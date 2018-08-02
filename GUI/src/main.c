@@ -1,7 +1,7 @@
 #include <gtk/gtk.h>
 #include <gdk/gdk.h>
 
-void BoardInit(GtkWidget *window);
+void OpenBoard(GtkWidget *window);
 
 int main(int argc, char *argv[])
 {
@@ -13,9 +13,7 @@ int main(int argc, char *argv[])
 	//gtk_window_set_resizable(GTK_WINDOW(window), FALSE);
 	g_signal_connect(window, "destroy", gtk_main_quit, NULL);
 
-	BoardInit(window);
-
-	gtk_widget_show_all(window);
+	OpenBoard(window);
 
     gtk_main();
     return 0;
