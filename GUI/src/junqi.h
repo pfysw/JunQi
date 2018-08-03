@@ -25,6 +25,7 @@ typedef struct ChessLineup
 {
 	enum ChessType type;
 	GtkWidget *pImage[4];
+	GtkWidget *pFlag;
 }ChessLineup;
 
 typedef struct BoardChess BoardChess;
@@ -37,11 +38,19 @@ struct BoardChess
 	int yPos;
 };
 
+typedef struct FlagChess
+{
+	GdkPixbuf *paPixbuf[20];
+	//GtkWidget *clearFlag;
+	GtkWidget *image;
+}FlagChess;
+
 typedef struct Junqi Junqi;
 struct Junqi
 {
 	u8 eState;
 	u8 bSelect;
+	u8 bStart;
 	BoardChess *pSelect;
 	GdkPixbuf *ChessImage[4];
 	GdkPixbuf *Chess[4][14];
@@ -53,6 +62,11 @@ struct Junqi
 
 	GtkWidget *whileRectangle[2];
 	GtkWidget *redRectangle[2];
+	FlagChess flagObj;
+
+	gpointer data;
+	GtkFileChooserNative *native;
+	int selectDir;
 
 };
 
@@ -63,11 +77,9 @@ typedef struct Jql
 	u8 chess[30];
 }Jql;
 
-GdkPixbuf* get_from_pixbuf_position(GdkPixbuf* pixbuf,
-								gint src_x,
-								gint src_y,
-								gint width,
-								gint height );
-
-
+void CreatBoardChess(GtkWidget *window, Junqi *pJunqi);
+Junqi *JunqiOpen(void);
+void select_chess_cb (GtkNativeDialog *dialog,
+                  gint             response_id,
+                  gpointer         user_data);
 #endif

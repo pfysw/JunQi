@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
 	gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
 	//gtk_window_set_resizable(GTK_WINDOW(window), FALSE);
 	g_signal_connect(window, "destroy", gtk_main_quit, NULL);
-
+    //初始化界面
 	OpenBoard(window);
 
     gtk_main();
