@@ -36,6 +36,7 @@ struct BoardChess
 	ChessLineup *pLineup;
 	int xPos;
 	int yPos;
+	int index;
 };
 
 typedef struct FlagChess
@@ -60,7 +61,7 @@ struct Junqi
 	//BoardChess ChessHome[4][30];
 	BoardChess NineGrid[9];
 
-	GtkWidget *whileRectangle[2];
+	GtkWidget *whiteRectangle[2];
 	GtkWidget *redRectangle[2];
 	FlagChess flagObj;
 
@@ -79,7 +80,7 @@ typedef struct Jql
 
 void CreatBoardChess(GtkWidget *window, Junqi *pJunqi);
 Junqi *JunqiOpen(void);
-void select_chess_cb (GtkNativeDialog *dialog,
+void get_lineup_cb (GtkNativeDialog *dialog,
                   gint             response_id,
                   gpointer         user_data);
 #endif

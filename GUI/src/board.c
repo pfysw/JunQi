@@ -115,7 +115,7 @@ static void button_cb(GtkWidget *button , gpointer data)
 	pJunqi->native = native;
 	g_signal_connect (native,
 					"response",
-					G_CALLBACK (select_chess_cb),
+					G_CALLBACK (get_lineup_cb),
 					pJunqi);
 }
 
@@ -294,4 +294,5 @@ void OpenBoard(GtkWidget *window)
     gtk_widget_show_all(window);
 
     CreatBoardChess(window, pJunqi);
+
 }

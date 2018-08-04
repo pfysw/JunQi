@@ -144,6 +144,7 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 		pJunqi->ChessPos[dir][i].yPos = y;
 		pJunqi->ChessPos[dir][i].pLineup = &pJunqi->Lineup[dir][i];
 		pJunqi->ChessPos[dir][i].type = pJunqi->Lineup[dir][i].type;
+		pJunqi->ChessPos[dir][i].index = i;
 		if(iType!=NONE)
 		{
 			SetChessImageType(pJunqi, dir, i, iType);
@@ -276,7 +277,7 @@ void ShowRectangle(Junqi *pJunqi, BoardChess *pChess, int color)
 	}
 	else
 	{
-		image = pJunqi->whileRectangle[pChess->iDir&1];
+		image = pJunqi->whiteRectangle[pChess->iDir&1];
 	}
 	gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
 			                 image,
@@ -309,61 +310,57 @@ void MoveFlag(Junqi *pJunqi, BoardChess *pChess, int isInit)
 	gtk_widget_show(pChess->pLineup->pFlag);
 }
 
+void ShowSelect(Junqi *pJunqi, BoardChess *pChess)
+{
+	if( pChess->type==NONE )
+	{
+		return;
+	}
+	pJunqi->bSelect = 1;
+	pJunqi->pSelect = pChess;
+
+	//显示白色选择框
+	gtk_widget_hide(pJunqi->redRectangle[0]);
+	gtk_widget_hide(pJunqi->redRectangle[1]);
+
+	ShowRectangle(pJunqi, pChess, RECTANGLE_WHITE);
+}
+
 void MoveChess(Junqi *pJunqi, BoardChess *pChess)
 {
 	BoardChess *pSrc, *pDst;
 
+	pDst = pChess;
 
-	if(!pJunqi->bSelect)
+	HideChess(pDst,pDst->iDir);
+	if(pChess->type!=NONE && pChess->pLineup->pFlag)
 	{
-		if( pChess->type==NONE )
-		{
-			return;
-		}
-		pJunqi->bSelect = 1;
-		pJunqi->pSelect = pChess;
-
-		//显示白色选择框
-		gtk_widget_hide(pJunqi->redRectangle[0]);
-		gtk_widget_hide(pJunqi->redRectangle[1]);
-
-		ShowRectangle(pJunqi, pChess, RECTANGLE_WHITE);
+		gtk_widget_destroy(pChess->pLineup->pFlag);
+		pChess->pLineup->pFlag = NULL;
 	}
-	else
+
+	pSrc = pJunqi->pSelect;
+	pDst->pLineup = pSrc->pLineup;
+
+	gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
+				   pSrc->pLineup->pImage[pDst->iDir],
+				   pDst->xPos,pDst->yPos);
+
+	if(pDst->pLineup->pFlag)
 	{
-		gtk_widget_hide(pJunqi->whileRectangle[0]);
-		gtk_widget_hide(pJunqi->whileRectangle[1]);
-		if(pChess==pJunqi->pSelect)
-		{
-			pJunqi->bSelect = 0;
-			pJunqi->pSelect = NULL;
-			return;
-		}
-		pJunqi->bSelect = 0;
-		pDst = pChess;
-		HideChess(pDst,pChess->iDir);
-		pSrc = pJunqi->pSelect;
-		pDst->pLineup = pSrc->pLineup;
-
-		gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
-				       pSrc->pLineup->pImage[pDst->iDir],
-				       pDst->xPos,pDst->yPos);
-
-		if(pDst->pLineup->pFlag)
-		{
-			MoveFlag(pJunqi,pDst,1);
-		}
-
-		//注意！这部分代码有很强的顺序关系
-		pDst->type = pSrc->type;
-		//隐藏选中的棋子
-		HideChess(pSrc,pSrc->iDir);
-		pSrc->type = NONE;
-
-		gtk_widget_show(pSrc->pLineup->pImage[pDst->iDir]);
-
-		ShowRectangle(pJunqi, pChess, RECTANGLE_RED);
+		MoveFlag(pJunqi,pDst,1);
 	}
+
+	//注意！这部分代码有很强的顺序关系
+	pDst->type = pSrc->type;
+	//隐藏选中的棋子
+	HideChess(pSrc,pSrc->iDir);
+	pSrc->type = NONE;
+
+	gtk_widget_show(pSrc->pLineup->pImage[pDst->iDir]);
+
+	ShowRectangle(pJunqi, pChess, RECTANGLE_RED);
+
 }
 
 /*
@@ -420,6 +417,40 @@ void ShowFlagChess(Junqi *pJunqi, BoardChess *pChess)
 	pJunqi->pSelect = pChess;
 }
 
+void SwapChess(Junqi *pJunqi, int i, int j)
+{
+	ChessLineup *temp;
+	BoardChess *pChess;
+	int dir = pJunqi->selectDir;
+
+	temp = pJunqi->ChessPos[dir][j].pLineup;
+	pJunqi->ChessPos[dir][j].pLineup = pJunqi->ChessPos[dir][i].pLineup;
+	pJunqi->ChessPos[dir][i].pLineup = temp;
+	pJunqi->ChessPos[dir][i].type = pJunqi->ChessPos[dir][i].pLineup->type;
+	pJunqi->ChessPos[dir][j].type = pJunqi->ChessPos[dir][j].pLineup->type;
+
+	pChess = &pJunqi->ChessPos[dir][i];
+	gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
+				   pChess->pLineup->pImage[pChess->iDir],
+				   pChess->xPos,pChess->yPos);
+
+	pChess = &pJunqi->ChessPos[dir][j];
+	gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
+				   pChess->pLineup->pImage[pChess->iDir],
+				   pChess->xPos,pChess->yPos);
+}
+
+void ChangeChess(Junqi *pJunqi, BoardChess *pChess)
+{
+	if(pChess->type!=NONE)
+	{
+		if(pChess->iDir==pJunqi->pSelect->iDir)
+		{
+			SwapChess(pJunqi,pChess->index,pJunqi->pSelect->index);
+		}
+	}
+}
+
 /*
  * 当鼠标点击棋盘时会触发该事件，移动棋子、标棋等
  */
@@ -442,9 +473,29 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
 	//点击左键
     if( event->button==1 )
     {
-    	if(pJunqi->bStart)
+    	if(!pJunqi->bSelect)
     	{
-    		MoveChess(pJunqi, pChess);
+    		ShowSelect(pJunqi, pChess);
+    	}
+    	else
+    	{
+    		gtk_widget_hide(pJunqi->whiteRectangle[0]);
+    		gtk_widget_hide(pJunqi->whiteRectangle[1]);
+    		pJunqi->bSelect = 0;
+    		if(pChess==pJunqi->pSelect)
+    		{
+    			pJunqi->pSelect = NULL;
+    			return;
+    		}
+
+    		if(pJunqi->bStart)
+    		{
+    			MoveChess(pJunqi, pChess);
+    		}
+    		else
+    		{
+    			ChangeChess(pJunqi, pChess);
+    		}
     	}
     }
     else if( event->button==3 )
@@ -511,12 +562,12 @@ void select_flag_event(GtkWidget *widget, GdkEventButton *event, gpointer data)
 
 void InitSelectImage(Junqi *pJunqi)
 {
-	pJunqi->whileRectangle[0] = GetSelectImage(0, 0);
-	pJunqi->whileRectangle[1] = GetSelectImage(1, 0);
+	pJunqi->whiteRectangle[0] = GetSelectImage(0, 0);
+	pJunqi->whiteRectangle[1] = GetSelectImage(1, 0);
 	pJunqi->redRectangle[0] = GetSelectImage(0, 1);
 	pJunqi->redRectangle[1] = GetSelectImage(1, 1);
-	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->whileRectangle[0], 0, 0);
-	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->whileRectangle[1], 0, 0);
+	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->whiteRectangle[0], 0, 0);
+	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->whiteRectangle[1], 0, 0);
 	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->redRectangle[0], 0, 0);
 	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->redRectangle[1], 0, 0);
 
@@ -613,30 +664,9 @@ void ConvertFilename(char *zName)
 	}
 }
 
-void SwapChess(Junqi *pJunqi, int i, int j)
-{
-	ChessLineup *temp;
-	BoardChess *pChess;
-	int dir = pJunqi->selectDir;
 
-	temp = pJunqi->ChessPos[dir][j].pLineup;
-	pJunqi->ChessPos[dir][j].pLineup = pJunqi->ChessPos[dir][i].pLineup;
-	pJunqi->ChessPos[dir][i].pLineup = temp;
-	pJunqi->ChessPos[dir][i].type = pJunqi->ChessPos[dir][i].pLineup->type;
-	pJunqi->ChessPos[dir][j].type = pJunqi->ChessPos[dir][j].pLineup->type;
 
-	pChess = &pJunqi->ChessPos[dir][i];
-	gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
-				   pChess->pLineup->pImage[pChess->iDir],
-				   pChess->xPos,pChess->yPos);
-
-	pChess = &pJunqi->ChessPos[dir][j];
-	gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
-				   pChess->pLineup->pImage[pChess->iDir],
-				   pChess->xPos,pChess->yPos);
-}
-
-void select_chess_cb (GtkNativeDialog *dialog,
+void get_lineup_cb (GtkNativeDialog *dialog,
                   gint             response_id,
                   gpointer         user_data)
 {
@@ -647,6 +677,7 @@ void select_chess_cb (GtkNativeDialog *dialog,
 	u8 aBuf[4096];
 	Jql *pLineup;
 	int i,j;
+	int iDir;
 
 	if (response_id == GTK_RESPONSE_ACCEPT)
 	{
@@ -661,17 +692,18 @@ void select_chess_cb (GtkNativeDialog *dialog,
 			assert(0);
 		}
 
+		iDir = pJunqi->selectDir;
 		for(i=0;i<30;i++)
 		{
-			if(pJunqi->ChessPos[0][i].type == NONE)
+			if(pJunqi->ChessPos[iDir][i].type == NONE)
 			{
 				continue;
 			}
-			if( pJunqi->ChessPos[0][i].type != pLineup->chess[i] )
+			if( pJunqi->ChessPos[iDir][i].type != pLineup->chess[i] )
 			{
 				for(j=i+1;j<30;j++)
 				{
-					if(pLineup->chess[i]==pJunqi->ChessPos[0][j].type)
+					if(pLineup->chess[i]==pJunqi->ChessPos[iDir][j].type)
 					{
 						SwapChess(pJunqi,i,j);
 						break;
