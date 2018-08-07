@@ -16,7 +16,7 @@ typedef struct BoardItem
 	GtkWidget *button[4];
 }BoardItem;
 
-BoardItem board;
+BoardItem gBoard;
 
 static void event_handle(GtkWidget *item,gpointer data)
 {
@@ -124,7 +124,7 @@ static void button_cb(GtkWidget *button , gpointer data)
  */
 void SetButton(GtkWidget *window, Junqi *pJunqi)
 {
-	GtkWidget **button = board.button;
+	GtkWidget **button = gBoard.button;
 	GError*  error =NULL;
 	GdkPixbuf *pixbuf;
 	GtkWidget *fixed = pJunqi->fixed;
@@ -225,7 +225,7 @@ static void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data
 	//隐藏调入布局按钮
 	for(int i=0; i<4; i++)
 	{
-		gtk_widget_hide(board.button[i]);
+		gtk_widget_hide(gBoard.button[i]);
 	}
 
 	if(!pJunqi->bStart)
@@ -258,7 +258,7 @@ void OpenBoard(GtkWidget *window)
     gtk_box_pack_start (GTK_BOX (hbox), vbox, TRUE, TRUE, 0);
     vbox2 = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
     gtk_box_pack_start (GTK_BOX (hbox), vbox2, FALSE, TRUE, 0);
-    set_menu(vbox);
+    //set_menu(vbox);
 
     GtkWidget *event_box = gtk_event_box_new();
     gtk_box_pack_start (GTK_BOX (vbox), event_box, TRUE, TRUE, 0);

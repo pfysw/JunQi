@@ -62,8 +62,7 @@ void InitLineup(Junqi *pJunqi, enum ChessColor color)
 	u8 aBuf[4096];
 	Jql *pLineup;
 	int i;
-	//fd = open("./res/5.jql", O_RDWR|O_CREAT, 0600);
-	fd = open("D:/军旗/高手/5.jql", O_RDWR|O_CREAT, 0600);
+	fd = open("./res/5.jql", O_RDWR|O_CREAT, 0600);
 
 	OsRead(fd, aBuf, 4096, 0);
 	pLineup = (Jql*)(&aBuf[0]);
@@ -83,10 +82,10 @@ void SetChessImageType(Junqi *pJunqi, int dir, int i, int iType)
 	GdkPixbuf *pPixbuf;
 	GdkPixbuf *pRotate;
 	GtkWidget *pImage;
-    if(dir==RIGHT||dir==LEFT)
-    {
-    	iType = DARK;
-    }
+//    if(dir==RIGHT||dir==LEFT)
+//    {
+//    	iType = DARK;
+//    }
 	pPixbuf = pJunqi->Chess[(dir+2)%4][iType];
 	pImage = gtk_image_new_from_pixbuf(pPixbuf);
 	pJunqi->Lineup[dir][i].pImage[0] = pImage;
@@ -104,6 +103,46 @@ void SetChessImageType(Junqi *pJunqi, int dir, int i, int iType)
 	g_object_unref (pPixbuf);
 }
 
+void SetBoardCamp(Junqi *pJunqi, enum ChessDir dir, int i)
+{
+	if(i==6||i==8||i==12||i==16||i==18)
+	{
+		pJunqi->ChessPos[dir][i].isCamp = 1;
+	}
+	else if(i==26||i==28)
+	{
+		pJunqi->ChessPos[dir][i].isStronghold = 1;
+	}
+}
+
+void SetBoardRailway(Junqi *pJunqi, enum ChessDir dir, int i)
+{
+	if(i<25)
+	{
+		if( (i/5==0||i/5==4) || ((i%5==0||i%5==4)) )
+		{
+			pJunqi->ChessPos[dir][i].isRailway = 1;
+		}
+	}
+}
+
+void CreatGraphVertex(Junqi *pJunqi, BoardChess *pChess)
+{
+	AdjNode *pNode;
+	BoardGraph *pVertex;
+	pNode = (AdjNode *)malloc(sizeof(AdjNode));
+	pNode->pChess = pChess;
+	pNode->pNext = NULL;
+	pVertex = &pJunqi->aBoard[pChess->point.x+1][pChess->point.y+1];
+//	if( pVertex->pAdjList!=NULL )
+//	{
+//		printf("dir %d index %d\n",pChess->iDir,pChess->isNineGrid);
+//	};
+
+	assert( pVertex->pAdjList==NULL );
+	pVertex->pAdjList = pNode;
+}
+
 void SetChess(Junqi *pJunqi, enum ChessDir dir)
 {
 	enum ChessType iType;
@@ -111,43 +150,60 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 
 	int x,y;
 	int i;
-
+    //从方阵的左上角从上往下，从左往右遍历
 	for(i=0;i<30;i++)
 	{
 		iType = pJunqi->Lineup[dir][i].type;
 
 		assert( iType>=NONE && iType<=GONGB );
-
+        // 下家最右侧横坐标为0
+		// 对家最上面纵坐标为0
 		switch(dir)
 		{
 		case HOME:
 			x = 265+(i%5)*40;
 			y = 13+(i/5+11)*39;
+			//如果坐标错了没什么好的方法确认，只能仔细检查一遍
+			pJunqi->ChessPos[dir][i].point.x = 10-i%5;
+			pJunqi->ChessPos[dir][i].point.y = 11+i/5;
 			break;
 		case RIGHT:
 			x = 38+(i/5+11)*39;
 			y = 242+(4-i%5)*39;
+			pJunqi->ChessPos[dir][i].point.x = 5-i/5;
+			pJunqi->ChessPos[dir][i].point.y = 10-i%5;
 			break;
 		case OPPS:
 			x = 265+(4-i%5)*40;
 			y = 13+(5-i/5)*39;
+			pJunqi->ChessPos[dir][i].point.x = 6+i%5;
+			pJunqi->ChessPos[dir][i].point.y = 5-i/5;
 			break;
 		case LEFT:
 			x = 38+(5-i/5)*39;
 			y = 242+(i%5)*39;
+			pJunqi->ChessPos[dir][i].point.x = 11+i/5;
+			pJunqi->ChessPos[dir][i].point.y = 6+i%5;
 			break;
 		default:
 			assert(0);
 			break;
 		}
+
 		pJunqi->ChessPos[dir][i].xPos = x;
 		pJunqi->ChessPos[dir][i].yPos = y;
 		pJunqi->ChessPos[dir][i].pLineup = &pJunqi->Lineup[dir][i];
 		pJunqi->ChessPos[dir][i].type = pJunqi->Lineup[dir][i].type;
 		pJunqi->ChessPos[dir][i].index = i;
+		pJunqi->ChessPos[dir][i].iDir= dir;
+		SetBoardCamp(pJunqi, dir, i);
+		SetBoardRailway(pJunqi, dir, i);
+		CreatGraphVertex(pJunqi,&pJunqi->ChessPos[dir][i]);
+
 		if(iType!=NONE)
 		{
 			SetChessImageType(pJunqi, dir, i, iType);
+			pJunqi->Lineup[dir][i].iDir = dir;
 			for(int j=1; j<4; j++)
 			{
 				pImage = pJunqi->Lineup[dir][i].pImage[j];
@@ -239,10 +295,6 @@ BoardChess *GetChessPos(Junqi *pJunqi, int x, int y)
 				pChess = &pJunqi->ChessPos[iDir][iPos];
 			}
 		}
-	}
-	if( pChess )
-	{
-		pChess->iDir = iDir;
 	}
 
 	return pChess;
@@ -417,11 +469,10 @@ void ShowFlagChess(Junqi *pJunqi, BoardChess *pChess)
 	pJunqi->pSelect = pChess;
 }
 
-void SwapChess(Junqi *pJunqi, int i, int j)
+void SwapChess(Junqi *pJunqi, int i, int j, int dir)
 {
 	ChessLineup *temp;
 	BoardChess *pChess;
-	int dir = pJunqi->selectDir;
 
 	temp = pJunqi->ChessPos[dir][j].pLineup;
 	pJunqi->ChessPos[dir][j].pLineup = pJunqi->ChessPos[dir][i].pLineup;
@@ -446,7 +497,12 @@ void ChangeChess(Junqi *pJunqi, BoardChess *pChess)
 	{
 		if(pChess->iDir==pJunqi->pSelect->iDir)
 		{
-			SwapChess(pJunqi,pChess->index,pJunqi->pSelect->index);
+			if( IsEnableChange(pJunqi,pChess) )
+			{
+				SwapChess(pJunqi,pChess->index,
+						  pJunqi->pSelect->index,
+						  pChess->iDir);
+			}
 		}
 	}
 }
@@ -490,7 +546,22 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
 
     		if(pJunqi->bStart)
     		{
-    			MoveChess(pJunqi, pChess);
+    			if(pChess->type!=NONE)
+    			{
+    				//如果是自己或者是对家的棋
+					if( (pChess->pLineup->iDir%2) == (pJunqi->pSelect->pLineup->iDir%2) )
+					{
+						if( pChess->pLineup->iDir == pJunqi->pSelect->pLineup->iDir )
+						{
+							ShowSelect(pJunqi, pChess);
+						}
+						return;
+					}
+    			}
+    			if(IsEnableMove(pJunqi, pChess))
+    			{
+    				MoveChess(pJunqi, pChess);
+    			}
     		}
     		else
     		{
@@ -604,12 +675,28 @@ void InitFlagPixbuf(Junqi *pJunqi)
 	}
 }
 
+void InitArrowPixbuf(Junqi *pJunqi)
+{
+	GdkPixbuf *pixbuf;
+	int i;
+	char *imageName = "./res/arrow.png";
+	GdkPixbuf *temp;
+	pixbuf = gdk_pixbuf_new_from_file(imageName, NULL);
+	for(i=0; i<8; i++)
+	{
+		temp = gdk_pixbuf_new_subpixbuf(pixbuf,8+30*i,8,14,14);
+		pJunqi->paArrowPixbuf[i] = temp;
+	}
+
+}
+
 void InitBoardItem(Junqi *pJunqi)
 {
 	//初始化选择框
 	InitSelectImage(pJunqi);
 	//初始化标记棋子
 	InitFlagPixbuf(pJunqi);
+	InitArrowPixbuf(pJunqi);
 }
 
 void InitNineGrid(Junqi *pJunqi)
@@ -621,8 +708,143 @@ void InitNineGrid(Junqi *pJunqi)
 		pJunqi->NineGrid[i].yPos = NINE_GRID_Y+(i/3)*2*LENGTH1;
 		pJunqi->NineGrid[i].type = NONE;
 		pJunqi->NineGrid[i].iDir = HOME;
+		pJunqi->NineGrid[i].point.x = 10-(i%3)*2;
+		pJunqi->NineGrid[i].point.y = 6+(i/3)*2;
+		pJunqi->NineGrid[i].isRailway = 1;
+		pJunqi->NineGrid[i].isNineGrid = 1;
+		CreatGraphVertex(pJunqi,&pJunqi->NineGrid[i]);
 
 	}
+
+}
+
+void AddAdjNode(
+		Junqi *pJunqi,
+		BoardGraph *pVertex,
+		int i,
+		int j,
+		u8 isNineGrid
+		)
+{
+	u8 newFlag;
+	AdjNode *pNew;
+	AdjNode *pNode = pJunqi->aBoard[i][j].pAdjList;
+
+	if( pNode!=NULL )
+	{
+		if(isNineGrid)
+		{
+			newFlag = pNode->pChess->isNineGrid;
+		}
+		else
+		{
+			newFlag = pNode->pChess->isRailway;
+		}
+
+		if( newFlag )
+		{
+			pNew = (AdjNode*)malloc(sizeof(AdjNode));
+			pNew->pChess =pNode->pChess;
+			pNew->pNext = pVertex->pAdjList->pNext;
+			pVertex->pAdjList->pNext = pNew;
+		}
+	}
+}
+
+/*
+ * 添加4个角上的铁路邻居
+ */
+void AddSpcNode(Junqi *pJunqi)
+{
+	BoardGraph *pVertex;
+
+	pVertex = &pJunqi->aBoard[11][12];
+	AddAdjNode(pJunqi, pVertex, 12, 11, 0);
+	pVertex = &pJunqi->aBoard[12][11];
+	AddAdjNode(pJunqi, pVertex, 11, 12, 0);
+
+	pVertex = &pJunqi->aBoard[7][12];
+	AddAdjNode(pJunqi, pVertex, 6, 11, 0);
+	pVertex = &pJunqi->aBoard[6][11];
+	AddAdjNode(pJunqi, pVertex, 7, 12, 0);
+
+	pVertex = &pJunqi->aBoard[7][6];
+	AddAdjNode(pJunqi, pVertex, 6, 7, 0);
+	pVertex = &pJunqi->aBoard[6][7];
+	AddAdjNode(pJunqi, pVertex, 7, 6, 0);
+
+	pVertex = &pJunqi->aBoard[12][7];
+	AddAdjNode(pJunqi, pVertex, 11, 6, 0);
+	pVertex = &pJunqi->aBoard[11][6];
+	AddAdjNode(pJunqi, pVertex, 12, 7, 0);
+}
+
+void InitBoardGraph(Junqi *pJunqi)
+{
+	int i,j;
+	BoardGraph *pVertex;
+
+	for(i=1; i<=17; i++)
+	{
+		for(j=1; j<=17; j++)
+		{
+			pVertex = &pJunqi->aBoard[i][j];
+			if( pVertex->pAdjList!=NULL )
+			{
+				assert( pVertex->pAdjList->pChess!=NULL );
+				if( pVertex->pAdjList->pChess->isRailway )
+				{
+					AddAdjNode(pJunqi, pVertex, i+1, j, 0);
+					AddAdjNode(pJunqi, pVertex, i-1, j, 0);
+					AddAdjNode(pJunqi, pVertex, i, j+1, 0);
+					AddAdjNode(pJunqi, pVertex, i, j-1, 0);
+					if( pVertex->pAdjList->pChess->isNineGrid )
+					{
+						AddAdjNode(pJunqi, pVertex, i+2, j, 1);
+						AddAdjNode(pJunqi, pVertex, i-2, j, 1);
+						AddAdjNode(pJunqi, pVertex, i, j+2, 1);
+						AddAdjNode(pJunqi, pVertex, i, j-2, 1);
+					}
+				}
+			}
+		}
+	}
+	AddSpcNode(pJunqi);
+
+#if 0//测试邻接表初始化是否正确
+	i = 6;
+	j = 8;
+	pVertex = &pJunqi->aBoard[i+1][j+1];
+	AdjNode *p;
+	for(p = pVertex->pAdjList;p!=NULL;p=p->pNext)
+	{
+		log_a("%d %d",p->pChess->point.x,p->pChess->point.y);
+
+	}
+#endif
+}
+
+void InitCurveRail(Junqi *pJunqi)
+{
+	int i,j;
+	for(i=0; i<4; i++)
+	{
+		for(j=0; j<30; j++)
+		{
+			if(j%5==4)
+			{
+				pJunqi->ChessPos[i][j].eCurveRail = i+RAIL1;
+				pJunqi->ChessPos[(i+1)%4][j-4].eCurveRail = i+RAIL1;
+			}
+		}
+	}
+	/////拐弯铁路测试//////////
+#if 0
+//	i = 6;
+//	j = 11;
+//	BoardGraph *pVertex = &pJunqi->aBoard[i+1][j+1];
+//    log_a("rail %d",pVertex->pAdjList->pChess->eCurveRail);
+#endif
 
 }
 
@@ -642,6 +864,8 @@ void CreatBoardChess(GtkWidget *window, Junqi *pJunqi)
 	}
 	InitNineGrid(pJunqi);
 	InitBoardItem(pJunqi);
+	InitBoardGraph(pJunqi);
+	InitCurveRail(pJunqi);
 }
 
 Junqi *JunqiOpen(void)
@@ -683,7 +907,7 @@ void get_lineup_cb (GtkNativeDialog *dialog,
 	{
 		name = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER (native));
 		ConvertFilename(name);
-
+		//printf("%s\n",name);
 		fd = open(name, O_RDWR|O_CREAT, 0600);
 		OsRead(fd, aBuf, 4096, 0);
 		pLineup = (Jql*)(&aBuf[0]);
@@ -699,13 +923,14 @@ void get_lineup_cb (GtkNativeDialog *dialog,
 			{
 				continue;
 			}
+
 			if( pJunqi->ChessPos[iDir][i].type != pLineup->chess[i] )
 			{
 				for(j=i+1;j<30;j++)
 				{
 					if(pLineup->chess[i]==pJunqi->ChessPos[iDir][j].type)
 					{
-						SwapChess(pJunqi,i,j);
+						SwapChess(pJunqi,i,j,iDir);
 						break;
 					}
 				}
