@@ -52,9 +52,9 @@ void ClearPassCnt(Junqi *pJunqi)
 	int i,j;
 
 	pJunqi->iPathLength = 0;
-	for(i=0; i<19; i++)
+	for(i=0; i<17; i++)
 	{
-		for(j=0; j<19; j++)
+		for(j=0; j<17; j++)
 		{
 			pJunqi->aBoard[i][j].passCnt = 0;
 		}
@@ -116,7 +116,7 @@ void ShowPathArrow(Junqi *pJunqi, int iPath)
 	}while( !p->isHead );
 }
 
-GtkWidget* GetArrowImage(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int iPath)
+GtkWidget* GetArrowImage(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 {
 	//a[1][1]不用
 	u8 aMap[3][3]={
@@ -155,7 +155,7 @@ void AddPathArrow(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int iPath)
 	p = (GraphPath *)malloc(sizeof(GraphPath));
 	memset(p, 0, sizeof(GraphPath));
     p->pChess = pSrc;
-    p->pArrow = GetArrowImage(pJunqi, pSrc, pDst, iPath);
+    p->pArrow = GetArrowImage(pJunqi, pSrc, pDst);
 	if( pHead==NULL )
 	{
 		p->isHead = 1;
@@ -280,7 +280,7 @@ u8 GetRailPath(
 
 	for(p=pSrc->pAdjList->pNext; p!=NULL; p=p->pNext)
 	{
-		pVertex = &pJunqi->aBoard[p->pChess->point.x+1][p->pChess->point.y+1];
+		pVertex = &pJunqi->aBoard[p->pChess->point.x][p->pChess->point.y];
 		if( p->pChess==pDst->pAdjList->pChess )
 		{
 			if(pathFlag)
@@ -291,6 +291,7 @@ u8 GetRailPath(
 			if( pDst->passCnt==0 )
 			{
 				pDst->passCnt = pSrc->passCnt+1;
+				ClearPathArrow(pJunqi, 1);
 				CopyPathArrow(pJunqi, p->pChess, 1, 2);
 
 			}
@@ -391,8 +392,8 @@ int IsEnableMove(Junqi *pJunqi, BoardChess *pDst)
 	}
 	if( !rc && pSrc->isRailway && pDst->isRailway )
 	{
-		pVertex1 = &pJunqi->aBoard[pSrc->point.x+1][pSrc->point.y+1];
-		pVertex2 = &pJunqi->aBoard[pDst->point.x+1][pDst->point.y+1];
+		pVertex1 = &pJunqi->aBoard[pSrc->point.x][pSrc->point.y];
+		pVertex2 = &pJunqi->aBoard[pDst->point.x][pDst->point.y];
 
 		if( pSrc->type==GONGB )
 		{

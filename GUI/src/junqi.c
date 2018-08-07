@@ -133,11 +133,7 @@ void CreatGraphVertex(Junqi *pJunqi, BoardChess *pChess)
 	pNode = (AdjNode *)malloc(sizeof(AdjNode));
 	pNode->pChess = pChess;
 	pNode->pNext = NULL;
-	pVertex = &pJunqi->aBoard[pChess->point.x+1][pChess->point.y+1];
-//	if( pVertex->pAdjList!=NULL )
-//	{
-//		printf("dir %d index %d\n",pChess->iDir,pChess->isNineGrid);
-//	};
+	pVertex = &pJunqi->aBoard[pChess->point.x][pChess->point.y];
 
 	assert( pVertex->pAdjList==NULL );
 	pVertex->pAdjList = pNode;
@@ -757,26 +753,35 @@ void AddAdjNode(
 void AddSpcNode(Junqi *pJunqi)
 {
 	BoardGraph *pVertex;
+	int i,j;
 
-	pVertex = &pJunqi->aBoard[11][12];
-	AddAdjNode(pJunqi, pVertex, 12, 11, 0);
-	pVertex = &pJunqi->aBoard[12][11];
-	AddAdjNode(pJunqi, pVertex, 11, 12, 0);
+	i = 10;
+	j = 11;
+	pVertex = &pJunqi->aBoard[i][j];
+	AddAdjNode(pJunqi, pVertex, j, i, 0);
+	pVertex = &pJunqi->aBoard[j][i];
+	AddAdjNode(pJunqi, pVertex, i, j, 0);
 
-	pVertex = &pJunqi->aBoard[7][12];
-	AddAdjNode(pJunqi, pVertex, 6, 11, 0);
-	pVertex = &pJunqi->aBoard[6][11];
-	AddAdjNode(pJunqi, pVertex, 7, 12, 0);
+	i = 6;
+	j = 11;
+	pVertex = &pJunqi->aBoard[i][j];
+	AddAdjNode(pJunqi, pVertex, i-1, j-1, 0);
+	pVertex = &pJunqi->aBoard[i-1][j-1];
+	AddAdjNode(pJunqi, pVertex, i, j, 0);
 
-	pVertex = &pJunqi->aBoard[7][6];
-	AddAdjNode(pJunqi, pVertex, 6, 7, 0);
-	pVertex = &pJunqi->aBoard[6][7];
-	AddAdjNode(pJunqi, pVertex, 7, 6, 0);
+	i = 6;
+	j = 5;
+	pVertex = &pJunqi->aBoard[i][j];
+	AddAdjNode(pJunqi, pVertex, j, i, 0);
+	pVertex = &pJunqi->aBoard[j][i];
+	AddAdjNode(pJunqi, pVertex, i, j, 0);
 
-	pVertex = &pJunqi->aBoard[12][7];
-	AddAdjNode(pJunqi, pVertex, 11, 6, 0);
-	pVertex = &pJunqi->aBoard[11][6];
-	AddAdjNode(pJunqi, pVertex, 12, 7, 0);
+	i = 11;
+	j = 6;
+	pVertex = &pJunqi->aBoard[i][j];
+	AddAdjNode(pJunqi, pVertex, i-1, j-1, 0);
+	pVertex = &pJunqi->aBoard[i-1][j-1];
+	AddAdjNode(pJunqi, pVertex, i, j, 0);
 }
 
 void InitBoardGraph(Junqi *pJunqi)
@@ -784,9 +789,9 @@ void InitBoardGraph(Junqi *pJunqi)
 	int i,j;
 	BoardGraph *pVertex;
 
-	for(i=1; i<=17; i++)
+	for(i=0; i<17; i++)
 	{
-		for(j=1; j<=17; j++)
+		for(j=0; j<17; j++)
 		{
 			pVertex = &pJunqi->aBoard[i][j];
 			if( pVertex->pAdjList!=NULL )
@@ -814,11 +819,11 @@ void InitBoardGraph(Junqi *pJunqi)
 #if 0//测试邻接表初始化是否正确
 	i = 6;
 	j = 8;
-	pVertex = &pJunqi->aBoard[i+1][j+1];
+	pVertex = &pJunqi->aBoard[i][j];
 	AdjNode *p;
 	for(p = pVertex->pAdjList;p!=NULL;p=p->pNext)
 	{
-		log_a("%d %d",p->pChess->point.x,p->pChess->point.y);
+		log_b("%d %d",p->pChess->point.x,p->pChess->point.y);
 
 	}
 #endif

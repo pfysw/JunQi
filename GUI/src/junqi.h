@@ -102,10 +102,8 @@ struct Junqi
 	GtkWidget *fixed;
 	//BoardChess ChessHome[4][30];
 	BoardChess NineGrid[9];
-	//棋盘是17*17，最外面那一圈不用，用来防止遍历周边结点时溢出
-	//对家最上面纵坐标为1，下家最右边横坐标为1
-	//point.x和point.y传入时要加1
-	BoardGraph aBoard[19][19];
+	//棋盘是17*17，9宫格是5*5
+	BoardGraph aBoard[17][17];
 	//0：之前显示的路径，1：当前确定的最优路径，2：其他尝试的路径
 	GraphPath  *pPath[3];
 	int iPathLength;
