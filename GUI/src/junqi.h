@@ -17,7 +17,7 @@ enum ChessType {NONE,DARK,JUNQI,DILEI,ZHADAN,SILING,JUNZH,SHIZH,
 enum ChessDir {HOME,RIGHT,OPPS,LEFT};
 enum SpcRail {RAIL1=1,RAIL2,RAIL3,RAIL4};
 enum RailType {GONGB_RAIL,HORIZONTAL_RAIL,VERTICAL_RAIL,CURVE_RAIL};
-enum CompareType {MOVE,EAT,BOMB,KILLED};
+enum CompareType {MOVE=1,EAT,BOMB,KILLED,SELECT,SHOW_FLAG,DEAD,BEGIN};
 
 ////////// test /////////////////////
 #define log_a(format,...)   //printf(format"\n",## __VA_ARGS__)
@@ -26,7 +26,14 @@ enum CompareType {MOVE,EAT,BOMB,KILLED};
 #define log_c(format,...)  //printf(format"\n",## __VA_ARGS__)
 ////////////////////////////////
 
-#define MOVE_SOUND "./sound/move.wav"
+#define MOVE_SOUND         "./sound/move.wav"
+#define BOMB_SOUND         "./sound/bomb.wav"
+#define EAT_SOUND          "./sound/eat.wav"
+#define KILLED_SOUND       "./sound/killed.wav"
+#define DEAD_SOUND         "./sound/dead.wav"
+#define SHOW_FLAG_SOUND    "./sound/showflag.wav"
+#define SELECT_SOUND       "./sound/select.wav"
+#define BEGIN_SOUND        "./sound/begin.wav"
 
 const static u8 aMagic[4]={0x57,0x04,0,0};
 
@@ -108,13 +115,15 @@ struct Junqi
 	ChessLineup Lineup[4][30];
 	BoardChess ChessPos[4][30];
 	GtkWidget *fixed;
+	//GtkWidget *sound_obj;
+	enum CompareType sound_type;
 	//BoardChess ChessHome[4][30];
 	BoardChess NineGrid[9];
 	//棋盘是17*17，9宫格是5*5
 	BoardGraph aBoard[17][17];
 	//0：之前显示的路径，1：当前确定的最优路径，2：其他尝试的路径
 	GraphPath  *pPath[3];
-	int iPathLength;
+	int szPath;
 
 	GtkWidget *whiteRectangle[2];
 	GtkWidget *redRectangle[2];
@@ -139,6 +148,7 @@ Junqi *JunqiOpen(void);
 void get_lineup_cb (GtkNativeDialog *dialog,
                   gint             response_id,
                   gpointer         user_data);
+void SendSoundEvent(Junqi *pJunqi, enum CompareType type);
 
 /////////////////////////////////
 int IsEnableChange(Junqi *pJunqi, BoardChess *pChess);

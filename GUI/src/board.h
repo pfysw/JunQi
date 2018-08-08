@@ -41,5 +41,5 @@ GdkPixbuf* get_from_pixbuf_position(GdkPixbuf* pixbuf,
 								gint src_y,
 								gint width,
 								gint height );
-
+void SendSoundEvent(Junqi *pJunqi, enum CompareType type);
 #endif /* BOARD_H_ */

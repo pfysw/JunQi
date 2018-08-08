@@ -136,10 +136,6 @@ void SetButton(GtkWidget *window, Junqi *pJunqi)
 		button[i] = gtk_button_new();
 
 		pixbuf = gdk_pixbuf_new_from_file(name, &error);
-		if(!pixbuf) {
-			fprintf(stderr, "board image open error!!!!\n%s\n",name);
-			exit(1);
-		}
 		GtkWidget *image = get_image_from_pixbuf(pixbuf, 0,0,77,22);
 
 		gtk_button_set_image(GTK_BUTTON(button[i]), image);
@@ -217,8 +213,6 @@ GtkWidget *GetSelectImage(int isVertical, int color)
 }
 
 
-
-
 static void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data)
 {
 	Junqi *pJunqi = (Junqi *)data;
@@ -243,7 +237,56 @@ static void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data
 		gtk_fixed_move( GTK_FIXED(fixed), button, 560,560);
 		gtk_widget_show(image1);
 	}
+	SendSoundEvent(pJunqi, BEGIN);
+}
 
+
+void sound_event(gpointer data)
+{
+	Junqi *pJunqi = (Junqi *)data;
+    if(pJunqi->sound_type>0 && pJunqi->szPath>3)
+    {
+		PlaySound (MOVE_SOUND, NULL, SND_FILENAME | SND_NODEFAULT);
+    }
+    switch(pJunqi->sound_type)
+    {
+    case MOVE:
+    	PlaySound (MOVE_SOUND, NULL, SND_FILENAME | SND_NODEFAULT);
+		if( pJunqi->szPath>3 )
+		{
+			PlaySound (MOVE_SOUND, NULL, SND_FILENAME | SND_NODEFAULT);
+		}
+    	break;
+    case BOMB:
+    	PlaySound (BOMB_SOUND, NULL, SND_FILENAME | SND_NODEFAULT);
+    	break;
+    case EAT:
+    	PlaySound (EAT_SOUND, NULL, SND_FILENAME | SND_NODEFAULT);
+    	break;
+    case KILLED:
+    	PlaySound (KILLED_SOUND, NULL, SND_FILENAME | SND_NODEFAULT);
+    	break;
+    case SELECT:
+    	PlaySound (SELECT_SOUND, NULL, SND_FILENAME | SND_NODEFAULT);
+    	break;
+    case SHOW_FLAG:
+    	PlaySound (SHOW_FLAG_SOUND, NULL, SND_FILENAME | SND_NODEFAULT);
+    	break;
+    case DEAD:
+    	PlaySound (DEAD_SOUND, NULL, SND_FILENAME | SND_NODEFAULT);
+    	break;
+    case BEGIN:
+    	PlaySound (BEGIN_SOUND, NULL, SND_FILENAME | SND_NODEFAULT);
+    	break;
+    default:
+    	break;
+    }
+    pJunqi->sound_type = 0;
+
+}
+void SendSoundEvent(Junqi *pJunqi, enum CompareType type)
+{
+	pJunqi->sound_type = type;
 }
 
 void OpenBoard(GtkWidget *window)
@@ -288,10 +331,12 @@ void OpenBoard(GtkWidget *window)
 
     pJunqi->data = image;
     g_signal_connect(button_box,"button-press-event",G_CALLBACK(begin_button),pJunqi);
-    gtk_fixed_put(GTK_FIXED(fixed), button_box, 560,560);
+    gtk_fixed_put(GTK_FIXED(fixed), button_box, 570,540);
     SetButton(window,pJunqi);
 
     gtk_widget_show_all(window);
+
+    g_timeout_add(500, (GSourceFunc)sound_event, pJunqi);
 
     CreatBoardChess(window, pJunqi);
 

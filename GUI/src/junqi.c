@@ -414,6 +414,7 @@ void ShowBanner(Junqi *pJunqi, int iDir)
 		     	  pBanner->pLineup->pImage[iDir],
 		     	  pBanner->xPos,pBanner->yPos);
 	gtk_widget_show(pBanner->pLineup->pImage[iDir]);
+	SendSoundEvent(pJunqi, SHOW_FLAG);
 }
 
 void DestroyAllChess(Junqi *pJunqi, int iDir)
@@ -442,6 +443,8 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 		gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
 					   pSrc->pLineup->pImage[pDst->iDir],
 					   pDst->xPos,pDst->yPos);
+		SendSoundEvent(pJunqi,MOVE);
+
 	}
 	if( type==EAT || type==BOMB )
 	{
@@ -453,10 +456,18 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 			pDst->pLineup->pFlag = NULL;
 		}
 		if( type==BOMB )
+		{
 			pDst->type = NONE;
+			SendSoundEvent(pJunqi,BOMB);
+		}
+		else
+		{
+			SendSoundEvent(pJunqi,EAT);
+		}
 
 		if( pDst->pLineup->type==JUNQI )
 		{
+			SendSoundEvent(pJunqi, DEAD);
 			DestroyAllChess(pJunqi, pDst->iDir);
 		}
 	}
@@ -471,11 +482,19 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 	}
 	if( type==KILLED || type==BOMB )
 	{
+		if( type==KILLED )
+		{
+			SendSoundEvent(pJunqi,KILLED);
+			if( pSrc->pLineup->type==SILING )
+			{
+				ShowBanner(pJunqi, pSrc->pLineup->iDir);
+			}
+		}
 		if(pSrc->pLineup->pFlag)
 		{
 			gtk_widget_hide(pSrc->pLineup->pFlag);
 		}
-		if( pSrc->pLineup->type==SILING || pDst->pLineup->type==SILING  )
+		if( type==BOMB )
 		{
 			if( pSrc->pLineup->type==SILING )
 				ShowBanner(pJunqi, pSrc->pLineup->iDir);
@@ -493,6 +512,7 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 	}
 	ShowRectangle(pJunqi, pDst, RECTANGLE_RED);
 	ShowPathArrow(pJunqi, 0);
+
 }
 
 /*
@@ -611,6 +631,7 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
     {
     	if(!pJunqi->bSelect)
     	{
+    		SendSoundEvent(pJunqi,SELECT);
     		ShowSelect(pJunqi, pChess);
     	}
     	else
@@ -620,6 +641,7 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
     		pJunqi->bSelect = 0;
     		if(pChess==pJunqi->pSelect)
     		{
+    			SendSoundEvent(pJunqi,SELECT);
     			pJunqi->pSelect = NULL;
     			return;
     		}

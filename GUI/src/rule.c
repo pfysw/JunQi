@@ -51,7 +51,7 @@ void ClearPassCnt(Junqi *pJunqi)
 {
 	int i,j;
 
-	pJunqi->iPathLength = 0;
+	pJunqi->szPath = 0;
 	for(i=0; i<17; i++)
 	{
 		for(j=0; j<17; j++)
@@ -286,7 +286,7 @@ u8 GetRailPath(
 		    	}
 #endif
 			}
-
+			pJunqi->szPath = pDst->passCnt;
 			RemovePathTail(pJunqi, 2);
 
 			return 1;
