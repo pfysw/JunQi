@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <gtk/gtk.h>
 #include <assert.h>
+#include <windows.h>
+#include <mmsystem.h>
 
 typedef unsigned char  u8;
 typedef unsigned int   u32;
@@ -15,6 +17,7 @@ enum ChessType {NONE,DARK,JUNQI,DILEI,ZHADAN,SILING,JUNZH,SHIZH,
 enum ChessDir {HOME,RIGHT,OPPS,LEFT};
 enum SpcRail {RAIL1=1,RAIL2,RAIL3,RAIL4};
 enum RailType {GONGB_RAIL,HORIZONTAL_RAIL,VERTICAL_RAIL,CURVE_RAIL};
+enum CompareType {MOVE,EAT,BOMB,KILLED};
 
 ////////// test /////////////////////
 #define log_a(format,...)   //printf(format"\n",## __VA_ARGS__)
@@ -23,10 +26,13 @@ enum RailType {GONGB_RAIL,HORIZONTAL_RAIL,VERTICAL_RAIL,CURVE_RAIL};
 #define log_c(format,...)  //printf(format"\n",## __VA_ARGS__)
 ////////////////////////////////
 
+#define MOVE_SOUND "./sound/move.wav"
+
 const static u8 aMagic[4]={0x57,0x04,0,0};
 
 typedef struct ChessLineup
 {
+	//表示棋子是哪家的棋
 	enum ChessDir iDir;
 	enum ChessType type;
 	GtkWidget *pImage[4];
@@ -43,9 +49,10 @@ typedef struct BoardChess BoardChess;
 struct BoardChess
 {
 	enum ChessType type;
+	ChessLineup *pLineup;
+	////下面为固定属性，不能改变///////////
 	enum ChessDir iDir;
 	enum SpcRail eCurveRail;
-	ChessLineup *pLineup;
 	int xPos;
 	int yPos;
 	int index;
@@ -94,6 +101,7 @@ struct Junqi
 	u8 eState;
 	u8 bSelect;
 	u8 bStart;
+	enum ChessColor eColor;
 	BoardChess *pSelect;
 	GdkPixbuf *ChessImage[4];
 	GdkPixbuf *Chess[4][14];
@@ -135,5 +143,6 @@ void get_lineup_cb (GtkNativeDialog *dialog,
 /////////////////////////////////
 int IsEnableChange(Junqi *pJunqi, BoardChess *pChess);
 int IsEnableMove(Junqi *pJunqi, BoardChess *pDst);
+int CompareChess(BoardChess *pSrc, BoardChess *pDst);
 
 #endif

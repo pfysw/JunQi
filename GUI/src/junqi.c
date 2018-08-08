@@ -82,11 +82,9 @@ void SetChessImageType(Junqi *pJunqi, int dir, int i, int iType)
 	GdkPixbuf *pPixbuf;
 	GdkPixbuf *pRotate;
 	GtkWidget *pImage;
-//    if(dir==RIGHT||dir==LEFT)
-//    {
-//    	iType = DARK;
-//    }
-	pPixbuf = pJunqi->Chess[(dir+2)%4][iType];
+
+	pJunqi->eColor = PURPLE;
+	pPixbuf = pJunqi->Chess[(dir+pJunqi->eColor)%4][iType];
 	pImage = gtk_image_new_from_pixbuf(pPixbuf);
 	pJunqi->Lineup[dir][i].pImage[0] = pImage;
 	pJunqi->Lineup[dir][i].pImage[2] = pImage;
@@ -198,6 +196,10 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 
 		if(iType!=NONE)
 		{
+//			if(dir==RIGHT||dir==LEFT)
+//			{
+//				iType = DARK;
+//			}
 			SetChessImageType(pJunqi, dir, i, iType);
 			pJunqi->Lineup[dir][i].iDir = dir;
 			for(int j=1; j<4; j++)
@@ -296,13 +298,6 @@ BoardChess *GetChessPos(Junqi *pJunqi, int x, int y)
 	return pChess;
 }
 
-void HideChess(BoardChess *pChess, int iDir)
-{
-	if(pChess->type!=NONE)
-	{
-		gtk_widget_hide(pChess->pLineup->pImage[iDir]);
-	}
-}
 
 void ShowRectangle(Junqi *pJunqi, BoardChess *pChess, int color)
 {
@@ -374,41 +369,130 @@ void ShowSelect(Junqi *pJunqi, BoardChess *pChess)
 	ShowRectangle(pJunqi, pChess, RECTANGLE_WHITE);
 }
 
-void MoveChess(Junqi *pJunqi, BoardChess *pChess)
+void ShowPathArrow(Junqi *pJunqi, int iPath)
 {
-	BoardChess *pSrc, *pDst;
+	GraphPath *p;
+	int x,y;
 
-	pDst = pChess;
-
-	HideChess(pDst,pDst->iDir);
-	if(pChess->type!=NONE && pChess->pLineup->pFlag)
+	p=pJunqi->pPath[iPath];
+	do
 	{
-		gtk_widget_destroy(pChess->pLineup->pFlag);
-		pChess->pLineup->pFlag = NULL;
+		if(p->pChess->iDir&1)
+		{
+			x = p->pChess->xPos+8;
+			y = p->pChess->yPos+9;
+		}
+		else
+		{
+			x = p->pChess->xPos+12;
+			y = p->pChess->yPos+5;
+		}
+		gtk_fixed_put(GTK_FIXED(pJunqi->fixed), p->pArrow, x, y);
+		gtk_widget_show(p->pArrow);
+
+		p=p->pNext;
+	}while( !p->isHead );
+}
+
+void ShowBanner(Junqi *pJunqi, int iDir)
+{
+	BoardChess *pBanner;
+	if( pJunqi->ChessPos[iDir][26].type==JUNQI )
+	{
+		pBanner = &pJunqi->ChessPos[iDir][26];
+	}
+	else
+	{
+		pBanner = &pJunqi->ChessPos[iDir][28];
+	}
+	for(int i=1; i<4; i++)
+	{
+		gtk_widget_destroy(pBanner->pLineup->pImage[i]);
+	}
+	SetChessImageType(pJunqi, iDir, pBanner->index, JUNQI);
+	gtk_fixed_put(GTK_FIXED(pJunqi->fixed),
+		     	  pBanner->pLineup->pImage[iDir],
+		     	  pBanner->xPos,pBanner->yPos);
+	gtk_widget_show(pBanner->pLineup->pImage[iDir]);
+}
+
+void DestroyAllChess(Junqi *pJunqi, int iDir)
+{
+	for(int i=0; i<30; i++)
+	{
+		if( pJunqi->Lineup[iDir][i].type!=NONE )
+		{
+			for(int j=1; j<4; j++)
+			{
+				gtk_widget_destroy(pJunqi->Lineup[iDir][i].pImage[j]);
+			}
+		}
+	}
+}
+
+/*
+ * 根据比较结果，对棋子做相应处理
+ * 此处代码具有很强的次序关系，修改时要小心
+ */
+void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
+{
+
+	if( type==EAT || type==MOVE )
+	{
+		gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
+					   pSrc->pLineup->pImage[pDst->iDir],
+					   pDst->xPos,pDst->yPos);
+	}
+	if( type==EAT || type==BOMB )
+	{
+		assert(pDst->type!=NONE);
+		gtk_widget_hide(pDst->pLineup->pImage[pDst->iDir]);
+		if( pDst->pLineup->pFlag )
+		{
+			gtk_widget_destroy(pDst->pLineup->pFlag);
+			pDst->pLineup->pFlag = NULL;
+		}
+		if( type==BOMB )
+			pDst->type = NONE;
+
+		if( pDst->pLineup->type==JUNQI )
+		{
+			DestroyAllChess(pJunqi, pDst->iDir);
+		}
+	}
+	if( type==EAT || type==MOVE )
+	{
+		pDst->type = pSrc->pLineup->type;
+		pDst->pLineup = pSrc->pLineup;
+		if(pSrc->pLineup->pFlag)
+		{
+			MoveFlag(pJunqi,pDst,1);
+		}
+	}
+	if( type==KILLED || type==BOMB )
+	{
+		if(pSrc->pLineup->pFlag)
+		{
+			gtk_widget_hide(pSrc->pLineup->pFlag);
+		}
+		if( pSrc->pLineup->type==SILING || pDst->pLineup->type==SILING  )
+		{
+			if( pSrc->pLineup->type==SILING )
+				ShowBanner(pJunqi, pSrc->pLineup->iDir);
+			if( pDst->pLineup->type==SILING )
+				ShowBanner(pJunqi, pDst->pLineup->iDir);
+		}
 	}
 
-	pSrc = pJunqi->pSelect;
-	pDst->pLineup = pSrc->pLineup;
-
-	gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
-				   pSrc->pLineup->pImage[pDst->iDir],
-				   pDst->xPos,pDst->yPos);
-
-	if(pDst->pLineup->pFlag)
-	{
-		MoveFlag(pJunqi,pDst,1);
-	}
-
-	//注意！这部分代码有很强的顺序关系
-	pDst->type = pSrc->type;
-	//隐藏选中的棋子
-	HideChess(pSrc,pSrc->iDir);
+	assert( pSrc->pLineup->type!=NONE );
+	gtk_widget_hide(pSrc->pLineup->pImage[pSrc->iDir]);
 	pSrc->type = NONE;
-
-	gtk_widget_show(pSrc->pLineup->pImage[pDst->iDir]);
-
-	ShowRectangle(pJunqi, pChess, RECTANGLE_RED);
-
+	if( type==EAT || type==MOVE )
+	{
+		gtk_widget_show(pDst->pLineup->pImage[pDst->iDir]);
+	}
+	ShowRectangle(pJunqi, pDst, RECTANGLE_RED);
+	ShowPathArrow(pJunqi, 0);
 }
 
 /*
@@ -554,9 +638,12 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
 						return;
 					}
     			}
-    			if(IsEnableMove(pJunqi, pChess))
+    			if( IsEnableMove(pJunqi, pChess) )
     			{
-    				MoveChess(pJunqi, pChess);
+    				int type;
+    				type = CompareChess(pJunqi->pSelect, pChess);
+    				PlayResult(pJunqi, pJunqi->pSelect, pChess, type);
+
     			}
     		}
     		else
@@ -918,6 +1005,7 @@ void get_lineup_cb (GtkNativeDialog *dialog,
 		pLineup = (Jql*)(&aBuf[0]);
 		if( memcmp(pLineup->aMagic, aMagic, 4)!=0 )
 		{
+			return;
 			assert(0);
 		}
 

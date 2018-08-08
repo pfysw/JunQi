@@ -91,30 +91,7 @@ void ClearPathArrow(Junqi *pJunqi, int iPath)
 	pJunqi->pPath[iPath] = NULL;
 }
 
-void ShowPathArrow(Junqi *pJunqi, int iPath)
-{
-	GraphPath *p;
-	int x,y;
 
-	p=pJunqi->pPath[iPath];
-	do
-	{
-		if(p->pChess->iDir&1)
-		{
-			x = p->pChess->xPos+8;
-			y = p->pChess->yPos+9;
-		}
-		else
-		{
-			x = p->pChess->xPos+12;
-			y = p->pChess->yPos+5;
-		}
-		gtk_fixed_put(GTK_FIXED(pJunqi->fixed), p->pArrow, x, y);
-		gtk_widget_show(p->pArrow);
-
-		p=p->pNext;
-	}while( !p->isHead );
-}
 
 GtkWidget* GetArrowImage(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 {
@@ -419,9 +396,55 @@ int IsEnableMove(Junqi *pJunqi, BoardChess *pDst)
     	ClearPathArrow(pJunqi, 0);
     	pJunqi->pPath[0] = pJunqi->pPath[1];
     	pJunqi->pPath[1] = NULL;
-
-    	ShowPathArrow(pJunqi, 0);
     }
 
 	return rc;
+}
+
+int CompareChess(BoardChess *pSrc, BoardChess *pDst)
+{
+	enum CompareType result;
+    assert( pSrc->type!=NONE );
+    if( pDst->type==NONE )
+    {
+    	result = MOVE;
+    }
+    else if( pDst->type==ZHADAN||pSrc->type==ZHADAN )
+    {
+    	result = BOMB;
+    }
+    else if( pDst->type==JUNQI )
+    {
+    	result = EAT;
+    }
+    else if( pDst->type==DILEI )
+    {
+    	if( pSrc->type==GONGB )
+    	{
+    		result = EAT;
+    	}
+    	else
+    	{
+    		result = KILLED;
+    	}
+    }
+    else
+    {
+    	assert( pDst->type>=SILING && pDst->type<=GONGB &&
+    			pSrc->type>=SILING && pSrc->type<=GONGB );
+    	if( pDst->type == pSrc->type )
+    	{
+    		result = BOMB;
+    	}
+    	else if( pSrc->type<pDst->type )
+    	{
+    		result = EAT;
+    	}
+    	else
+    	{
+    		result = KILLED;
+    	}
+    }
+
+	return result;
 }
