@@ -42,4 +42,7 @@ GdkPixbuf* get_from_pixbuf_position(GdkPixbuf* pixbuf,
 								gint width,
 								gint height );
 void SendSoundEvent(Junqi *pJunqi, enum CompareType type);
+void ShowReplaySlider(Junqi *pJunqi);
+void HideJumpButton(int iDir);
+void ShowDialogMessage(Junqi *pJunqi, char *str, int num);
 #endif /* BOARD_H_ */

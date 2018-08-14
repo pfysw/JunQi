@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "junqi.h"
 #include "board.h"
+#include "rule.h"
 
 void select_flag_event(GtkWidget *widget, GdkEventButton *event, gpointer data);
 
@@ -18,6 +19,24 @@ int OsRead(int fd, void *zBuf, int iAmt, long iOfst)
   nRead = read(fd, zBuf, iAmt);
 
   return nRead;
+}
+
+int OsWrite(
+  int fd,
+  void *zBuf,
+  int iAmt,
+  long iOfst
+){
+  off_t ofst;
+  int nWrite;
+
+  ofst = lseek(fd, iOfst, SEEK_SET);
+  if( ofst!=iOfst ){
+    return 0;
+  }
+  nWrite = write(fd, zBuf, iAmt);
+
+  return nWrite;
 }
 
 void LoadChess(Junqi *pJunqi, enum ChessColor color)
@@ -83,7 +102,6 @@ void SetChessImageType(Junqi *pJunqi, int dir, int i, int iType)
 	GdkPixbuf *pRotate;
 	GtkWidget *pImage;
 
-	pJunqi->eColor = PURPLE;
 	pPixbuf = pJunqi->Chess[(dir+pJunqi->eColor)%4][iType];
 	pImage = gtk_image_new_from_pixbuf(pPixbuf);
 	pJunqi->Lineup[dir][i].pImage[0] = pImage;
@@ -144,6 +162,10 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 
 	int x,y;
 	int i;
+
+	pJunqi->eColor = PURPLE;
+	pJunqi->eTurn = (4-pJunqi->eColor)%4;
+
     //从方阵的左上角从上往下，从左往右遍历
 	for(i=0;i<30;i++)
 	{
@@ -192,14 +214,13 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 		pJunqi->ChessPos[dir][i].iDir= dir;
 		SetBoardCamp(pJunqi, dir, i);
 		SetBoardRailway(pJunqi, dir, i);
-		CreatGraphVertex(pJunqi,&pJunqi->ChessPos[dir][i]);
 
 		if(iType!=NONE)
 		{
-//			if(dir==RIGHT||dir==LEFT)
-//			{
-//				iType = DARK;
-//			}
+			if( (dir==RIGHT||dir==LEFT) && !pJunqi->bReplay )
+			{
+				iType = DARK;
+			}
 			SetChessImageType(pJunqi, dir, i, iType);
 			pJunqi->Lineup[dir][i].iDir = dir;
 			for(int j=1; j<4; j++)
@@ -355,16 +376,9 @@ void MoveFlag(Junqi *pJunqi, BoardChess *pChess, int isInit)
 
 void ShowSelect(Junqi *pJunqi, BoardChess *pChess)
 {
-	if( pChess->type==NONE )
-	{
-		return;
-	}
 	pJunqi->bSelect = 1;
 	pJunqi->pSelect = pChess;
 
-	//显示白色选择框
-	gtk_widget_hide(pJunqi->redRectangle[0]);
-	gtk_widget_hide(pJunqi->redRectangle[1]);
 
 	ShowRectangle(pJunqi, pChess, RECTANGLE_WHITE);
 }
@@ -419,16 +433,96 @@ void ShowBanner(Junqi *pJunqi, int iDir)
 
 void DestroyAllChess(Junqi *pJunqi, int iDir)
 {
-	for(int i=0; i<30; i++)
+	int i,j;
+	BoardChess *pChess;
+
+	for(i=0; i<30; i++)
 	{
 		if( pJunqi->Lineup[iDir][i].type!=NONE )
 		{
-			for(int j=1; j<4; j++)
+			for(j=1; j<4; j++)
 			{
 				gtk_widget_destroy(pJunqi->Lineup[iDir][i].pImage[j]);
 			}
 		}
 	}
+	for(i=0; i<17; i++)
+	{
+		for(j=0; j<17; j++)
+		{
+			if( pJunqi->aBoard[i][j].pAdjList )
+			{
+				pChess = pJunqi->aBoard[i][j].pAdjList->pChess;
+				assert( pChess );
+				if( pChess && pChess->iDir==iDir )
+				{
+					pChess->type = NONE;
+				}
+			}
+		}
+	}
+
+	pJunqi->aInfo[iDir].bDead = 1;
+	if( pJunqi->aInfo[(iDir+2)%4].bDead==1 )
+	{
+		if( !pJunqi->bReplay )
+			pJunqi->bStart = 0;
+	}
+
+}
+
+void AddDataToReplay(Junqi *pJunqi, const u8 *aBuf, int size)
+{
+	if( pJunqi->iReOfst+size>=PAGE_SIZE )
+	{
+		return;
+	}
+	memcpy(pJunqi->aReplay+pJunqi->iReOfst, aBuf, size);
+	pJunqi->iReOfst += size;
+}
+
+void SetReplayData(Junqi *pJunqi, u8 *aBuf, int iOfst, int iAmt)
+{
+	memcpy(pJunqi->aReplay+iOfst, aBuf, iAmt);
+}
+
+void AddEventToReplay(Junqi *pJunqi, int event, int iDir)
+{
+	u8 aEvent[4];
+
+	memset(aEvent, 0, 4);
+	aEvent[0] = PLAY_EVENT;
+	aEvent[1] = event;
+	aEvent[2] = iDir;
+	AddDataToReplay(pJunqi, aEvent, 4);
+}
+
+void AddLineupToReplay(Junqi *pJunqi)
+{
+	u8 aLineup[30];
+	for(int i=0; i<4; i++)
+	{
+		for(int j=0; j<30; j++)
+		{
+			aLineup[j] = pJunqi->Lineup[i][j].type;
+		}
+		AddDataToReplay(pJunqi, aLineup, 30);
+	}
+}
+
+void AddMoveRecord(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
+{
+	u8 aMove[4];
+	aMove[0] = pSrc->point.x;
+	aMove[1] = pSrc->point.y;
+	aMove[2] = pDst->point.x;
+	aMove[3] = pDst->point.y;
+
+	for(int i=0; i<4; i++)
+	{
+		assert( aMove[i]>=0 && aMove[i]<17 );
+	}
+	AddDataToReplay(pJunqi, aMove, 4);
 }
 
 /*
@@ -467,8 +561,9 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 
 		if( pDst->pLineup->type==JUNQI )
 		{
-			SendSoundEvent(pJunqi, DEAD);
 			DestroyAllChess(pJunqi, pDst->iDir);
+			SendSoundEvent(pJunqi,DEAD);
+			HideJumpButton(pDst->iDir);
 		}
 	}
 	if( type==EAT || type==MOVE )
@@ -512,6 +607,11 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 	}
 	ShowRectangle(pJunqi, pDst, RECTANGLE_RED);
 	ShowPathArrow(pJunqi, 0);
+
+	if(!pJunqi->bReplay)
+	{
+		AddMoveRecord(pJunqi, pSrc, pDst);
+	}
 
 }
 
@@ -571,12 +671,16 @@ void ShowFlagChess(Junqi *pJunqi, BoardChess *pChess)
 
 void SwapChess(Junqi *pJunqi, int i, int j, int dir)
 {
-	ChessLineup *temp;
+	ChessLineup temp;
 	BoardChess *pChess;
 
-	temp = pJunqi->ChessPos[dir][j].pLineup;
-	pJunqi->ChessPos[dir][j].pLineup = pJunqi->ChessPos[dir][i].pLineup;
-	pJunqi->ChessPos[dir][i].pLineup = temp;
+	memcpy(&temp, &pJunqi->Lineup[dir][i], sizeof(ChessLineup));
+	memcpy(&pJunqi->Lineup[dir][i], &pJunqi->Lineup[dir][j], sizeof(ChessLineup));
+	memcpy(&pJunqi->Lineup[dir][j], &temp, sizeof(ChessLineup));
+
+
+	pJunqi->ChessPos[dir][j].pLineup = &pJunqi->Lineup[dir][j];
+	pJunqi->ChessPos[dir][i].pLineup = &pJunqi->Lineup[dir][i];
 	pJunqi->ChessPos[dir][i].type = pJunqi->ChessPos[dir][i].pLineup->type;
 	pJunqi->ChessPos[dir][j].type = pJunqi->ChessPos[dir][j].pLineup->type;
 
@@ -629,8 +733,17 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
 	//点击左键
     if( event->button==1 )
     {
-    	if(!pJunqi->bSelect)
+    	if( !pJunqi->bSelect )
     	{
+    		if( pChess->type==NONE )
+    		{
+    			return;
+    		}
+			if( pJunqi->bStart && pJunqi->eTurn!=pChess->pLineup->iDir )
+			{
+				if( !pJunqi->bReplay )
+					return;
+			}
     		SendSoundEvent(pJunqi,SELECT);
     		ShowSelect(pJunqi, pChess);
     	}
@@ -645,7 +758,6 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
     			pJunqi->pSelect = NULL;
     			return;
     		}
-
     		if(pJunqi->bStart)
     		{
     			if(pChess->type!=NONE)
@@ -660,11 +772,16 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
 						return;
 					}
     			}
-    			if( IsEnableMove(pJunqi, pChess) )
+    			if( IsEnableMove(pJunqi, pJunqi->pSelect, pChess) )
     			{
+            		gtk_widget_hide(pJunqi->redRectangle[0]);
+            		gtk_widget_hide(pJunqi->redRectangle[1]);
+
     				int type;
     				type = CompareChess(pJunqi->pSelect, pChess);
     				PlayResult(pJunqi, pJunqi->pSelect, pChess, type);
+    				//pJunqi->eTurn = (pJunqi->eTurn+1)%4;
+    				ChessTurn(pJunqi);
 
     			}
     		}
@@ -736,16 +853,25 @@ void select_flag_event(GtkWidget *widget, GdkEventButton *event, gpointer data)
 	}
 }
 
+
+void DestroySelectImage(Junqi *pJunqi)
+{
+	gtk_widget_destroy(pJunqi->whiteRectangle[0]);
+	gtk_widget_destroy(pJunqi->whiteRectangle[1]);
+	gtk_widget_destroy(pJunqi->redRectangle[0]);
+	gtk_widget_destroy(pJunqi->redRectangle[1]);
+}
+
 void InitSelectImage(Junqi *pJunqi)
 {
 	pJunqi->whiteRectangle[0] = GetSelectImage(0, 0);
 	pJunqi->whiteRectangle[1] = GetSelectImage(1, 0);
 	pJunqi->redRectangle[0] = GetSelectImage(0, 1);
 	pJunqi->redRectangle[1] = GetSelectImage(1, 1);
-	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->whiteRectangle[0], 0, 0);
-	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->whiteRectangle[1], 0, 0);
 	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->redRectangle[0], 0, 0);
 	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->redRectangle[1], 0, 0);
+	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->whiteRectangle[0], 0, 0);
+	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->whiteRectangle[1], 0, 0);
 
 }
 
@@ -802,6 +928,15 @@ void InitBoardItem(Junqi *pJunqi)
 	//初始化标记棋子
 	InitFlagPixbuf(pJunqi);
 	InitArrowPixbuf(pJunqi);
+}
+
+void ResetNineGrid(Junqi *pJunqi)
+{
+	int i;
+	for(i=0; i<9; i++)
+	{
+		pJunqi->NineGrid[i].type = NONE;
+	}
 }
 
 void InitNineGrid(Junqi *pJunqi)
@@ -975,6 +1110,10 @@ void CreatBoardChess(GtkWidget *window, Junqi *pJunqi)
 	{
 		InitLineup(pJunqi,i);
 		SetChess(pJunqi,i);
+		for(int j=0; j<30; j++)
+		{
+			CreatGraphVertex(pJunqi,&pJunqi->ChessPos[i][j]);
+		}
 	}
 	InitNineGrid(pJunqi);
 	InitBoardItem(pJunqi);
@@ -986,7 +1125,7 @@ Junqi *JunqiOpen(void)
 {
 	Junqi *pJunqi = (Junqi*)malloc(sizeof(Junqi));
 	memset(pJunqi, 0, sizeof(Junqi));
-
+	AddDataToReplay(pJunqi, aMagic, 4);
 	return pJunqi;
 }
 
@@ -1002,7 +1141,30 @@ void ConvertFilename(char *zName)
 	}
 }
 
+void LoadLineup(Junqi *pJunqi, int iDir, u8 *chess)
+{
+	int i,j;
 
+	for(i=0;i<30;i++)
+	{
+		if(pJunqi->ChessPos[iDir][i].type == NONE)
+		{
+			continue;
+		}
+
+		if( pJunqi->ChessPos[iDir][i].type != chess[i] )
+		{
+			for(j=i+1;j<30;j++)
+			{
+				if(chess[i]==pJunqi->ChessPos[iDir][j].type)
+				{
+					SwapChess(pJunqi,i,j,iDir);
+					break;
+				}
+			}
+		}
+	}
+}
 
 void get_lineup_cb (GtkNativeDialog *dialog,
                   gint             response_id,
@@ -1014,14 +1176,12 @@ void get_lineup_cb (GtkNativeDialog *dialog,
 	int fd;
 	u8 aBuf[4096];
 	Jql *pLineup;
-	int i,j;
 	int iDir;
 
 	if (response_id == GTK_RESPONSE_ACCEPT)
 	{
 		name = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER (native));
 		ConvertFilename(name);
-		//printf("%s\n",name);
 		fd = open(name, O_RDWR|O_CREAT, 0600);
 		OsRead(fd, aBuf, 4096, 0);
 		pLineup = (Jql*)(&aBuf[0]);
@@ -1032,28 +1192,158 @@ void get_lineup_cb (GtkNativeDialog *dialog,
 		}
 
 		iDir = pJunqi->selectDir;
-		for(i=0;i<30;i++)
-		{
-			if(pJunqi->ChessPos[iDir][i].type == NONE)
-			{
-				continue;
-			}
 
-			if( pJunqi->ChessPos[iDir][i].type != pLineup->chess[i] )
-			{
-				for(j=i+1;j<30;j++)
-				{
-					if(pLineup->chess[i]==pJunqi->ChessPos[iDir][j].type)
-					{
-						SwapChess(pJunqi,i,j,iDir);
-						break;
-					}
-				}
-			}
-		}
+		LoadLineup(pJunqi, iDir, pLineup->chess);
 	}
 
 	gtk_native_dialog_destroy (GTK_NATIVE_DIALOG (native));
 	g_object_unref (native);
 
+}
+
+void LoadReplayLineup(Junqi *pJunqi)
+{
+	u8 aChess[30];
+	for(int i=0; i<4; i++)
+	{
+		memcpy(aChess, &pJunqi->aReplay[8+30*i], 30);
+		LoadLineup(pJunqi, i, aChess);
+	}
+
+}
+
+void OpenReplay(GtkNativeDialog *dialog,
+        gint             response_id,
+        gpointer         user_data)
+{
+	char *name;
+	Junqi *pJunqi = (Junqi *)user_data;
+	GtkFileChooserNative *native = pJunqi->native;
+	int fd;
+	u8 aBuf[PAGE_SIZE];
+
+	if (response_id == GTK_RESPONSE_ACCEPT)
+	{
+		name = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER (native));
+		ConvertFilename(name);
+		fd = open(name, O_RDWR|O_CREAT, 0600);
+		OsRead(fd, aBuf, PAGE_SIZE, 0);
+		if( memcmp(aBuf, aMagic, 4)==0 )
+		{
+			pJunqi->bReplay = 1;
+			memcpy(pJunqi->aReplay, aBuf, PAGE_SIZE);
+			ReSetChessBoard(pJunqi);
+			LoadReplayLineup(pJunqi);
+			ShowReplaySlider(pJunqi);
+			int max_step = *(int *)(&pJunqi->aReplay[4]);
+			gtk_adjustment_set_upper(pJunqi->slider_adj, max_step);
+
+			pJunqi->bStart = 1;
+			pJunqi->bStop = 1;
+			pJunqi->iRpStep = 0;
+		}
+	}
+
+	gtk_native_dialog_destroy (GTK_NATIVE_DIALOG (native));
+	g_object_unref (native);
+}
+
+void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
+{
+	int i;
+	BoardChess *pSrc, *pDst;
+	BoardPoint p1,p2;
+
+	ReSetChessBoard(pJunqi);
+	for(i=0; i<pJunqi->iRpStep; i++)
+	{
+		pJunqi->sound_type = 0;
+
+		if( *((u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i))==PLAY_EVENT )
+		{
+			int iDir = *((u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+2));
+			if( *((u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+1))==SURRENDER_EVENT )
+			{
+				DestroyAllChess(pJunqi, iDir);
+				SendSoundEvent(pJunqi,DEAD);
+			}
+			else if( *((u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+1))==JUMP_EVENT )
+			{
+				IncJumpCnt(pJunqi, iDir);
+				if( i==pJunqi->iRpStep-1 && next_flag)
+					ShowDialogMessage(pJunqi, "跳过次数", pJunqi->aInfo[iDir].cntJump);
+			}
+			continue;
+		}
+		p1.x = *(u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i);
+		p1.y = *(u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+1);
+		p2.x = *(u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+2);
+		p2.y = *(u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+3);
+
+		assert( p1.x>=0 && p1.x<17 );
+		assert( p1.y>=0 && p1.y<17 );
+		assert( p2.x>=0 && p2.x<17 );
+		assert( p2.x>=0 && p2.x<17 );
+		pSrc = pJunqi->aBoard[p1.x][p1.y].pAdjList->pChess;
+		pDst = pJunqi->aBoard[p2.x][p2.y].pAdjList->pChess;
+
+		if( IsEnableMove(pJunqi, pSrc, pDst) )
+		{
+			gtk_widget_hide(pJunqi->redRectangle[0]);
+			gtk_widget_hide(pJunqi->redRectangle[1]);
+
+			int type;
+			type = CompareChess(pSrc, pDst);
+			PlayResult(pJunqi, pSrc, pDst, type);
+		}
+		else
+		{
+			assert(0);
+		}
+	}
+
+}
+
+void SaveReplay(GtkNativeDialog *dialog,
+        gint             response_id,
+        gpointer         user_data)
+{
+	char *name;
+	Junqi *pJunqi = (Junqi *)user_data;
+	GtkFileChooserNative *native = pJunqi->native;
+	int fd;
+	int iTolalStep;
+
+	if (response_id == GTK_RESPONSE_ACCEPT)
+	{
+		name = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER (native));
+		ConvertFilename(name);
+		fd = open(name, O_RDWR|O_CREAT, 0600);
+		assert( pJunqi->iReOfst>=MOVE_OFFSET );
+		iTolalStep = (pJunqi->iReOfst-MOVE_OFFSET)/4;
+		SetReplayData(pJunqi, (u8*)&iTolalStep, 4, 4);
+		OsWrite(fd, pJunqi->aReplay, pJunqi->iReOfst, 0);
+	}
+	gtk_native_dialog_destroy (GTK_NATIVE_DIALOG (native));
+	g_object_unref (native);
+}
+
+
+void ReSetChessBoard(Junqi *pJunqi)
+{
+
+	for(int i=0; i<4; i++)
+	{
+		if( !pJunqi->aInfo[i].bDead )
+		{
+			DestroyAllChess(pJunqi, i);
+		}
+		SetChess(pJunqi,i);
+	}
+	ResetNineGrid(pJunqi);
+	ClearPathArrow(pJunqi, 0);
+	DestroySelectImage(pJunqi);
+	InitSelectImage(pJunqi);
+	//DestroyAllChess内部会把bDead置位，初始化重新清0
+	memset(pJunqi->aInfo, 0, sizeof(pJunqi->aInfo));
 }

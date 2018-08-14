@@ -5,6 +5,7 @@
  *      Author: Administrator
  */
 #include "junqi.h"
+#include "board.h"
 
 int IsChangeValid(BoardChess *pSrc, BoardChess *pDst)
 {
@@ -324,14 +325,13 @@ u8 GetRailPath(
 }
 
 
-int IsEnableMove(Junqi *pJunqi, BoardChess *pDst)
+int IsEnableMove(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 {
 	int rc = 0;
-	BoardChess *pSrc;
+
 	BoardGraph *pVertex1;
 	BoardGraph *pVertex2;
 
-	pSrc = pJunqi->pSelect;
 	ClearPassCnt(pJunqi);
 
 	if(pSrc->isStronghold)
@@ -447,4 +447,42 @@ int CompareChess(BoardChess *pSrc, BoardChess *pDst)
     }
 
 	return result;
+}
+
+void ChessTurn(Junqi *pJunqi)
+{
+	pJunqi->eTurn = (pJunqi->eTurn+1)%4;
+	//下家阵亡
+	if( pJunqi->aInfo[pJunqi->eTurn].bDead )
+	{
+		pJunqi->eTurn = (pJunqi->eTurn+1)%4;
+		//下下家阵亡
+		if( pJunqi->aInfo[pJunqi->eTurn].bDead )
+		{
+			pJunqi->eTurn = (pJunqi->eTurn+1)%4;
+		}
+	}
+
+	pJunqi->bSelect = 0;
+	gtk_widget_hide(pJunqi->whiteRectangle[0]);
+	gtk_widget_hide(pJunqi->whiteRectangle[1]);
+}
+
+void IncJumpCnt(Junqi *pJunqi, int iDir)
+{
+	int cntJump;
+	pJunqi->aInfo[iDir].cntJump++;
+	cntJump = pJunqi->aInfo[iDir].cntJump;
+
+	if( cntJump==5 )
+	{
+		SendSoundEvent(pJunqi,DEAD);
+		DestroyAllChess(pJunqi, iDir);
+
+		HideJumpButton(iDir);
+	}
+    if( !pJunqi->bReplay )
+    {
+    	ShowDialogMessage(pJunqi, "跳过次数", cntJump);
+    }
 }

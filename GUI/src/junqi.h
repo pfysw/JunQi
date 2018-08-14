@@ -7,6 +7,7 @@
 #include <windows.h>
 #include <mmsystem.h>
 
+
 typedef unsigned char  u8;
 typedef unsigned int   u32;
 typedef unsigned short u16;
@@ -17,13 +18,29 @@ enum ChessType {NONE,DARK,JUNQI,DILEI,ZHADAN,SILING,JUNZH,SHIZH,
 enum ChessDir {HOME,RIGHT,OPPS,LEFT};
 enum SpcRail {RAIL1=1,RAIL2,RAIL3,RAIL4};
 enum RailType {GONGB_RAIL,HORIZONTAL_RAIL,VERTICAL_RAIL,CURVE_RAIL};
-enum CompareType {MOVE=1,EAT,BOMB,KILLED,SELECT,SHOW_FLAG,DEAD,BEGIN};
+enum CompareType {MOVE=1,EAT,BOMB,KILLED,SELECT,SHOW_FLAG,DEAD,BEGIN,TIMER};
 
 ////////// test /////////////////////
 #define log_a(format,...)   //printf(format"\n",## __VA_ARGS__)
 #define log_fun(format,...)  //printf(format"\n",## __VA_ARGS__)
 #define log_b(format,...)  printf(format"\n",## __VA_ARGS__)
 #define log_c(format,...)  //printf(format"\n",## __VA_ARGS__)
+
+#if 0
+static void memout(u8 *pdata,u8 len)
+{
+	int i;
+	for(i=0;i<len;i++)
+	{
+		printf("%02X ",*(pdata+i));
+		if((i+1)%8==0)
+		{
+			printf("\n");
+		}
+	}
+	printf("\n");
+}
+#endif
 ////////////////////////////////
 
 #define MOVE_SOUND         "./sound/move.wav"
@@ -34,8 +51,17 @@ enum CompareType {MOVE=1,EAT,BOMB,KILLED,SELECT,SHOW_FLAG,DEAD,BEGIN};
 #define SHOW_FLAG_SOUND    "./sound/showflag.wav"
 #define SELECT_SOUND       "./sound/select.wav"
 #define BEGIN_SOUND        "./sound/begin.wav"
+#define TIMER_SOUND        "./sound/timer.wav"
+
+#define PAGE_SIZE 4096
+#define MOVE_OFFSET (8+30*4)//4字节起始标志+4字节总步数+4家布阵
 
 const static u8 aMagic[4]={0x57,0x04,0,0};
+
+#define PLAY_EVENT 0xF5
+#define JUMP_EVENT 0x00
+#define SURRENDER_EVENT 0x01
+
 
 typedef struct ChessLineup
 {
@@ -102,19 +128,32 @@ struct GraphPath
 	u8 isHead;
 };
 
+typedef struct PartyInfo
+{
+	u8 bDead;
+	u8 cntJump;
+}PartyInfo;
+
 typedef struct Junqi Junqi;
 struct Junqi
 {
-	u8 eState;
+	u8 bReplay;
 	u8 bSelect;
 	u8 bStart;
+	u8 bStop;
 	enum ChessColor eColor;
+	enum ChessDir eTurn;
 	BoardChess *pSelect;
 	GdkPixbuf *ChessImage[4];
 	GdkPixbuf *Chess[4][14];
 	ChessLineup Lineup[4][30];
 	BoardChess ChessPos[4][30];
 	GtkWidget *fixed;
+	GtkWidget *window;
+	GtkWidget *begin_button;
+	GtkWidget *start_button;
+	GtkWidget *step_fixed;
+	GtkAdjustment *slider_adj;
 	//GtkWidget *sound_obj;
 	enum CompareType sound_type;
 	//BoardChess ChessHome[4][30];
@@ -124,11 +163,17 @@ struct Junqi
 	//0：之前显示的路径，1：当前确定的最优路径，2：其他尝试的路径
 	GraphPath  *pPath[3];
 	int szPath;
+	u8 aReplay[4096];
+	int iReOfst;
+	int iRpStep;
+	PartyInfo aInfo[4];
 
 	GtkWidget *whiteRectangle[2];
 	GtkWidget *redRectangle[2];
 	FlagChess flagObj;
 	GdkPixbuf *paArrowPixbuf[8];
+	char label_str[100];
+	GtkWidget *pTimeLabel;
 
 	gpointer data;
 	GtkFileChooserNative *native;
@@ -148,11 +193,18 @@ Junqi *JunqiOpen(void);
 void get_lineup_cb (GtkNativeDialog *dialog,
                   gint             response_id,
                   gpointer         user_data);
+void SaveReplay(GtkNativeDialog *dialog,
+        gint             response_id,
+        gpointer         user_data);
+void OpenReplay(GtkNativeDialog *dialog,
+        gint             response_id,
+        gpointer         user_data);
 void SendSoundEvent(Junqi *pJunqi, enum CompareType type);
+void ReSetChessBoard(Junqi *pJunqi);
+void DestroyAllChess(Junqi *pJunqi, int iDir);
+void AddLineupToReplay(Junqi *pJunqi);
+void AddEventToReplay(Junqi *pJunqi, int event, int iDir);
+void ShowReplayStep(Junqi *pJunqi, u8 next_flag);
 
-/////////////////////////////////
-int IsEnableChange(Junqi *pJunqi, BoardChess *pChess);
-int IsEnableMove(Junqi *pJunqi, BoardChess *pDst);
-int CompareChess(BoardChess *pSrc, BoardChess *pDst);
 
 #endif
