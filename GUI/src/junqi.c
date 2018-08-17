@@ -456,7 +456,7 @@ void DestroyAllChess(Junqi *pJunqi, int iDir)
 			{
 				pChess = pJunqi->aBoard[i][j].pAdjList->pChess;
 				assert( pChess );
-				if( pChess && pChess->iDir==iDir )
+				if( pChess && pChess->pLineup && pChess->pLineup->iDir==iDir )
 				{
 					pChess->type = NONE;
 				}
@@ -766,8 +766,8 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
     		{
     			return;
     		}
-			if( pJunqi->bStart && (pJunqi->eTurn!=pChess->pLineup->iDir ||
-					pJunqi->eTurn%2!=0) )
+			if( pJunqi->bStart && (pJunqi->eTurn!=pChess->pLineup->iDir
+					|| pJunqi->eTurn%2!=0) )
 			{
 				if( !pJunqi->bReplay  )
 					return;
