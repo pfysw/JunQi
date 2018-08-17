@@ -408,7 +408,7 @@ void ShowPathArrow(Junqi *pJunqi, int iPath)
 	}while( !p->isHead );
 }
 
-void ShowBanner(Junqi *pJunqi, int iDir)
+BoardChess *ShowBanner(Junqi *pJunqi, int iDir)
 {
 	BoardChess *pBanner;
 	if( pJunqi->ChessPos[iDir][26].type==JUNQI )
@@ -429,6 +429,8 @@ void ShowBanner(Junqi *pJunqi, int iDir)
 		     	  pBanner->xPos,pBanner->yPos);
 	gtk_widget_show(pBanner->pLineup->pImage[iDir]);
 	SendSoundEvent(pJunqi, SHOW_FLAG);
+
+	return pBanner;
 }
 
 void DestroyAllChess(Junqi *pJunqi, int iDir)
@@ -532,6 +534,16 @@ void AddMoveRecord(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 {
 
+	MoveResultData send_data;
+	BoardChess *pBanner;
+
+	memset(&send_data, 0, sizeof(MoveResultData));
+	send_data.src[0] = pSrc->point.x;
+	send_data.src[1] = pSrc->point.y;
+	send_data.dst[0] = pDst->point.x;
+	send_data.dst[1] = pDst->point.y;
+	send_data.result = type;
+
 	if( type==EAT || type==MOVE )
 	{
 		gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
@@ -561,6 +573,7 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 
 		if( pDst->pLineup->type==JUNQI )
 		{
+			send_data.extra_info |= 0x01;
 			DestroyAllChess(pJunqi, pDst->iDir);
 			SendSoundEvent(pJunqi,DEAD);
 			HideJumpButton(pDst->iDir);
@@ -582,7 +595,10 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 			SendSoundEvent(pJunqi,KILLED);
 			if( pSrc->pLineup->type==SILING )
 			{
-				ShowBanner(pJunqi, pSrc->pLineup->iDir);
+				send_data.extra_info |= 0x02;
+				pBanner = ShowBanner(pJunqi, pSrc->pLineup->iDir);
+				send_data.junqi_src[0] = pBanner->point.x;
+				send_data.junqi_src[1] = pBanner->point.y;
 			}
 		}
 		if(pSrc->pLineup->pFlag)
@@ -592,9 +608,19 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 		if( type==BOMB )
 		{
 			if( pSrc->pLineup->type==SILING )
-				ShowBanner(pJunqi, pSrc->pLineup->iDir);
+			{
+				send_data.extra_info |= 0x02;
+				pBanner = ShowBanner(pJunqi, pSrc->pLineup->iDir);
+				send_data.junqi_src[0] = pBanner->point.x;
+				send_data.junqi_src[1] = pBanner->point.y;
+			}
 			if( pDst->pLineup->type==SILING )
-				ShowBanner(pJunqi, pDst->pLineup->iDir);
+			{
+				send_data.extra_info |= 0x04;
+				pBanner = ShowBanner(pJunqi, pDst->pLineup->iDir);
+				send_data.junqi_dst[0] = pBanner->point.x;
+				send_data.junqi_dst[1] = pBanner->point.y;
+			}
 		}
 	}
 
@@ -612,7 +638,7 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 	{
 		AddMoveRecord(pJunqi, pSrc, pDst);
 	}
-
+	SendMoveResult(pJunqi, pSrc->pLineup->iDir, &send_data);
 }
 
 /*
@@ -701,11 +727,12 @@ void ChangeChess(Junqi *pJunqi, BoardChess *pChess)
 	{
 		if(pChess->iDir==pJunqi->pSelect->iDir)
 		{
-			if( IsEnableChange(pJunqi,pChess) )
+			if( IsEnableChange(pJunqi->pSelect, pChess) )
 			{
 				SwapChess(pJunqi,pChess->index,
 						  pJunqi->pSelect->index,
 						  pChess->iDir);
+				SendLineup(pJunqi, pChess->iDir);
 			}
 		}
 	}
@@ -739,9 +766,10 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
     		{
     			return;
     		}
-			if( pJunqi->bStart && pJunqi->eTurn!=pChess->pLineup->iDir )
+			if( pJunqi->bStart && (pJunqi->eTurn!=pChess->pLineup->iDir ||
+					pJunqi->eTurn%2!=0) )
 			{
-				if( !pJunqi->bReplay )
+				if( !pJunqi->bReplay  )
 					return;
 			}
     		SendSoundEvent(pJunqi,SELECT);
@@ -780,7 +808,6 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
     				int type;
     				type = CompareChess(pJunqi->pSelect, pChess);
     				PlayResult(pJunqi, pJunqi->pSelect, pChess, type);
-    				//pJunqi->eTurn = (pJunqi->eTurn+1)%4;
     				ChessTurn(pJunqi);
 
     			}
@@ -1158,12 +1185,16 @@ void LoadLineup(Junqi *pJunqi, int iDir, u8 *chess)
 			{
 				if(chess[i]==pJunqi->ChessPos[iDir][j].type)
 				{
-					SwapChess(pJunqi,i,j,iDir);
+					if( IsEnableChange(&pJunqi->ChessPos[iDir][j], &pJunqi->ChessPos[iDir][i]) )
+					{
+						SwapChess(pJunqi,i,j,iDir);
+					}
 					break;
 				}
 			}
 		}
 	}
+	SendLineup(pJunqi, iDir);
 }
 
 void get_lineup_cb (GtkNativeDialog *dialog,

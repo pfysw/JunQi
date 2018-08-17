@@ -6,11 +6,10 @@
 #include <assert.h>
 #include <windows.h>
 #include <mmsystem.h>
+#include "comm.h"
+#include "type.h"
 
 
-typedef unsigned char  u8;
-typedef unsigned int   u32;
-typedef unsigned short u16;
 
 enum ChessColor {ORANGE,PURPLE,GREEN,BLUE};
 enum ChessType {NONE,DARK,JUNQI,DILEI,ZHADAN,SILING,JUNZH,SHIZH,
@@ -134,7 +133,6 @@ typedef struct PartyInfo
 	u8 cntJump;
 }PartyInfo;
 
-typedef struct Junqi Junqi;
 struct Junqi
 {
 	u8 bReplay;
@@ -179,6 +177,8 @@ struct Junqi
 	GtkFileChooserNative *native;
 	int selectDir;
 
+	struct sockaddr_in addr;
+	int socket_fd;
 };
 
 typedef struct Jql
@@ -205,6 +205,10 @@ void DestroyAllChess(Junqi *pJunqi, int iDir);
 void AddLineupToReplay(Junqi *pJunqi);
 void AddEventToReplay(Junqi *pJunqi, int event, int iDir);
 void ShowReplayStep(Junqi *pJunqi, u8 next_flag);
-
+int IsEnableMove(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst);
+int CompareChess(BoardChess *pSrc, BoardChess *pDst);
+void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type);
+void ChessTurn(Junqi *pJunqi);
+void LoadLineup(Junqi *pJunqi, int iDir, u8 *chess);
 
 #endif

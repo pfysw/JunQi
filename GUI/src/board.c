@@ -10,6 +10,7 @@
 #include "pthread.h"
 #include <unistd.h>
 #include "rule.h"
+#include "comm.h"
 
 static GdkPixbuf *background;
 static Junqi *gJunqi;
@@ -171,6 +172,7 @@ static void event_handle(GtkWidget *item,gpointer data)
 	else if( strcmp(event,"stop" )==0 )
 	{
 		pJunqi->bStop = 1;
+		SendHeader(pJunqi, pJunqi->eTurn, COMM_STOP);
 	}
 	else if( strcmp(event,"continue" )==0 )
 	{
@@ -393,6 +395,7 @@ static void  surrender_cb(GtkWidget *button , gpointer data)
 	response = gtk_dialog_run (GTK_DIALOG (dialog));
 	if (response == GTK_RESPONSE_OK)
 	{
+		SendEvent(pJunqi, iDir, SURRENDER_EVENT);
 		SendSoundEvent(pJunqi,DEAD);
 		DestroyAllChess(pJunqi, iDir);
 		AddEventToReplay(pJunqi, SURRENDER_EVENT, iDir);
@@ -416,7 +419,7 @@ static void  jump_cb(GtkWidget *button , gpointer data)
 		AddEventToReplay(pJunqi, JUMP_EVENT, iDir);
 		IncJumpCnt(pJunqi, iDir);
 		ChessTurn(pJunqi);
-
+		SendEvent(pJunqi, iDir, JUMP_EVENT);
 	}
 }
 
@@ -545,6 +548,14 @@ GtkWidget *GetSelectImage(int isVertical, int color)
     return image;
 }
 
+static void send_go(GtkWidget *button, GdkEventButton *event, gpointer data)
+{
+	Junqi *pJunqi = (Junqi *)data;
+	if( pJunqi->bStart )
+	{
+		SendHeader(pJunqi, pJunqi->eTurn, COMM_GO);
+	}
+}
 
 static void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data)
 {
@@ -573,7 +584,9 @@ static void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data
 
 	pJunqi->iReOfst = 8;
 	AddLineupToReplay(pJunqi);
-	//memout(pJunqi->aReplay, pJunqi->iReOfst);
+
+
+	SendHeader(pJunqi, pJunqi->eTurn, COMM_START);
 
 }
 
@@ -587,6 +600,7 @@ void ShowTime( Junqi *pJunqi )
 	tick--;
 	if( tick==0 )
 	{
+		SendEvent(pJunqi, pJunqi->eTurn, JUMP_EVENT);
 		AddEventToReplay(pJunqi, JUMP_EVENT, pJunqi->eTurn);
 		IncJumpCnt(pJunqi, pJunqi->eTurn);
 		ChessTurn(pJunqi);
@@ -737,6 +751,7 @@ void CreatBeginButton(Junqi *pJunqi)
 	pJunqi->start_button = image;
 	gtk_container_add(GTK_CONTAINER(start_button),image);
 	gtk_widget_show(start_button);
+	g_signal_connect(start_button,"button-press-event",G_CALLBACK(send_go),pJunqi);
 	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), start_button, 580,520);
 	g_object_unref (pixbuf);
 
@@ -851,4 +866,6 @@ void OpenBoard(GtkWidget *window)
 
     CreatStepSlider(pJunqi);
     CreatBoardChess(window, pJunqi);
+    CreatCommThread(pJunqi);
+
 }

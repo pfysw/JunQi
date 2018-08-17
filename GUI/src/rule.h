@@ -10,7 +10,7 @@
 
 #include "junqi.h"
 
-int IsEnableChange(Junqi *pJunqi, BoardChess *pChess);
+int IsEnableChange(BoardChess *pSrc, BoardChess *pDst);
 int IsEnableMove(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst);
 int CompareChess(BoardChess *pSrc, BoardChess *pDst);
 void ClearPathArrow(Junqi *pJunqi, int iPath);

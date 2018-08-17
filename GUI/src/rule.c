@@ -36,13 +36,14 @@ int IsChangeValid(BoardChess *pSrc, BoardChess *pDst)
     return rc;
 }
 
-int IsEnableChange(Junqi *pJunqi, BoardChess *pChess)
+
+int IsEnableChange(BoardChess *pSrc, BoardChess *pDst)
 {
 	int rc = 1;
 
-	if( (rc = IsChangeValid(pJunqi->pSelect, pChess)) )
+	if( (rc = IsChangeValid(pSrc, pDst)) )
 	{
-		rc = IsChangeValid(pChess, pJunqi->pSelect);
+		rc = IsChangeValid(pDst, pSrc);
 	}
 
     return rc;
