@@ -177,6 +177,10 @@ static void event_handle(GtkWidget *item,gpointer data)
 	else if( strcmp(event,"continue" )==0 )
 	{
 		pJunqi->bStop = 0;
+		if( pJunqi->bStart )
+		{
+			SendHeader(pJunqi, pJunqi->eTurn, COMM_GO);
+		}
 	}
 	else if( strcmp(event,"open" )==0 )
 	{

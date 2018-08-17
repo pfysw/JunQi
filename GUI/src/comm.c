@@ -218,7 +218,7 @@ void *comm_thread(void *arg)
 
 	while(1)
 	{
-		recvbytes=recvfrom(socket_fd, buf, 100, 0,NULL ,NULL);
+		recvbytes=recvfrom(socket_fd, buf, 200, 0,NULL ,NULL);
 		(void)recvbytes;//暂时不用，消除告警
 		DealRecData(pJunqi, buf);
 	}
