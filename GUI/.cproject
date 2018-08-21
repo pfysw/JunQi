@@ -41,6 +41,9 @@
 									<listOptionValue builtIn="false" value="-LF:/msys32/mingw32/bin -LF:/msys32/mingw32/lib -lgtk-3-0 -lgdk-3-0 -lgdi32 -limm32 -lshell32 -lole32 -Wl,-luuid -lwinmm -ldwmapi -lsetupapi -lcfgmgr32 -lz -lpangowin32-1.0-0 -lpangocairo-1.0-0 -lpango-1.0-0 -lfribidi-0 -latk-1.0-0 -lcairo-gobject-2 -lcairo-2 -lgdk_pixbuf-2.0-0 -lgio-2.0-0 -lgobject-2.0-0 -lglib-2.0-0 -lintl-8"/>
 								</option>
 								<option id="gnu.c.link.option.ldflags.1717026527" name="Linker flags" superClass="gnu.c.link.option.ldflags" value="-mwindows" valueType="string"/>
+								<option id="gnu.c.link.option.libs.627993109" superClass="gnu.c.link.option.libs" valueType="libs">
+									<listOptionValue builtIn="false" value="winmm"/>
+								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.linker.input.2018773154" superClass="cdt.managedbuild.tool.gnu.c.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
