@@ -326,7 +326,7 @@ u8 GetRailPath(
 }
 
 
-int IsEnableMove(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
+int IsEnableMove(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, u8 isShowPath)
 {
 	int rc = 0;
 
@@ -392,10 +392,15 @@ int IsEnableMove(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 	}
 
     assert( rc || pJunqi->pPath[1] == NULL );
-    if( rc )
+    if( rc && isShowPath)
     {
     	ClearPathArrow(pJunqi, 0);
     	pJunqi->pPath[0] = pJunqi->pPath[1];
+    	pJunqi->pPath[1] = NULL;
+    }
+    else
+    {
+    	ClearPathArrow(pJunqi, 1);
     	pJunqi->pPath[1] = NULL;
     }
 
@@ -479,6 +484,7 @@ void IncJumpCnt(Junqi *pJunqi, int iDir)
 	{
 		SendSoundEvent(pJunqi,DEAD);
 		DestroyAllChess(pJunqi, iDir);
+		ClearChessFlag(pJunqi,iDir);
 
 		HideJumpButton(iDir);
 	}
@@ -486,4 +492,73 @@ void IncJumpCnt(Junqi *pJunqi, int iDir)
     {
     	ShowDialogMessage(pJunqi, "跳过次数", cntJump);
     }
+}
+
+int IfHasMove(Junqi* pJunqi, BoardChess *pSrc)
+{
+	BoardChess *pTemp;
+	int i;
+	int rc = 0;
+
+
+	for(i=0; i<129; i++)
+	{
+		if( i<120 )
+		{
+			pTemp = &pJunqi->ChessPos[i/30][i%30];
+		}
+		else
+		{
+			pTemp = &pJunqi->NineGrid[i-120];
+		}
+		if( pTemp->type!=NONE && pSrc->pLineup->iDir%2==pTemp->pLineup->iDir%2 )
+		{
+			continue;
+		}
+		if( IsEnableMove(pJunqi, pSrc,pTemp, 0) )
+		{
+			rc = 1;
+			break;
+		}
+	}
+
+	return rc;
+}
+
+//todo 疑似存在内存泄漏问题
+int CheckIfDead(Junqi *pJunqi, int iDir)
+{
+	int rc = 1;
+	int i;
+	ChessLineup *pLineup;
+
+	if( pJunqi->aInfo[iDir].bDead )
+	{
+		return 1;
+	}
+
+	for(i=0; i<30; i++)
+	{
+		pLineup = &pJunqi->Lineup[iDir][i];
+		if( !pLineup->bDead && pLineup->type!=NONE )
+		{
+			assert(  aseertLineup(pLineup)  );
+			if( IfHasMove(pJunqi, pLineup->pChess) )
+			{
+				rc = 0;
+				break;
+			}
+		}
+	}
+
+	if( rc )
+	{
+		SendSoundEvent(pJunqi,DEAD);
+		DestroyAllChess(pJunqi, iDir);
+		ClearChessFlag(pJunqi,iDir);
+		HideJumpButton(iDir);
+		SendEvent(pJunqi, iDir, SURRENDER_EVENT);
+	}
+
+	return rc;
 }

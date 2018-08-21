@@ -10,6 +10,7 @@
 #include "junqi.h"
 #include "rule.h"
 
+gboolean pro_comm_msg(gpointer data);
 
 void PacketHeader(CommHeader *header, u8 iDir, u8 eFun)
 {
@@ -30,9 +31,11 @@ void SendData(Junqi* pJunqi, CommHeader *header, void *data, int len)
 
 	memcpy(buf+length, data, len);
 	length += len;
-
-	sendto(pJunqi->socket_fd, buf, length, 0,
-			(struct sockaddr *)&pJunqi->addr, sizeof(struct sockaddr));
+    if(!pJunqi->bReplay)
+    {
+		sendto(pJunqi->socket_fd, buf, length, 0,
+				(struct sockaddr *)&pJunqi->addr, sizeof(struct sockaddr));
+    }
 }
 
 void SendHeader(Junqi* pJunqi, u8 iDir, u8 eFun)
@@ -74,9 +77,11 @@ void SendMoveResult(Junqi* pJunqi, int iDir, MoveResultData *pData)
 void SendEvent(Junqi* pJunqi, int iDir, u8 event)
 {
 	CommHeader header;
-	u8 data = event;
+	u8 data[4] = {0};
+	data[0] = event;
+	data[1] = pJunqi->aInfo[iDir].cntJump;
 	PacketHeader(&header, iDir, COMM_EVNET);
-	SendData(pJunqi, &header, &data, 1);
+	SendData(pJunqi, &header, &data, 4);
 }
 
 void DealRecData(Junqi* pJunqi, u8 *data)
@@ -116,7 +121,12 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 			{
 				pSrc = pJunqi->aBoard[p1.x][p1.y].pAdjList->pChess;
 				pDst = pJunqi->aBoard[p2.x][p2.y].pAdjList->pChess;
-				if( pSrc==NULL || pDst==NULL )
+				if( pSrc==NULL || pDst==NULL || pSrc->type==NONE )
+				{
+					SendHeader(pJunqi, pHead->iDir, COMM_ERROR);
+					return;
+				}
+				if( pDst->type!=NONE && pSrc->pLineup->iDir%2==pDst->pLineup->iDir%2 )
 				{
 					SendHeader(pJunqi, pHead->iDir, COMM_ERROR);
 					return;
@@ -128,7 +138,7 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 				return;
 			}
 
-			if( pSrc->pLineup->iDir==pHead->iDir && IsEnableMove(pJunqi, pSrc, pDst) )
+			if( pSrc->pLineup->iDir==pHead->iDir && IsEnableMove(pJunqi, pSrc, pDst, 1) )
 			{
 				gtk_widget_hide(pJunqi->redRectangle[0]);
 				gtk_widget_hide(pJunqi->redRectangle[1]);
@@ -145,31 +155,30 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 		}
 		break;
 	case COMM_EVNET:
-		event = *((u8*)&pHead[1]);
-		if( event==JUMP_EVENT )
+		if( pJunqi->bStart && pJunqi->eTurn==pHead->iDir && pHead->iDir%2==1 )
 		{
-			if( pHead->iDir==pJunqi->eTurn )
+			event = *((u8*)&pHead[1]);
+			if( event==JUMP_EVENT )
 			{
+				log_b("jump");
 				AddEventToReplay(pJunqi, JUMP_EVENT, pHead->iDir);
 				IncJumpCnt(pJunqi, pHead->iDir);
 				ChessTurn(pJunqi);
 				SendEvent(pJunqi, pHead->iDir, JUMP_EVENT);
 			}
-		}
-		else if( event==SURRENDER_EVENT )
-		{
-			if( pHead->iDir==pJunqi->eTurn )
+			else if( event==SURRENDER_EVENT )
 			{
 				SendEvent(pJunqi, pHead->iDir, SURRENDER_EVENT);
 				SendSoundEvent(pJunqi,DEAD);
 				DestroyAllChess(pJunqi, pHead->iDir);
+				ClearChessFlag(pJunqi,pHead->iDir);
 				AddEventToReplay(pJunqi, SURRENDER_EVENT, pHead->iDir);
 				ChessTurn(pJunqi);
 			}
-		}
-		else
-		{
-			SendHeader(pJunqi, pHead->iDir, COMM_ERROR);
+			else
+			{
+				SendHeader(pJunqi, pHead->iDir, COMM_ERROR);
+			}
 		}
 		break;
 	case COMM_LINEUP:
@@ -190,6 +199,7 @@ void *comm_thread(void *arg)
 	struct sockaddr_in addr,local;
 	size_t recvbytes = 0;
 	u8 buf[200]={0};
+	u8 tmp_buf[200]={0};
 
 	socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (socket_fd < 0)
@@ -219,8 +229,13 @@ void *comm_thread(void *arg)
 	while(1)
 	{
 		recvbytes=recvfrom(socket_fd, buf, 200, 0,NULL ,NULL);
-		(void)recvbytes;//暂时不用，消除告警
-		DealRecData(pJunqi, buf);
+
+		pthread_mutex_lock(&pJunqi->mutex);
+		memcpy(tmp_buf,buf,recvbytes);
+		pJunqi->pCommData = tmp_buf;
+		pthread_mutex_unlock(&pJunqi->mutex);
+		g_idle_add((GSourceFunc)pro_comm_msg, pJunqi);
+
 	}
 
 	pthread_detach(pthread_self());
@@ -228,12 +243,20 @@ void *comm_thread(void *arg)
 
 }
 
+gboolean pro_comm_msg(gpointer data)
+{
+	Junqi *pJunqi = (Junqi *)data;
+
+	pthread_mutex_lock(&pJunqi->mutex);
+	DealRecData(pJunqi, pJunqi->pCommData);
+	pthread_mutex_unlock(&pJunqi->mutex);
+
+	return 0;
+}
 
 void CreatCommThread(Junqi* pJunqi)
 {
     pthread_t tidp;
     pthread_create(&tidp,NULL,(void*)comm_thread,pJunqi);
 }
-
-
 

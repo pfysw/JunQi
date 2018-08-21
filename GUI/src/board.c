@@ -15,6 +15,7 @@
 static GdkPixbuf *background;
 static Junqi *gJunqi;
 
+
 typedef struct BoardItem
 {
 	GtkWidget *lineup_button[4];
@@ -161,9 +162,12 @@ static void event_handle(GtkWidget *item,gpointer data)
 		pJunqi->bReplay = 0;
 		pJunqi->bStop = 0;
 		ReSetChessBoard(pJunqi);
+		DestroyChessFlag(pJunqi);
 		ResetBoardButton(pJunqi);
 		gtk_widget_set_sensitive(gBoard.open_menu, TRUE);
 		gtk_widget_set_sensitive(gBoard.save_menu, FALSE);
+		SendHeader(pJunqi, pJunqi->eTurn, COMM_READY);
+
 	}
 	else if( strcmp(event,"save" )==0 )
 	{
@@ -402,6 +406,7 @@ static void  surrender_cb(GtkWidget *button , gpointer data)
 		SendEvent(pJunqi, iDir, SURRENDER_EVENT);
 		SendSoundEvent(pJunqi,DEAD);
 		DestroyAllChess(pJunqi, iDir);
+		ClearChessFlag(pJunqi,iDir);
 		AddEventToReplay(pJunqi, SURRENDER_EVENT, iDir);
 		ChessTurn(pJunqi);
 
@@ -589,18 +594,24 @@ static void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data
 	pJunqi->iReOfst = 8;
 	AddLineupToReplay(pJunqi);
 
-
 	SendHeader(pJunqi, pJunqi->eTurn, COMM_START);
 
 }
 
 
-void ShowTime( Junqi *pJunqi )
+void ShowTime( Junqi *pJunqi, int bClear )
 {
-	static int tick = 300;
+	static int tick = 30;
 	static int now_dir;
 	static u8 bStart = 0;
 	char label_str[100];
+
+	if( bClear )
+	{
+		tick = 30;
+		return;
+	}
+	SetTimeStr(label_str, tick);
 	tick--;
 	if( tick==0 )
 	{
@@ -609,24 +620,23 @@ void ShowTime( Junqi *pJunqi )
 		IncJumpCnt(pJunqi, pJunqi->eTurn);
 		ChessTurn(pJunqi);
 		now_dir = pJunqi->eTurn;
-		tick = 300;
+		tick = 30;
 	}
 	if( now_dir!=pJunqi->eTurn )
 	{
 		now_dir = pJunqi->eTurn;
-		tick = 300;
+		tick = 30;
 	}
-    if( tick<100 && tick%5==0  )
+    if( tick<10  )
     {
     	SendSoundEvent(pJunqi, TIMER);
     }
-	SetTimeStr(label_str, (tick+9)/10);
+
 	gtk_label_set_markup(GTK_LABEL(pJunqi->pTimeLabel),label_str);
 	if( !bStart )
 	{
 		bStart = 1;
 		gtk_fixed_put(GTK_FIXED(pJunqi->fixed),pJunqi->pTimeLabel,221,628);
-		gtk_widget_show(pJunqi->pTimeLabel);
 	}
 
 	switch(pJunqi->eTurn)
@@ -646,6 +656,7 @@ void ShowTime( Junqi *pJunqi )
 	default:
 		break;
 	}
+	gtk_widget_show(pJunqi->pTimeLabel);
 
 }
 
@@ -655,8 +666,15 @@ gboolean time_event(gpointer data)
 
     if( pJunqi->bStart && !pJunqi->bStop )
     {
-    	ShowTime(pJunqi);
+    	ShowTime(pJunqi, 0);
     }
+    if( !pJunqi->bStart )
+    {
+    	ShowTime(pJunqi, 1);
+    	gtk_widget_hide(pJunqi->pTimeLabel);
+
+    }
+
     return 1;
 
 }
@@ -864,7 +882,7 @@ void OpenBoard(GtkWidget *window)
     CreatBeginButton(pJunqi);
     SetButton(window,pJunqi);
 
-    g_timeout_add(100, (GSourceFunc)time_event, pJunqi);
+    g_timeout_add(1000, (GSourceFunc)time_event, pJunqi);
     pthread_t tidp;
     pthread_create(&tidp,NULL,(void*)sound_thread,pJunqi);
 

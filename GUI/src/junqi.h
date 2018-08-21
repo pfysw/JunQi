@@ -61,7 +61,7 @@ const static u8 aMagic[4]={0x57,0x04,0,0};
 #define JUMP_EVENT 0x00
 #define SURRENDER_EVENT 0x01
 
-
+typedef struct BoardChess BoardChess;
 typedef struct ChessLineup
 {
 	//表示棋子是哪家的棋
@@ -69,6 +69,9 @@ typedef struct ChessLineup
 	enum ChessType type;
 	GtkWidget *pImage[4];
 	GtkWidget *pFlag;
+	GdkPixbuf *pixbuf;
+	BoardChess *pChess;
+	u8 bDead;
 }ChessLineup;
 
 typedef struct BoardPoint
@@ -77,7 +80,7 @@ typedef struct BoardPoint
 	int y;
 }BoardPoint;
 
-typedef struct BoardChess BoardChess;
+
 struct BoardChess
 {
 	enum ChessType type;
@@ -133,6 +136,7 @@ typedef struct PartyInfo
 	u8 cntJump;
 }PartyInfo;
 
+
 struct Junqi
 {
 	u8 bReplay;
@@ -179,6 +183,9 @@ struct Junqi
 
 	struct sockaddr_in addr;
 	int socket_fd;
+	GtkWidget *comm;
+	u8 *pCommData;
+	pthread_mutex_t mutex;
 };
 
 typedef struct Jql
@@ -205,10 +212,13 @@ void DestroyAllChess(Junqi *pJunqi, int iDir);
 void AddLineupToReplay(Junqi *pJunqi);
 void AddEventToReplay(Junqi *pJunqi, int event, int iDir);
 void ShowReplayStep(Junqi *pJunqi, u8 next_flag);
-int IsEnableMove(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst);
 int CompareChess(BoardChess *pSrc, BoardChess *pDst);
 void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type);
 void ChessTurn(Junqi *pJunqi);
 void LoadLineup(Junqi *pJunqi, int iDir, u8 *chess);
+void DestroyChessFlag(Junqi *pJunqi);
+void MoveFlag(Junqi *pJunqi, BoardChess *pChess, int isInit);
+void ClearChessFlag(Junqi *pJunqi, int iDir);
+int aseertLineup(ChessLineup *pLineup);
 
 #endif
