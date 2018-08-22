@@ -8,6 +8,16 @@
 
 void select_flag_event(GtkWidget *widget, GdkEventButton *event, gpointer data);
 
+static const u8 aLineupBuf[] = {
+	0x51, 0x51, 0x47, 0x61, 0x6D, 0x65, 0x20, 0x4A,
+	0x51, 0x4C, 0x20, 0x46, 0x69, 0x6C, 0x65, 0x00,
+	0x57, 0x04, 0x00, 0x00, 0x05, 0x08, 0x0B, 0x0D,
+	0x07, 0x09, 0x00, 0x0B, 0x00, 0x09, 0x06, 0x0D,
+	0x00, 0x0B, 0x07, 0x04, 0x00, 0x0C, 0x00, 0x0A,
+	0x08, 0x03, 0x0C, 0x03, 0x04, 0x0A, 0x02, 0x03,
+	0x0C, 0x0D
+};
+
 int OsRead(int fd, void *zBuf, int iAmt, long iOfst)
 {
   off_t ofst;
@@ -78,14 +88,11 @@ void LoadChessImage(Junqi *pJunqi)
 
 void InitLineup(Junqi *pJunqi, enum ChessColor color)
 {
-	int fd;
-	u8 aBuf[4096];
 	Jql *pLineup;
 	int i;
-	fd = open("./res/5.jql", O_RDWR|O_CREAT, 0600);
 
-	OsRead(fd, aBuf, 4096, 0);
-	pLineup = (Jql*)(&aBuf[0]);
+	pLineup = (Jql*)(&aLineupBuf[0]);
+
 	if( memcmp(pLineup->aMagic, aMagic, 4)!=0 )
 	{
 		assert(0);
@@ -1452,6 +1459,39 @@ void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
 		}
 	}
 
+}
+
+void SaveLineup(GtkNativeDialog *dialog,
+        gint             response_id,
+        gpointer         user_data)
+{
+	char *name;
+	Junqi *pJunqi = (Junqi *)user_data;
+	GtkFileChooserNative *native = pJunqi->native;
+	int fd;
+    char aBuf[50];
+    int iDir;
+
+	if (response_id == GTK_RESPONSE_ACCEPT)
+	{
+		name = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER (native));
+		ConvertFilename(name);
+		strcat(name,".jql");
+
+		fd = open(name, O_RDWR|O_CREAT, 0600);
+
+		memcpy(aBuf,aLineupBuf,20);
+		iDir = pJunqi->eLineupDir;
+		for(int i=0; i<30; i++)
+		{
+			aBuf[20+i] = pJunqi->Lineup[iDir][i].type ;
+		}
+
+		OsWrite(fd, aBuf, sizeof(aBuf), 0);
+	}
+
+	gtk_native_dialog_destroy (GTK_NATIVE_DIALOG (native));
+	g_object_unref (native);
 }
 
 void SaveReplay(GtkNativeDialog *dialog,

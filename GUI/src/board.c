@@ -114,7 +114,8 @@ void ShowReplaySlider(Junqi *pJunqi)
 	gtk_widget_show(pJunqi->step_fixed);
 }
 
-void CreatSaveDialog(Junqi *pJunqi)
+
+void CreatSaveDialog(Junqi *pJunqi, GCallback c_handler)
 {
     GtkFileChooserNative *native;
 
@@ -127,7 +128,7 @@ void CreatSaveDialog(Junqi *pJunqi)
 	pJunqi->native = native;
 	g_signal_connect (native,
 					"response",
-					G_CALLBACK (SaveReplay),
+					c_handler,
 					pJunqi);
 
 }
@@ -169,14 +170,14 @@ static void event_handle(GtkWidget *item,gpointer data)
 		gtk_widget_set_sensitive(gBoard.open_menu, TRUE);
 		gtk_widget_set_sensitive(gBoard.save_menu, FALSE);
 		SendHeader(pJunqi, pJunqi->eTurn, COMM_READY);
-		log_b("malloc %d free %d",malloc_cnt,free_cnt);
+		log_a("malloc %d free %d",malloc_cnt,free_cnt);
 		malloc_cnt = 0;
 		free_cnt = 0;
 
 	}
 	else if( strcmp(event,"save" )==0 )
 	{
-		CreatSaveDialog(pJunqi);
+		CreatSaveDialog(pJunqi, G_CALLBACK (SaveReplay));
 	}
 	else if( strcmp(event,"stop" )==0 )
 	{
@@ -206,6 +207,48 @@ GtkWidget *SetMenuItem(GtkWidget *menu, char *zLabel, void *call_back, char *arg
 	return menuitem;
 }
 
+static void save_lineup_handle(GtkWidget *item,gpointer data)
+{
+	enum ChessDir iDir;
+	Junqi *pJunqi = gJunqi;
+	char *zDir = (char*)data;
+
+	if(zDir==NULL) return;
+
+    if( strcmp(zDir,"orange" )==0 )
+    {
+    	iDir = (4-pJunqi->eColor)%4;
+    }
+    else if( strcmp(zDir,"purple" )==0 )
+    {
+    	iDir = (4-pJunqi->eColor+1)%4;
+    }
+    else if( strcmp(zDir,"green" )==0 )
+    {
+    	iDir = (4-pJunqi->eColor+2)%4;
+    }
+    else if( strcmp(zDir,"blue" )==0 )
+    {
+    	iDir = (4-pJunqi->eColor+3)%4;
+    }
+    pJunqi->eLineupDir = iDir;
+
+    CreatSaveDialog(pJunqi, G_CALLBACK (SaveLineup));
+}
+
+void CreatSaveLineupMenu(GtkWidget *menu)
+{
+	GtkWidget *menuitem,*save_menu;
+	menuitem = gtk_menu_item_new_with_label("导出布阵");
+	gtk_menu_shell_append (GTK_MENU_SHELL (menu), menuitem);
+	save_menu = gtk_menu_new();
+	gtk_menu_item_set_submenu(GTK_MENU_ITEM(menuitem),save_menu);
+	SetMenuItem(save_menu, "橙色", save_lineup_handle, "orange");
+	SetMenuItem(save_menu, "绿色", save_lineup_handle, "green");
+	SetMenuItem(save_menu, "蓝色", save_lineup_handle, "blue");
+	SetMenuItem(save_menu, "紫色", save_lineup_handle, "purple");
+}
+
 /*
  * 设置菜单栏
  */
@@ -226,6 +269,7 @@ void set_menu(GtkWidget *vbox)
 	gBoard.open_menu = SetMenuItem(menu, "打开复盘", event_handle, "open");
 	gBoard.save_menu = SetMenuItem(menu, "保存复盘", event_handle, "save");
 	gtk_widget_set_sensitive(gBoard.save_menu, FALSE);
+	CreatSaveLineupMenu(menu);
 
 	menuitem=gtk_menu_item_new_with_label("设定");
 	gtk_menu_shell_append (GTK_MENU_SHELL (menubar), menuitem);

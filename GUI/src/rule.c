@@ -547,7 +547,6 @@ int IfHasMove(Junqi* pJunqi, BoardChess *pSrc)
 	return rc;
 }
 
-//todo 疑似存在内存泄漏问题
 int CheckIfDead(Junqi *pJunqi, int iDir)
 {
 	int rc = 1;

@@ -19,6 +19,7 @@ enum SpcRail {RAIL1=1,RAIL2,RAIL3,RAIL4};
 enum RailType {GONGB_RAIL,HORIZONTAL_RAIL,VERTICAL_RAIL,CURVE_RAIL};
 enum CompareType {MOVE=1,EAT,BOMB,KILLED,SELECT,SHOW_FLAG,DEAD,BEGIN,TIMER};
 
+
 ////////// test /////////////////////
 #define log_a(format,...)   //printf(format"\n",## __VA_ARGS__)
 #define log_fun(format,...)  //printf(format"\n",## __VA_ARGS__)
@@ -180,6 +181,7 @@ struct Junqi
 	gpointer data;
 	GtkFileChooserNative *native;
 	int selectDir;
+	enum ChessDir eLineupDir;
 
 	struct sockaddr_in addr;
 	int socket_fd;
@@ -204,6 +206,9 @@ void SaveReplay(GtkNativeDialog *dialog,
         gint             response_id,
         gpointer         user_data);
 void OpenReplay(GtkNativeDialog *dialog,
+        gint             response_id,
+        gpointer         user_data);
+void SaveLineup(GtkNativeDialog *dialog,
         gint             response_id,
         gpointer         user_data);
 void SendSoundEvent(Junqi *pJunqi, enum CompareType type);
