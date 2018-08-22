@@ -7,6 +7,9 @@
 #include "junqi.h"
 #include "board.h"
 
+int malloc_cnt = 0;
+int free_cnt = 0;
+
 int IsChangeValid(BoardChess *pSrc, BoardChess *pDst)
 {
 	int rc = 1;
@@ -76,18 +79,28 @@ void ClearPathArrow(Junqi *pJunqi, int iPath)
 	p = pJunqi->pPath[iPath]->pNext;
 	while(1)
 	{
-		gtk_widget_destroy(p->pArrow);
+
+		log_a("remove %d : %d %d",iPath,p->pChess->point.x,p->pChess->point.y);
 		if(p->isHead)
 		{
+			free_cnt++;
+			log_a("free %d",free_cnt);
+			gtk_widget_destroy(p->pArrow);
+			g_object_unref (p->pArrow);
 			free(p);
 			break;
 		}
 		else
 		{
+			free_cnt++;
+			log_a("free %d",free_cnt);
+			gtk_widget_destroy(p->pArrow);
+			g_object_unref (p->pArrow);
 			pTmp = p;
 			p = p->pNext;
 			free(pTmp);
 		}
+
 	}
 
 	pJunqi->pPath[iPath] = NULL;
@@ -135,6 +148,7 @@ void AddPathArrow(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int iPath)
 	memset(p, 0, sizeof(GraphPath));
     p->pChess = pSrc;
     p->pArrow = GetArrowImage(pJunqi, pSrc, pDst);
+    g_object_ref_sink (p->pArrow);
 	if( pHead==NULL )
 	{
 		p->isHead = 1;
@@ -153,6 +167,9 @@ void AddPathArrow(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int iPath)
 	log_a("add %d : %d %d dst %d %d",iPath,
 			p->pChess->point.x,p->pChess->point.y,
 			pDst->point.x,pDst->point.y);
+
+	malloc_cnt++;
+	log_a("malloc %d",malloc_cnt);
 
 }
 
@@ -195,6 +212,8 @@ void RemovePathTail(Junqi *pJunqi, int iPath)
 	}
 	pTail = pHead->pPrev;
 	log_a("remove %d : %d %d",iPath,pTail->pChess->point.x,pTail->pChess->point.y);
+	gtk_widget_destroy(pTail->pArrow);
+	g_object_unref (pTail->pArrow);
 	if( !pTail->isHead )
 	{
 		pTail->pPrev->pNext = pHead;
@@ -206,6 +225,9 @@ void RemovePathTail(Junqi *pJunqi, int iPath)
 		free(pTail);
 		pJunqi->pPath[iPath] = NULL;
 	}
+
+	free_cnt++;
+	log_a("free %d",free_cnt);
 
 }
 
@@ -390,7 +412,7 @@ int IsEnableMove(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, u8 isShowPat
 			rc = GetRailPath(pJunqi, pVertex1, pVertex2, CURVE_RAIL);
 		}
 	}
-
+    assert( pJunqi->pPath[2] == NULL );
     assert( rc || pJunqi->pPath[1] == NULL );
     if( rc && isShowPath)
     {

@@ -105,17 +105,20 @@ void SetChessImageType(Junqi *pJunqi, int dir, int i, int iType)
 
 	pPixbuf = pJunqi->Chess[(dir+pJunqi->eColor)%4][iType];
 	pImage = gtk_image_new_from_pixbuf(pPixbuf);
+	g_object_ref_sink (pImage);
 	pJunqi->Lineup[dir][i].pImage[0] = pImage;
 	pJunqi->Lineup[dir][i].pImage[2] = pImage;
 	pRotate = gdk_pixbuf_rotate_simple(pPixbuf,GDK_PIXBUF_ROTATE_COUNTERCLOCKWISE);
 	//g_object_unref (pPixbuf);//这里pPixbuf是某个图片的子图片，释放掉会出错
 	pPixbuf = pRotate;
 	pImage = gtk_image_new_from_pixbuf(pPixbuf);
+	g_object_ref_sink (pImage);
 	pJunqi->Lineup[dir][i].pImage[1] = pImage;
 	pRotate = gdk_pixbuf_rotate_simple(pPixbuf,GDK_PIXBUF_ROTATE_UPSIDEDOWN);
 	g_object_unref (pPixbuf);
 	pPixbuf = pRotate;
 	pImage = gtk_image_new_from_pixbuf(pPixbuf);
+	g_object_ref_sink (pImage);
 	pJunqi->Lineup[dir][i].pImage[3] = pImage;
 	g_object_unref (pPixbuf);
 }
@@ -435,7 +438,7 @@ BoardChess *ShowBanner(Junqi *pJunqi, int iDir)
 	for(int i=1; i<4; i++)
 	{
 		gtk_widget_destroy(pBanner->pLineup->pImage[i]);
-		Sleep(1);
+		g_object_unref (pBanner->pLineup->pImage[i]);
 	}
 	SetChessImageType(pJunqi, iDir, pBanner->index, JUNQI);
 	gtk_fixed_put(GTK_FIXED(pJunqi->fixed),
@@ -538,6 +541,7 @@ void DestroyAllChess(Junqi *pJunqi, int iDir)
 			for(j=1; j<4; j++)
 			{
 				gtk_widget_destroy(pLineup->pImage[j]);
+				g_object_unref (pLineup->pImage[j]);
 			}
 		}
 	}

@@ -15,6 +15,8 @@
 static GdkPixbuf *background;
 static Junqi *gJunqi;
 
+extern int malloc_cnt;
+extern int free_cnt;
 
 typedef struct BoardItem
 {
@@ -167,6 +169,9 @@ static void event_handle(GtkWidget *item,gpointer data)
 		gtk_widget_set_sensitive(gBoard.open_menu, TRUE);
 		gtk_widget_set_sensitive(gBoard.save_menu, FALSE);
 		SendHeader(pJunqi, pJunqi->eTurn, COMM_READY);
+		log_b("malloc %d free %d",malloc_cnt,free_cnt);
+		malloc_cnt = 0;
+		free_cnt = 0;
 
 	}
 	else if( strcmp(event,"save" )==0 )
