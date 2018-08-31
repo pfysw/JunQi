@@ -6,9 +6,17 @@
  */
 #include "junqi.h"
 #include "comm.h"
-#include <unistd.h>
-#include <fcntl.h>
 #include <time.h>
+#include "event.h"
+#include "engine.h"
+
+EventHandle eventArr[] = {
+	{ ComeInCamp, CAMP_EVENT },
+	{ ProBombEvent, BOMB_EVENT },
+	{ ProEatEvent, EAT_EVENT },
+	{ ProEatEvent, GONGB_EVENT },
+	{ ProEatEvent, DARK_EVENT }
+};
 
 u32 random_(void)
 {
@@ -47,6 +55,72 @@ void ProMoveEvent(Junqi* pJunqi, u8 iDir, u8 event)
 	}
 }
 
+Engine *OpneEnigne(Junqi *pJunqi)
+{
+	Engine *pEngine = (Engine *)malloc(sizeof(Engine));
+	memset(pEngine, 0, sizeof(Engine));
+	memset(aEventBit, 0, sizeof(aEventBit));
+	pEngine->pJunqi = pJunqi;
+	return pEngine;
+}
+
+void CloseEngine(Engine *pEngine)
+{
+	if(pEngine!=NULL)
+	{
+		pEngine->pJunqi->pEngine = NULL;
+		free(pEngine);
+	}
+}
+
+void CheckMoveEvent(
+	Engine *pEngine,
+	BoardChess *pSrc,
+	BoardChess *pDst,
+	MoveResultData* pResult)
+{
+	int type = pResult->result;
+	if( type==MOVE || type==EAT  )
+	{
+		if( pDst->pLineup->iDir%2!=ENGINE_DIR%2 )
+		{
+			CheckCampEvent(pEngine,pDst);
+		}
+	}
+	CheckBombEvent(pEngine);
+	CheckEatEvent(pEngine);
+}
+
+u8 DealEvent(Engine *pEngine)
+{
+	u8 isMove = 0;
+	int i;
+	u8 eventFlag = 0;
+	u8 eventId = 0;
+	u8 index;
+
+	for(i=0; i<sizeof(eventArr)/sizeof(eventArr[0]); i++)
+	{
+		if( TESTBIT(aEventBit, eventArr[i].eventId) )
+		{
+			if( eventArr[i].eventId>=eventId )
+			{
+				eventId = eventArr[i].eventId;
+				index = i;
+			}
+			eventFlag = 1;
+		}
+	}
+
+	if( eventFlag )
+	{
+		isMove = eventArr[index].xEventFun(pEngine);
+	}
+
+	return isMove;
+}
+
+
 void ProMoveResult(Junqi* pJunqi, u8 iDir, u8 *data)
 {
 	BoardChess *pSrc, *pDst;
@@ -57,7 +131,6 @@ void ProMoveResult(Junqi* pJunqi, u8 iDir, u8 *data)
 	p1.y = pResult->src[1]%17;
 	p2.x = pResult->dst[0]%17;
 	p2.y = pResult->dst[1]%17;
-
 	if( pJunqi->aBoard[p1.x][p1.y].pAdjList && pJunqi->aBoard[p2.x][p2.y].pAdjList )
 	{
 		pSrc = pJunqi->aBoard[p1.x][p1.y].pAdjList->pChess;
@@ -73,11 +146,11 @@ void ProMoveResult(Junqi* pJunqi, u8 iDir, u8 *data)
 		SendHeader(pJunqi, iDir, COMM_ERROR);
 		return;
 	}
-
 	assert( pSrc->pLineup->iDir==iDir );
-
 	PlayResult(pJunqi, pSrc, pDst, pResult);
 	ChessTurn(pJunqi);
+	CheckMoveEvent(pJunqi->pEngine, pSrc, pDst, pResult);
+
 }
 
 BoardChess * GetMoveDst(Junqi* pJunqi, BoardChess *pSrc)
@@ -91,7 +164,6 @@ BoardChess * GetMoveDst(Junqi* pJunqi, BoardChess *pSrc)
 	//rand = 109;
 	for(i=0; i<129; i++)
 	{
-		//if(i==11)
 		//log_a("aa i %d rand %d k %d",i, rand,(rand+i)%129);
 		j = (i+rand)%129;
 		if( j<120 )
@@ -128,11 +200,8 @@ void SendRandMove(Junqi* pJunqi)
     ChessLineup *pLineup;
 
     rand = random_()%30;
-    //rand = 21;
     for(i=0;  i<30; i++)
     {
-    	assert(pJunqi->eTurn>=0&&pJunqi->eTurn<4);
-    	assert((rand+i)%30>=0&&(rand+i)%30<30);
     	pLineup = &pJunqi->Lineup[pJunqi->eTurn][(rand+i)%30];
     	if( pLineup->bDead )
     	{
@@ -160,7 +229,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	CommHeader *pHead;
 	pHead = (CommHeader *)data;
 	u8 event;
-	static int isInitBoard = 0;
+	u8 isMove = 0;
 
 	if( memcmp(pHead->aMagic, aMagic, 4)!=0 )
 	{
@@ -180,41 +249,6 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 		ProMoveResult(pJunqi, pHead->iDir, data);
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
 		break;
-	case COMM_GO:
-		pJunqi->bStop = 0;
-		break;
-	case COMM_START:
-		InitChess(pJunqi, data);
-		SendHeader(pJunqi, pHead->iDir, COMM_OK);
-		pJunqi->eTurn = pHead->iDir;
-		pJunqi->bStart = 1;
-
-		break;
-	case COMM_READY:
-		pJunqi->bStart = 0;
-		SendHeader(pJunqi, pHead->iDir, COMM_READY);
-		break;
-	case COMM_INIT:
-		InitLineup(pJunqi, data, isInitBoard);
-		InitChess(pJunqi, data);
-		if( !isInitBoard )
-		{
-			isInitBoard = 1;
-			InitBoard(pJunqi);
-		}
-		SendHeader(pJunqi, pHead->iDir, COMM_OK);
-		break;
-	case COMM_LINEUP:
-		data = (u8*)&pHead[1];
-		SetRecLineup(pJunqi, data,  pHead->iDir);
-		SendHeader(pJunqi, pHead->iDir, COMM_OK);
-		break;
-	case COMM_STOP:
-		pJunqi->bStop = 1;
-		break;
-	case COMM_ERROR:
-		assert(0);
-		break;
 	default:
 		break;
 	}
@@ -223,16 +257,25 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	{
 		return;
 	}
-
+	if( !pJunqi->bGo )
+	{
+		return;
+	}
+	pJunqi->bGo = 0;
 
 	if( pJunqi->eTurn%2==1 )
 	{
-		sleep(1);
 		if( pJunqi->aInfo[pJunqi->eTurn].bDead )
 		{
 			ChessTurn(pJunqi);
 		}
-		SendRandMove(pJunqi);
+
+		isMove = DealEvent(pJunqi->pEngine);
+
+		if( !isMove )
+		{
+			SendRandMove(pJunqi);
+		}
 	}
 }
 
@@ -248,7 +291,7 @@ void *engine_thread(void *arg)
     	log_b("engine");
         if ( len > 0)
         {
-        	memout(aBuf,len);
+        	//memout(aBuf,len);
         	ProRecMsg(pJunqi, aBuf);
         }
     }

@@ -6,11 +6,17 @@
  */
 #include "junqi.h"
 
+//>=司令：1，>=军长：2，>=师长：4，>=旅长：6
+const u8 aMaxTypeNum[14] =
+{
+	0,0,1,3,2,1,2,4,6,8,10,13,16,19
+};
+
 Junqi *JunqiOpen(void)
 {
 	Junqi *pJunqi = (Junqi*)malloc(sizeof(Junqi));
 	memset(pJunqi, 0, sizeof(Junqi));
-
+	pthread_mutex_init(&pJunqi->mutex, NULL);
 	return pJunqi;
 }
 
@@ -106,9 +112,12 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 		pJunqi->ChessPos[dir][i].pLineup = &pJunqi->Lineup[dir][i];
 		pJunqi->ChessPos[dir][i].type = pJunqi->Lineup[dir][i].type;
 		pJunqi->ChessPos[dir][i].index = i;
+		pJunqi->ChessPos[dir][i].iDir = dir;
 		pJunqi->Lineup[dir][i].iDir = dir;
 		pJunqi->Lineup[dir][i].pChess = &pJunqi->ChessPos[dir][i];
 		pJunqi->Lineup[dir][i].bDead = 0;
+		pJunqi->Lineup[dir][i].index = i;
+		pJunqi->Lineup[dir][i].mx_type= SILING;
 		SetBoardCamp(pJunqi, dir, i);
 		SetBoardRailway(pJunqi, dir, i);
 	}
@@ -437,7 +446,7 @@ int IsEnableMove(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 
 	ClearPassCnt(pJunqi);
 
-	if(pSrc->isStronghold)
+	if( pSrc->isStronghold || pSrc->type==NONE )
 	{
 		return rc;
 	}
@@ -505,6 +514,110 @@ int aseertChess(BoardChess *pChess)
 	return rc;
 }
 
+int GetTypeNum(u8 *aBombNum, u8 *aTpyeNum, int type)
+{
+	int i;
+	int sum = 0;
+	int sum1 = 0;
+	for(i=SILING; i<=type; i++)
+	{
+		sum += aTpyeNum[i];
+		sum1 += aBombNum[i];
+	}
+	if( aTpyeNum[GONGB]>3 )
+	{
+		aTpyeNum[ZHADAN] += aTpyeNum[GONGB]-3;
+	}
+	assert( aTpyeNum[ZHADAN]<=2 );
+	sum -= (sum1<(2-aTpyeNum[ZHADAN]))?sum1:(2-aTpyeNum[ZHADAN]);
+	return sum;
+}
+
+void AdjustMaxType(Junqi *pJunqi, int iDir)
+{
+	int i;
+	ChessLineup *pLineup;
+	u8 aTypeNum[14] = {0};
+	u8 aBombNum[14] = {0};
+
+	for(i=0; i<30; i++)
+	{
+		pLineup = &pJunqi->Lineup[iDir][i];
+		if( pLineup->type==NONE || pLineup->type==DARK )
+		{
+			continue;
+		}
+		aTypeNum[pLineup->type]++;
+		if( pLineup->bBomb )
+		{
+			aBombNum[pLineup->type]++;
+		}
+	}
+	for(i=0; i<30; i++)
+	{
+		pLineup = &pJunqi->Lineup[iDir][i];
+		if( pLineup->type==NONE || pLineup->type==DARK )
+		{
+			continue;
+		}
+		while( pLineup->mx_type<pLineup->type )
+		{
+			if( GetTypeNum(aBombNum,aTypeNum,pLineup->mx_type)<aMaxTypeNum[pLineup->mx_type] )
+			{
+				break;
+			}
+			else
+			{
+				pLineup->mx_type++;
+			}
+		}
+	}
+}
+
+void JudgeIfBomb(
+		Junqi *pJunqi,
+		BoardChess *pSrc,
+		BoardChess *pDst,
+		MoveResultData* pResult
+		)
+{
+	if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
+	{
+		if( pDst->pLineup->type==DARK )
+		{
+			pDst->pLineup->bBomb = 1;
+		}
+
+		if( (pResult->extra_info&0x02) && !(pResult->extra_info&0x04))
+		{
+			pDst->pLineup->type = ZHADAN;
+		}
+		else if( pSrc->pLineup->type!=ZHADAN )
+		{
+			pDst->pLineup->type = pSrc->pLineup->type;
+		}
+
+	}
+	else
+	{
+		if( pSrc->pLineup->type==DARK )
+		{
+			pSrc->pLineup->bBomb = 1;
+		}
+
+		if( ((pResult->extra_info&0x04) && !(pResult->extra_info&0x02)) ||
+				pDst->pLineup->type==DILEI )
+		{
+			pSrc->pLineup->type = ZHADAN;
+		}
+		else if( pDst->pLineup->type!=ZHADAN )
+		{
+			pSrc->pLineup->type = pDst->pLineup->type;
+		}
+
+	}
+}
+
 void PlayResult(
 		Junqi *pJunqi,
 		BoardChess *pSrc,
@@ -516,9 +629,48 @@ void PlayResult(
 	int type = pResult->result;
 	BoardChess *pJunqiChess;
 	BoardPoint p;
+	int iDir1,iDir2;
 
 	assert( aseertChess(pSrc) );
 	assert( aseertChess(pDst) );
+
+	iDir1 = pSrc->pLineup->iDir;
+	if( type!=MOVE )
+	{
+		iDir2 = pDst->pLineup->iDir;
+	}
+	if( pResult->extra_info&0x02 )
+	{
+		p.x = pResult->junqi_src[0];
+		p.y = pResult->junqi_src[1];
+		pJunqiChess = pJunqi->aBoard[p.x][p.y].pAdjList->pChess;
+		pJunqiChess->pLineup->type = JUNQI;
+		pJunqiChess->type = JUNQI;
+		pSrc->pLineup->type = SILING;
+	}
+	if( pResult->extra_info&0x04 )
+	{
+		p.x = pResult->junqi_dst[0];
+		p.y = pResult->junqi_dst[1];
+		pJunqiChess = pJunqi->aBoard[p.x][p.y].pAdjList->pChess;
+		pJunqiChess->pLineup->type = JUNQI;
+		pJunqiChess->type = JUNQI;
+		pDst->pLineup->type = SILING;
+	}
+
+	if( iDir1%2!=ENGINE_DIR%2 && pSrc->pLineup->index>=20 )
+	{
+		pSrc->pLineup->isNotLand = 1;
+	}
+
+	if( pSrc->pLineup->type==DARK )
+	{
+		if( !IsEnableMove(pJunqi, pSrc, pDst) )
+		{
+			pSrc->pLineup->type = GONGB;
+		}
+	}
+
 	if( type==EAT || type==BOMB )
 	{
 		pDst->pLineup->bDead = 1;
@@ -529,6 +681,25 @@ void PlayResult(
 			pDst->type = NONE;
 			pSrc->pLineup->bDead = 1;
 
+			JudgeIfBomb(pJunqi, pSrc, pDst, pResult);
+		}
+		else if( pSrc->pLineup->iDir%2!=ENGINE_DIR%2 )
+		{
+			if( pDst->type!=DILEI && pDst->type!=JUNQI )
+			{
+				pSrc->pLineup->type = pDst->type-1;
+			}
+			else if( pDst->type==DILEI )
+			{
+				pSrc->pLineup->type = GONGB;
+			}
+		}
+		else
+		{
+			if( pSrc->pLineup->type==PAIZH )
+			{
+				pDst->pLineup->type = GONGB;
+			}
 		}
 
 		if( pResult->extra_info&1 )
@@ -546,26 +717,39 @@ void PlayResult(
 	if( type==KILLED )
 	{
 		pSrc->pLineup->bDead = 1;
-	}
 
-	if( pResult->extra_info&0x02 )
-	{
-		p.x = pResult->junqi_src[0];
-		p.y = pResult->junqi_src[1];
-		pJunqiChess = pJunqi->aBoard[p.x][p.y].pAdjList->pChess;
-		pJunqiChess->pLineup->type = JUNQI;
-		pJunqiChess->type = JUNQI;
-	}
-	if( pResult->extra_info&0x04 )
-	{
-		p.x = pResult->junqi_dst[0];
-		p.y = pResult->junqi_dst[1];
-		pJunqiChess = pJunqi->aBoard[p.x][p.y].pAdjList->pChess;
-		pJunqiChess->pLineup->type = JUNQI;
-		pJunqiChess->type = JUNQI;
-	}
+		if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
+		{
+			if( pSrc->type==GONGB )
+			{
+				pDst->pLineup->isNotLand = 1;
+			}
+			pDst->pLineup->type = pSrc->type-1;
+			if( pDst->pLineup->type<pDst->pLineup->mx_type )
+			{
+				pDst->pLineup->type = DILEI;
+			}
+		}
+		else
+		{
+			if( pDst->pLineup->type==PAIZH )
+			{
+				pSrc->pLineup->type = GONGB;
+			}
+		}
 
+	}
 	pSrc->type = NONE;
+	//预测敌方最大的棋子
+	if( iDir1%2!=ENGINE_DIR%2 )
+	{
+		AdjustMaxType(pJunqi, iDir1);
+	}
+	else if( type!=MOVE )
+	{
+		AdjustMaxType(pJunqi, iDir2);
+	}
+
 	assert( aseertChess(pSrc) );
 	assert( aseertChess(pDst) );
 }

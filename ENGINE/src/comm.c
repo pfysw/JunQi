@@ -7,6 +7,7 @@
 
 #include "comm.h"
 #include "junqi.h"
+#include "engine.h"
 
 #if 1
 void memout(u8 *pdata,u8 len)
@@ -48,7 +49,9 @@ void SendData(Junqi* pJunqi, CommHeader *header, void *data, int len)
 	sendto(pJunqi->socket_fd, buf, length, 0,
 			(struct sockaddr *)&pJunqi->addr, sizeof(struct sockaddr));
 	log_a("send");
+	pthread_mutex_lock(&pJunqi->mutex);
 	memout(buf,length);
+	pthread_mutex_unlock(&pJunqi->mutex);
 }
 
 void SendHeader(Junqi* pJunqi, u8 iDir, u8 eFun)
@@ -92,6 +95,63 @@ void SendEvent(Junqi* pJunqi, int iDir, u8 event)
 	SendData(pJunqi, &header, &data, 1);
 }
 
+void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
+{
+	CommHeader *pHead;
+	pHead = (CommHeader *)data;
+	static int isInitBoard = 0;
+
+	if( memcmp(pHead->aMagic, aMagic, 4)!=0 )
+	{
+		return;
+	}
+
+	switch(pHead->eFun)
+	{
+	case COMM_GO:
+		pJunqi->bGo = 1;
+		mq_send(pJunqi->qid, (char*)data, len, 0);
+		break;
+	case COMM_STOP:
+		pJunqi->bStop = 1;
+		break;
+	case COMM_ERROR:
+		assert(0);
+		break;
+	case COMM_START:
+		InitChess(pJunqi, data);
+		SendHeader(pJunqi, pHead->iDir, COMM_OK);
+		pJunqi->eTurn = pHead->iDir;
+		pJunqi->bStart = 1;
+		mq_send(pJunqi->qid, (char*)data, len, 0);
+		break;
+	case COMM_READY:
+		pJunqi->bStart = 0;
+		CloseEngine(pJunqi->pEngine);
+		SendHeader(pJunqi, pHead->iDir, COMM_READY);
+		break;
+	case COMM_INIT:
+		pJunqi->pEngine = OpneEnigne(pJunqi);
+		InitLineup(pJunqi, data, isInitBoard);
+		InitChess(pJunqi, data);
+		if( !isInitBoard )
+		{
+			isInitBoard = 1;
+			InitBoard(pJunqi);
+		}
+		SendHeader(pJunqi, pHead->iDir, COMM_OK);
+		break;
+	case COMM_LINEUP:
+		data = (u8*)&pHead[1];
+		SetRecLineup(pJunqi, data,  pHead->iDir);
+		SendHeader(pJunqi, pHead->iDir, COMM_OK);
+		break;
+	default:
+		mq_send(pJunqi->qid, (char*)data, len, 0);
+		break;
+	}
+}
+
 void *comm_thread(void *arg)
 {
 	Junqi* pJunqi = (Junqi*)arg;
@@ -128,7 +188,12 @@ void *comm_thread(void *arg)
 	while(1)
 	{
 		recvbytes=recvfrom(socket_fd, buf, 200, 0,NULL ,NULL);
-		mq_send(pJunqi->qid, (char*)buf, recvbytes, 0);
+		log_a("rec");
+		pthread_mutex_lock(&pJunqi->mutex);
+		memout(buf, recvbytes);
+		pthread_mutex_unlock(&pJunqi->mutex);
+		DealRecData(pJunqi, buf, recvbytes);
+		//mq_send(pJunqi->qid, (char*)buf, recvbytes, 0);
 
 	}
 

@@ -13,6 +13,7 @@
 #include "type.h"
 #include "comm.h"
 #include <assert.h>
+#include "engine.h"
 
 enum ChessColor {ORANGE,PURPLE,GREEN,BLUE};
 enum ChessType {NONE,DARK,JUNQI,DILEI,ZHADAN,SILING,JUNZH,SHIZH,
@@ -34,14 +35,19 @@ void memout(u8 *pdata,u8 len);
 #define JUMP_EVENT 0x00
 #define SURRENDER_EVENT 0x01
 
+
 typedef struct BoardChess BoardChess;
 typedef struct ChessLineup
 {
 	//表示棋子是哪家的棋
 	enum ChessDir iDir;
 	enum ChessType type;
+	enum ChessType mx_type;
 	BoardChess *pChess;
 	u8 bDead;
+	u8 bBomb;
+	u8 index;
+	u8 isNotLand;
 }ChessLineup;
 
 typedef struct BoardPoint
@@ -57,6 +63,7 @@ struct BoardChess
 	ChessLineup *pLineup;
 	////下面为固定属性，不能改变///////////
 	enum SpcRail eCurveRail;
+	enum ChessDir iDir;
 	int index;
 	BoardPoint point;
 	u8  isStronghold;
@@ -99,6 +106,7 @@ struct Junqi
 {
 	u8 bStart;
 	u8 bStop;
+	u8 bGo;
 	enum ChessDir eTurn;
 	ChessLineup Lineup[4][30];
 	BoardChess ChessPos[4][30];
@@ -107,10 +115,12 @@ struct Junqi
 	BoardGraph aBoard[17][17];
 
 	PartyInfo aInfo[4];
+	Engine *pEngine;
 
 	struct sockaddr_in addr;
 	int socket_fd;
 	mqd_t qid;
+	pthread_mutex_t mutex;
 };
 
 Junqi *JunqiOpen(void);
