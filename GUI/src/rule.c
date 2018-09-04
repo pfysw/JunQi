@@ -578,6 +578,9 @@ int CheckIfDead(Junqi *pJunqi, int iDir)
 		DestroyAllChess(pJunqi, iDir);
 		ClearChessFlag(pJunqi,iDir);
 		HideJumpButton(iDir);
+		pJunqi->addr = pJunqi->addr_tmp[0];
+		SendEvent(pJunqi, iDir, SURRENDER_EVENT);
+		pJunqi->addr = pJunqi->addr_tmp[1];
 		SendEvent(pJunqi, iDir, SURRENDER_EVENT);
 	}
 

@@ -230,10 +230,12 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 
 		if(iType!=NONE)
 		{
+#if NOT_DEBUG1
 			if( (dir==RIGHT||dir==LEFT) && !pJunqi->bReplay )
 			{
 				iType = DARK;
 			}
+#endif
 			SetChessImageType(pJunqi, dir, i, iType);
 			for(int j=1; j<4; j++)
 			{
@@ -749,8 +751,12 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 	{
 		AddMoveRecord(pJunqi, pSrc, pDst);
 	}
-
+	pJunqi->addr = pJunqi->addr_tmp[0];
 	SendMoveResult(pJunqi, pSrc->pLineup->iDir, &send_data);
+#ifndef NOT_DEBUG2
+	pJunqi->addr = pJunqi->addr_tmp[1];
+	SendMoveResult(pJunqi, pSrc->pLineup->iDir, &send_data);
+#endif
 	CheckIfDead(pJunqi, srcDir);
 	CheckIfDead(pJunqi, dstDir);
 
@@ -886,9 +892,12 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
     		{
     			return;
     		}
-			if( pJunqi->bStart && (pJunqi->eTurn!=pChess->pLineup->iDir
-					|| pJunqi->eTurn%2!=0) )
+			if( pJunqi->bStart && pJunqi->eTurn!=pChess->pLineup->iDir )
 			{
+#if NOT_DEBUG1
+				if( pJunqi->eTurn%2!=0 )
+					return;
+#endif
 				if( !pJunqi->bReplay  )
 					return;
 			}
@@ -1452,6 +1461,10 @@ void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
 			int type;
 			type = CompareChess(pSrc, pDst);
 			PlayResult(pJunqi, pSrc, pDst, type);
+			if( i==pJunqi->iRpStep-1 )
+			{
+				pJunqi->sound_type = pJunqi->sound_replay;
+			}
 		}
 		else
 		{
@@ -1476,7 +1489,7 @@ void SaveLineup(GtkNativeDialog *dialog,
 	{
 		name = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER (native));
 		ConvertFilename(name);
-		strcat(name,".jql");
+		//strcat(name,".jql");
 
 		fd = open(name, O_RDWR|O_CREAT, 0600);
 

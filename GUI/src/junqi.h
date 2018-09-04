@@ -43,6 +43,9 @@ static void memout(u8 *pdata,u8 len)
 #endif
 ////////////////////////////////
 
+#define NOT_DEBUG1   0
+//#define NOT_DEBUG2
+
 #define MOVE_SOUND         "./sound/move.wav"
 #define BOMB_SOUND         "./sound/bomb.wav"
 #define EAT_SOUND          "./sound/eat.wav"
@@ -159,6 +162,7 @@ struct Junqi
 	GtkAdjustment *slider_adj;
 	//GtkWidget *sound_obj;
 	enum CompareType sound_type;
+	enum CompareType sound_replay;
 	//BoardChess ChessHome[4][30];
 	BoardChess NineGrid[9];
 	//棋盘是17*17，9宫格是5*5
@@ -184,6 +188,7 @@ struct Junqi
 	enum ChessDir eLineupDir;
 
 	struct sockaddr_in addr;
+	struct sockaddr_in addr_tmp[2];
 	int socket_fd;
 	GtkWidget *comm;
 	u8 *pCommData;

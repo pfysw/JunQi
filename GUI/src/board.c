@@ -169,7 +169,10 @@ static void event_handle(GtkWidget *item,gpointer data)
 		ResetBoardButton(pJunqi);
 		gtk_widget_set_sensitive(gBoard.open_menu, TRUE);
 		gtk_widget_set_sensitive(gBoard.save_menu, FALSE);
-		SendHeader(pJunqi, pJunqi->eTurn, COMM_READY);
+
+		SendHeader(pJunqi, 0, COMM_READY);
+	    SendHeader(pJunqi, 1, COMM_READY);
+
 		log_a("malloc %d free %d",malloc_cnt,free_cnt);
 		malloc_cnt = 0;
 		free_cnt = 0;
@@ -182,14 +185,19 @@ static void event_handle(GtkWidget *item,gpointer data)
 	else if( strcmp(event,"stop" )==0 )
 	{
 		pJunqi->bStop = 1;
-		SendHeader(pJunqi, pJunqi->eTurn, COMM_STOP);
+
+		SendHeader(pJunqi, 0, COMM_STOP);
+#ifndef NOT_DEBUG2
+		SendHeader(pJunqi, 1, COMM_STOP);
+#endif
 	}
 	else if( strcmp(event,"continue" )==0 )
 	{
 		pJunqi->bStop = 0;
 		if( pJunqi->bStart )
 		{
-			SendHeader(pJunqi, pJunqi->eTurn, COMM_GO);
+			SendHeader(pJunqi, 0, COMM_GO);
+			SendHeader(pJunqi, 1, COMM_GO);
 		}
 	}
 	else if( strcmp(event,"open" )==0 )
@@ -643,7 +651,12 @@ static void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data
 	pJunqi->iReOfst = 8;
 	AddLineupToReplay(pJunqi);
 
+	pJunqi->addr = pJunqi->addr_tmp[0];
 	SendHeader(pJunqi, pJunqi->eTurn, COMM_START);
+#ifndef NOT_DEBUG2
+	pJunqi->addr = pJunqi->addr_tmp[1];
+	SendHeader(pJunqi, pJunqi->eTurn, COMM_START);
+#endif
 
 }
 
@@ -796,7 +809,14 @@ void *sound_thread(void *arg)
 
 void SendSoundEvent(Junqi *pJunqi, enum CompareType type)
 {
-	pJunqi->sound_type = type;
+	if( !pJunqi->bReplay )
+	{
+		pJunqi->sound_type = type;
+	}
+	else
+	{
+		pJunqi->sound_replay = type;
+	}
 }
 
 void CreatBeginButton(Junqi *pJunqi)
@@ -930,8 +950,9 @@ void OpenBoard(GtkWidget *window)
     pJunqi->pTimeLabel = gtk_label_new(NULL);
     CreatBeginButton(pJunqi);
     SetButton(window,pJunqi);
-
+#if NOT_DEBUG1
     g_timeout_add(1000, (GSourceFunc)time_event, pJunqi);
+#endif
     pthread_t tidp;
     pthread_create(&tidp,NULL,(void*)sound_thread,pJunqi);
 

@@ -26,6 +26,10 @@
 #define COMM_INIT        8
 #define COMM_STOP        9
 
+
+#define LOCAL_PORT  1234
+#define DST_PORT    5678
+
 typedef struct CommHeader
 {
 	u8 aMagic[4];
