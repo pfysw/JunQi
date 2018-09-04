@@ -10,6 +10,7 @@
 #include "event.h"
 #include "engine.h"
 
+
 EventHandle eventArr[] = {
 	{ ComeInCamp, CAMP_EVENT },
 	{ ProBombEvent, BOMB_EVENT },
@@ -17,6 +18,7 @@ EventHandle eventArr[] = {
 	{ ProEatEvent, GONGB_EVENT },
 	{ ProEatEvent, DARK_EVENT }
 };
+
 
 u32 random_(void)
 {
@@ -230,6 +232,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	pHead = (CommHeader *)data;
 	u8 event;
 	u8 isMove = 0;
+	static int preTurn = 1000;
 
 	if( memcmp(pHead->aMagic, aMagic, 4)!=0 )
 	{
@@ -257,13 +260,13 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	{
 		return;
 	}
-	if( !pJunqi->bGo )
-	{
-		return;
-	}
-	pJunqi->bGo = 0;
+//	if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
+//	{
+//		return;
+//	}
+//	pJunqi->bGo = 0;
 
-	if( pJunqi->eTurn%2==1 )
+	if( pJunqi->eTurn%2==ENGINE_DIR )
 	{
 		if( pJunqi->aInfo[pJunqi->eTurn].bDead )
 		{
@@ -276,6 +279,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 		{
 			SendRandMove(pJunqi);
 		}
+		preTurn = pJunqi->eTurn;
 	}
 }
 
@@ -291,7 +295,7 @@ void *engine_thread(void *arg)
     	log_b("engine");
         if ( len > 0)
         {
-        	//memout(aBuf,len);
+        	memout(aBuf,len);
         	ProRecMsg(pJunqi, aBuf);
         }
     }

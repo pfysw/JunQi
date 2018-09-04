@@ -70,7 +70,6 @@ struct BoardChess
 	u8  isCamp;
 	u8  isRailway;
 	u8  isNineGrid;
-    u8 ss1;
 };
 
 //邻接表adjacency list;
@@ -100,6 +99,7 @@ typedef struct PartyInfo
 {
 	u8 bDead;
 	u8 cntJump;
+	u8 bDeadSiling;
 }PartyInfo;
 
 struct Junqi

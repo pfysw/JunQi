@@ -37,7 +37,7 @@ void InitLineup(Junqi* pJunqi, u8 *data, u8 isInit)
 			{
 				pJunqi->Lineup[j][i].type = data[k++];
 			}
-			else if(!isInit)
+			else //if(!isInit)
 			{
 				pJunqi->Lineup[j][i].type = DARK;
 			}
@@ -514,7 +514,7 @@ int aseertChess(BoardChess *pChess)
 	return rc;
 }
 
-int GetTypeNum(u8 *aBombNum, u8 *aTpyeNum, int type)
+int GetTypeNum(u8 *aBombNum, const u8 *aTpyeNum, int type)
 {
 	int i;
 	int sum = 0;
@@ -524,11 +524,7 @@ int GetTypeNum(u8 *aBombNum, u8 *aTpyeNum, int type)
 		sum += aTpyeNum[i];
 		sum1 += aBombNum[i];
 	}
-	if( aTpyeNum[GONGB]>3 )
-	{
-		aTpyeNum[ZHADAN] += aTpyeNum[GONGB]-3;
-	}
-	assert( aTpyeNum[ZHADAN]<=2 );
+
 	sum -= (sum1<(2-aTpyeNum[ZHADAN]))?sum1:(2-aTpyeNum[ZHADAN]);
 	return sum;
 }
@@ -553,6 +549,13 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 			aBombNum[pLineup->type]++;
 		}
 	}
+	if( aTypeNum[GONGB]>3 )
+	{
+		log_b("gongb zhad %d %d",aTypeNum[GONGB], aTypeNum[ZHADAN]);
+		aTypeNum[ZHADAN] += aTypeNum[GONGB]-3;
+		assert(0);
+	}
+
 	for(i=0; i<30; i++)
 	{
 		pLineup = &pJunqi->Lineup[iDir][i];
@@ -647,6 +650,7 @@ void PlayResult(
 		pJunqiChess->pLineup->type = JUNQI;
 		pJunqiChess->type = JUNQI;
 		pSrc->pLineup->type = SILING;
+		pJunqi->aInfo[iDir1].bDeadSiling = 1;
 	}
 	if( pResult->extra_info&0x04 )
 	{
@@ -656,6 +660,7 @@ void PlayResult(
 		pJunqiChess->pLineup->type = JUNQI;
 		pJunqiChess->type = JUNQI;
 		pDst->pLineup->type = SILING;
+		pJunqi->aInfo[iDir2].bDeadSiling = 1;
 	}
 
 	if( iDir1%2!=ENGINE_DIR%2 && pSrc->pLineup->index>=20 )

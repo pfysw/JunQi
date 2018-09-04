@@ -8,6 +8,11 @@
 
 u8 aEventBit[100]={0};
 
+const char *aTypeName[14] =
+{
+	"none","dark","junqi","dilei","zhadan","siling","junzh",
+	"shizh","lvzh","tuanzh","yingzh","lianzh","paizh","gongb"
+};
 
 u8 MoveInCamp(Engine *pEngine, BoardChess *pCamp)
 {
@@ -219,16 +224,30 @@ u8 CanEatChess(Engine *pEngine, BoardChess *pSrc, int iDir)
 
 		if( IsEnableMove(pJunqi, pSrc, pLineup->pChess) )
 		{
+			log_a("move %d %d",i,pLineup->type);
+			if( pLineup->type==JUNQI )
+			{
+				pEngine->pEat[0] = pSrc;
+				pEngine->pEat[1] = pLineup->pChess;
+				SETBIT(aEventBit, EAT_EVENT);
+				isEat = 1;
+				break;
+			}
 			if( pSrc->pLineup->type!=GONGB )
 			{
+				log_b("index %d %d",pLineup->index,pLineup->isNotLand);
 				if( pLineup->type==DARK )
 				{
-					pEngine->pEat[0] = pSrc;
-					pEngine->pEat[1] = pLineup->pChess;
-					SETBIT(aEventBit, DARK_EVENT);
-					isEat = 2;
+					if( pLineup->index<20 || pLineup->isNotLand )
+					{
+						pEngine->pEat[0] = pSrc;
+						pEngine->pEat[1] = pLineup->pChess;
+						SETBIT(aEventBit, DARK_EVENT);
+						isEat = 2;
+					}
 				}
-				else if( pSrc->pLineup->type<=pLineup->mx_type )
+				else if( pSrc->pLineup->type<=pLineup->mx_type ||
+					     pLineup->type==GONGB )
 				{
 					pEngine->pEat[0] = pSrc;
 					pEngine->pEat[1] = pLineup->pChess;
@@ -239,10 +258,14 @@ u8 CanEatChess(Engine *pEngine, BoardChess *pSrc, int iDir)
 			}
 			else if( pLineup->index>=20 && !pLineup->isNotLand)
 			{
-				pEngine->pEat[0] = pSrc;
-				pEngine->pEat[1] = pLineup->pChess;
-				SETBIT(aEventBit, GONGB_EVENT);
-				isEat = 3;
+				if( !pJunqi->aInfo[pLineup->pChess->iDir].bDeadSiling
+						|| !pLineup->pChess->isStronghold)
+				{
+					pEngine->pEat[0] = pSrc;
+					pEngine->pEat[1] = pLineup->pChess;
+					SETBIT(aEventBit, GONGB_EVENT);
+					isEat = 3;
+				}
 			}
 
 		}
@@ -267,12 +290,14 @@ void CheckEatEvent(Engine *pEngine)
 	CLEARBIT(aEventBit, DARK_EVENT);
 	CLEARBIT(aEventBit, GONGB_EVENT);
 
+
 	for(i=0; i<30; i++)
 	{
 		pLineup = &pJunqi->Lineup[pJunqi->eTurn][i];
 		if( pLineup->type>=SILING && pLineup->type<=GONGB && !pLineup->bDead )
 		{
 			isEat = CanEatChess(pEngine, pLineup->pChess, (ENGINE_DIR+1)%4);
+			log_a("for1 %d %d",i,isEat);
 			if( isEat==1 )
 			{
 				break;
@@ -280,10 +305,17 @@ void CheckEatEvent(Engine *pEngine)
 			else
 			{
 				isEat=CanEatChess(pEngine, pLineup->pChess, (ENGINE_DIR+3)%4);
+				log_a("for2 %d %d",i,isEat);
 				if( isEat==1 ) break;
 			}
 		}
 	}
+#ifdef  TEST
+	assert( pEngine->pEat[0] );
+	log_a("eat %s %s",aTypeName[pEngine->pEat[0]->type],
+			aTypeName[pEngine->pEat[1]->type]);
+
+#endif
 
 }
 
@@ -293,6 +325,14 @@ u8 ProEatEvent(Engine *pEngine)
 
 	assert( IsEnableMove(pJunqi, pEngine->pEat[0], pEngine->pEat[1]) );
 	SendMove(pJunqi, pEngine->pEat[0], pEngine->pEat[1]);
+	if( pEngine->pEat[1]->pLineup->index>=20 )
+	{
+		log_a("src %s",aTypeName[pEngine->pEat[0]->pLineup->type]);
+		log_a("dst %s %s",aTypeName[pEngine->pEat[1]->pLineup->type],
+				aTypeName[pEngine->pEat[1]->pLineup->mx_type]);
+		assert( pEngine->pEat[0]->type==GONGB || pEngine->pEat[1]->pLineup->isNotLand
+				|| pEngine->pEat[1]->pLineup->type==JUNQI );
+	}
 	CLEARBIT(aEventBit, EAT_EVENT);
 	CLEARBIT(aEventBit, DARK_EVENT);
 	CLEARBIT(aEventBit, GONGB_EVENT);

@@ -49,9 +49,9 @@ void SendData(Junqi* pJunqi, CommHeader *header, void *data, int len)
 	sendto(pJunqi->socket_fd, buf, length, 0,
 			(struct sockaddr *)&pJunqi->addr, sizeof(struct sockaddr));
 	log_a("send");
-	pthread_mutex_lock(&pJunqi->mutex);
+	//pthread_mutex_lock(&pJunqi->mutex);
 	memout(buf,length);
-	pthread_mutex_unlock(&pJunqi->mutex);
+	//pthread_mutex_unlock(&pJunqi->mutex);
 }
 
 void SendHeader(Junqi* pJunqi, u8 iDir, u8 eFun)
@@ -110,7 +110,8 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 	{
 	case COMM_GO:
 		pJunqi->bGo = 1;
-		mq_send(pJunqi->qid, (char*)data, len, 0);
+		pJunqi->bStop = 0;
+		//mq_send(pJunqi->qid, (char*)data, len, 0);
 		break;
 	case COMM_STOP:
 		pJunqi->bStop = 1;
@@ -123,7 +124,7 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
 		pJunqi->eTurn = pHead->iDir;
 		pJunqi->bStart = 1;
-		mq_send(pJunqi->qid, (char*)data, len, 0);
+		//mq_send(pJunqi->qid, (char*)data, len, 0);
 		break;
 	case COMM_READY:
 		pJunqi->bStart = 0;
@@ -131,6 +132,7 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		SendHeader(pJunqi, pHead->iDir, COMM_READY);
 		break;
 	case COMM_INIT:
+		memset(pJunqi->Lineup,0,sizeof(pJunqi->Lineup));
 		pJunqi->pEngine = OpneEnigne(pJunqi);
 		InitLineup(pJunqi, data, isInitBoard);
 		InitChess(pJunqi, data);
@@ -147,7 +149,7 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
 		break;
 	default:
-		mq_send(pJunqi->qid, (char*)data, len, 0);
+		//mq_send(pJunqi->qid, (char*)data, len, 0);
 		break;
 	}
 }
@@ -169,7 +171,11 @@ void *comm_thread(void *arg)
 
 	local.sin_family = AF_INET;
 	local.sin_addr.s_addr=INADDR_ANY;
+#ifdef  TEST
+	local.sin_port = htons(6678);
+#else
 	local.sin_port = htons(5678);
+#endif
 	if(bind(socket_fd, (struct sockaddr *)&local, sizeof(struct sockaddr) )<0)
 	{
 		printf("Bind Error!\n");
@@ -183,17 +189,19 @@ void *comm_thread(void *arg)
 	pJunqi->socket_fd = socket_fd;
 	pJunqi->addr = addr;
 
-	SendHeader(pJunqi, 0, COMM_READY);
+	SendHeader(pJunqi, ENGINE_DIR, COMM_READY);
 
 	while(1)
 	{
 		recvbytes=recvfrom(socket_fd, buf, 200, 0,NULL ,NULL);
-		log_a("rec");
+		//log_a("rec");
 		pthread_mutex_lock(&pJunqi->mutex);
-		memout(buf, recvbytes);
-		pthread_mutex_unlock(&pJunqi->mutex);
+		//memout(buf, recvbytes);
+
 		DealRecData(pJunqi, buf, recvbytes);
-		//mq_send(pJunqi->qid, (char*)buf, recvbytes, 0);
+
+		mq_send(pJunqi->qid, (char*)buf, recvbytes, 0);
+		pthread_mutex_unlock(&pJunqi->mutex);
 
 	}
 

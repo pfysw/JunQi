@@ -19,7 +19,13 @@ enum MoveEvent{
 	BOMB_EVENT
 };
 
+//#define TEST
+
+#ifdef  TEST
+#define ENGINE_DIR   0
+#else
 #define ENGINE_DIR   1
+#endif
 
 extern u8 aEventBit[100];
 
