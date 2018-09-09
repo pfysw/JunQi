@@ -5,6 +5,7 @@
  *      Author: Administrator
  */
 #include "junqi.h"
+#include "path.h"
 
 //>=司令：1，>=军长：2，>=师长：4，>=旅长：6
 const u8 aMaxTypeNum[14] =
@@ -348,158 +349,6 @@ void IncJumpCnt(Junqi *pJunqi, int iDir)
 	}
 }
 
-u8 IsSameRail(
-		Junqi *pJunqi,
-		BoardGraph *pSrc,
-		BoardGraph *pDst,
-		enum RailType type)
-{
-	BoardChess *pSrcChess;
-	BoardChess *pDstChess;
-	u8 rc =0;
-
-	pSrcChess = pSrc->pAdjList->pChess;
-	pDstChess = pDst->pAdjList->pChess;
-
-	switch(type)
-	{
-	case HORIZONTAL_RAIL:
-		if( pSrcChess->point.x==pDstChess->point.x )
-			rc = 1;
-		break;
-	case VERTICAL_RAIL:
-		if( pSrcChess->point.y==pDstChess->point.y )
-			rc = 1;
-		break;
-	case CURVE_RAIL:
-		assert( pSrcChess->eCurveRail>0 );
-		if( pSrcChess->eCurveRail==pDstChess->eCurveRail  )//&& pSrcChess->eCurveRail>0
-			rc = 1;
-		break;
-	default:
-		break;
-	}
-
-	return rc;
-}
-
-u8 GetRailPath(
-		Junqi *pJunqi,
-		BoardGraph *pSrc,
-		BoardGraph *pDst,
-		enum RailType type)
-{
-	AdjNode *p;
-	BoardGraph *pVertex;
-	u8 rc = 0;
-
-	pSrc->passCnt++;
-
-	for(p=pSrc->pAdjList->pNext; p!=NULL; p=p->pNext)
-	{
-		pVertex = &pJunqi->aBoard[p->pChess->point.x][p->pChess->point.y];
-		if( p->pChess==pDst->pAdjList->pChess )
-		{
-			return 1;
-		}
-		else if( p->pChess->type!=NONE )
-		{
-			continue;
-		}
-		else if( pVertex->passCnt!=0 )
-		{
-			continue;
-		}
-		else if( type!=GONGB_RAIL && !IsSameRail(pJunqi, pSrc, pVertex, type))
-		{
-            continue;
-		}
-		else
-		{
-			rc = GetRailPath(pJunqi, pVertex, pDst, type);
-			if( rc )  break;
-		}
-	}
-
-	return rc;
-}
-
-void ClearPassCnt(Junqi *pJunqi)
-{
-	int i,j;
-
-	for(i=0; i<17; i++)
-	{
-		for(j=0; j<17; j++)
-		{
-			pJunqi->aBoard[i][j].passCnt = 0;
-		}
-	}
-}
-
-int IsEnableMove(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
-{
-	int rc = 0;
-
-	BoardGraph *pVertex1;
-	BoardGraph *pVertex2;
-
-	ClearPassCnt(pJunqi);
-
-	if( pSrc->isStronghold || pSrc->type==NONE )
-	{
-		return rc;
-	}
-	else if( pDst->isCamp && pDst->type!=NONE )
-	{
-		return rc;
-	}
-	else if( pSrc->type==DILEI || pSrc->type==JUNQI )
-	{
-		return rc;
-	}
-
-
-	//如果是相邻的格子（包括斜相邻）
-	if( ((pDst->point.x-pSrc->point.x)>=-1 && (pDst->point.x-pSrc->point.x)<=1) &&
-			((pDst->point.y-pSrc->point.y)>=-1 && (pDst->point.y-pSrc->point.y)<=1) )
-	{
-		//营与周围的格子都是相邻的
-		if( pSrc->isCamp || pDst->isCamp )
-		{
-			rc = 1;
-		}
-		//非斜相邻
-		else if( pDst->point.x==pSrc->point.x || pDst->point.y==pSrc->point.y)
-		{
-			rc = 1;
-		}
-	}
-	if( !rc && pSrc->isRailway && pDst->isRailway )
-	{
-		pVertex1 = &pJunqi->aBoard[pSrc->point.x][pSrc->point.y];
-		pVertex2 = &pJunqi->aBoard[pDst->point.x][pDst->point.y];
-
-		if( pSrc->type==GONGB )
-		{
-			rc = GetRailPath(pJunqi, pVertex1, pVertex2, GONGB_RAIL);
-		}
-		else if( pDst->point.x==pSrc->point.x )
-		{
-			rc = GetRailPath(pJunqi, pVertex1, pVertex2, HORIZONTAL_RAIL);
-		}
-		else if( pDst->point.y==pSrc->point.y )
-		{
-			rc = GetRailPath(pJunqi, pVertex1, pVertex2, VERTICAL_RAIL);
-		}
-		else if( pDst->eCurveRail>0 && pDst->eCurveRail==pSrc->eCurveRail )
-		{
-			rc = GetRailPath(pJunqi, pVertex1, pVertex2, CURVE_RAIL);
-		}
-	}
-
-	return rc;
-}
 
 int aseertChess(BoardChess *pChess)
 {
@@ -553,7 +402,7 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 	{
 		log_b("gongb zhad %d %d",aTypeNum[GONGB], aTypeNum[ZHADAN]);
 		aTypeNum[ZHADAN] += aTypeNum[GONGB]-3;
-		assert(0);
+		//assert(0);
 	}
 
 	for(i=0; i<30; i++)
@@ -650,7 +499,7 @@ void PlayResult(
 		pJunqiChess->pLineup->type = JUNQI;
 		pJunqiChess->type = JUNQI;
 		pSrc->pLineup->type = SILING;
-		pJunqi->aInfo[iDir1].bDeadSiling = 1;
+		pJunqi->aInfo[iDir1].bShowFlag = 1;
 	}
 	if( pResult->extra_info&0x04 )
 	{
@@ -660,7 +509,22 @@ void PlayResult(
 		pJunqiChess->pLineup->type = JUNQI;
 		pJunqiChess->type = JUNQI;
 		pDst->pLineup->type = SILING;
-		pJunqi->aInfo[iDir2].bDeadSiling = 1;
+		pJunqi->aInfo[iDir2].bShowFlag = 1;
+	}
+	if( pDst->isStronghold && ((pResult->extra_info&1)==0) )
+	{
+		//假旗被挖后，另外一个大本营只能是军旗
+		if( pDst->index==26 )
+		{
+			pJunqi->Lineup[pDst->iDir][28].type = JUNQI;
+			pJunqi->ChessPos[pDst->iDir][28].type = JUNQI;
+		}
+		else
+		{
+			pJunqi->Lineup[pDst->iDir][26].type = JUNQI;
+			pJunqi->ChessPos[pDst->iDir][26].type = JUNQI;
+		}
+		pJunqi->aInfo[pDst->iDir].bShowFlag = 1;
 	}
 
 	if( iDir1%2!=ENGINE_DIR%2 && pSrc->pLineup->index>=20 )
@@ -690,8 +554,10 @@ void PlayResult(
 		}
 		else if( pSrc->pLineup->iDir%2!=ENGINE_DIR%2 )
 		{
-			if( pDst->type!=DILEI && pDst->type!=JUNQI )
+			if( pDst->type!=DILEI && pDst->type!=JUNQI &&
+					(pDst->type<=pSrc->pLineup->type || pSrc->pLineup->type==DARK) )
 			{
+				log_a("change type %d %d",pSrc->pLineup->type,pDst->type);
 				pSrc->pLineup->type = pDst->type-1;
 			}
 			else if( pDst->type==DILEI )
@@ -729,7 +595,10 @@ void PlayResult(
 			{
 				pDst->pLineup->isNotLand = 1;
 			}
-			pDst->pLineup->type = pSrc->type-1;
+			if( pDst->pLineup->type>=pSrc->type || pDst->pLineup->type==DARK )
+			{
+				pDst->pLineup->type = pSrc->type-1;
+			}
 			if( pDst->pLineup->type<pDst->pLineup->mx_type )
 			{
 				pDst->pLineup->type = DILEI;

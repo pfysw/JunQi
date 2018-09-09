@@ -9,14 +9,18 @@
 #include <time.h>
 #include "event.h"
 #include "engine.h"
+#include "path.h"
 
+int preTurn = 1000;
 
 EventHandle eventArr[] = {
 	{ ComeInCamp, CAMP_EVENT },
 	{ ProBombEvent, BOMB_EVENT },
 	{ ProEatEvent, EAT_EVENT },
 	{ ProEatEvent, GONGB_EVENT },
-	{ ProEatEvent, DARK_EVENT }
+	{ ProEatEvent, DARK_EVENT },
+	{ ProJunqiEvent, MOVE_EVENT },
+	{ ProJunqiEvent, JUNQI_EVENT }
 };
 
 
@@ -91,6 +95,7 @@ void CheckMoveEvent(
 	}
 	CheckBombEvent(pEngine);
 	CheckEatEvent(pEngine);
+	CheckJunqiEvent(pEngine);
 }
 
 u8 DealEvent(Engine *pEngine)
@@ -152,6 +157,7 @@ void ProMoveResult(Junqi* pJunqi, u8 iDir, u8 *data)
 	PlayResult(pJunqi, pSrc, pDst, pResult);
 	ChessTurn(pJunqi);
 	CheckMoveEvent(pJunqi->pEngine, pSrc, pDst, pResult);
+
 
 }
 
@@ -232,7 +238,6 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	pHead = (CommHeader *)data;
 	u8 event;
 	u8 isMove = 0;
-	static int preTurn = 1000;
 
 	if( memcmp(pHead->aMagic, aMagic, 4)!=0 )
 	{
@@ -242,11 +247,13 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	switch(pHead->eFun)
 	{
 	case COMM_EVNET:
+		preTurn = pJunqi->eTurn;
 		event = *((u8*)&pHead[1]);
 		ProMoveEvent(pJunqi, pHead->iDir, event);
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
 		break;
 	case COMM_MOVE:
+		preTurn = pJunqi->eTurn;
 		assert( pHead->iDir==pJunqi->eTurn );
 		data = (u8*)&pHead[1];
 		ProMoveResult(pJunqi, pHead->iDir, data);
@@ -260,6 +267,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	{
 		return;
 	}
+
 //	if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
 //	{
 //		return;
@@ -279,7 +287,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 		{
 			SendRandMove(pJunqi);
 		}
-		preTurn = pJunqi->eTurn;
+
 	}
 }
 

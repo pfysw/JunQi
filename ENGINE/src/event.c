@@ -5,10 +5,11 @@
  *      Author: Administrator
  */
 #include "event.h"
+#include "path.h"
 
 u8 aEventBit[100]={0};
 
-const char *aTypeName[14] =
+char *aTypeName[14] =
 {
 	"none","dark","junqi","dilei","zhadan","siling","junzh",
 	"shizh","lvzh","tuanzh","yingzh","lianzh","paizh","gongb"
@@ -27,10 +28,12 @@ u8 MoveInCamp(Engine *pEngine, BoardChess *pCamp)
 		if( i==4 ) continue;
 		x = pCamp->point.x+1-i%3;
 		y = pCamp->point.y+i/3-1;
+
 		if( pJunqi->aBoard[x][y].pAdjList )
 		{
 			pNbr = pJunqi->aBoard[x][y].pAdjList->pChess;
-			if( pNbr->pLineup!=NULL &&
+			assert( pNbr->pLineup!=NULL );
+			if( pNbr->type!=NONE &&
 				pNbr->pLineup->iDir==pJunqi->eTurn &&
 				!pNbr->pLineup->pChess->isCamp )
 			{
@@ -140,6 +143,7 @@ u8 CanBombChess(Engine *pEngine, BoardChess *pBomb, int iDir)
 		}
 		if( pLineup->type>=SILING && pLineup->type<=LVZH )
 		{
+			assert( pBomb->type!=NONE );
 			if( IsEnableMove(pJunqi, pBomb, pLineup->pChess) )
 			{
 				pEngine->pBomb[0] = pBomb;
@@ -160,7 +164,8 @@ u8 ProBombEvent(Engine *pEngine)
 	u8 isMove = 0;
 	Junqi *pJunqi = pEngine->pJunqi;
 
-	if( IsEnableMove(pJunqi, pEngine->pBomb[0], pEngine->pBomb[1]) )
+	assert( IsEnableMove(pJunqi, pEngine->pBomb[0], pEngine->pBomb[1]) );
+
 	{
 		isMove = 1;
 		SendMove(pJunqi, pEngine->pBomb[0], pEngine->pBomb[1]);
@@ -249,17 +254,20 @@ u8 CanEatChess(Engine *pEngine, BoardChess *pSrc, int iDir)
 				else if( pSrc->pLineup->type<=pLineup->mx_type ||
 					     pLineup->type==GONGB )
 				{
-					pEngine->pEat[0] = pSrc;
-					pEngine->pEat[1] = pLineup->pChess;
-					SETBIT(aEventBit, EAT_EVENT);
-					isEat = 1;
-					break;
+					if( pLineup->index<20 || pLineup->isNotLand )
+					{
+						pEngine->pEat[0] = pSrc;
+						pEngine->pEat[1] = pLineup->pChess;
+						SETBIT(aEventBit, EAT_EVENT);
+						isEat = 1;
+						break;
+					}
 				}
 			}
 			else if( pLineup->index>=20 && !pLineup->isNotLand)
 			{
-				if( !pJunqi->aInfo[pLineup->pChess->iDir].bDeadSiling
-						|| !pLineup->pChess->isStronghold)
+				if( !pJunqi->aInfo[pLineup->pChess->iDir].bShowFlag
+						|| !pLineup->pChess->isStronghold )
 				{
 					pEngine->pEat[0] = pSrc;
 					pEngine->pEat[1] = pLineup->pChess;
@@ -296,6 +304,7 @@ void CheckEatEvent(Engine *pEngine)
 		pLineup = &pJunqi->Lineup[pJunqi->eTurn][i];
 		if( pLineup->type>=SILING && pLineup->type<=GONGB && !pLineup->bDead )
 		{
+			assert( pLineup->pChess->type!=NONE );
 			isEat = CanEatChess(pEngine, pLineup->pChess, (ENGINE_DIR+1)%4);
 			log_a("for1 %d %d",i,isEat);
 			if( isEat==1 )
@@ -336,5 +345,49 @@ u8 ProEatEvent(Engine *pEngine)
 	CLEARBIT(aEventBit, EAT_EVENT);
 	CLEARBIT(aEventBit, DARK_EVENT);
 	CLEARBIT(aEventBit, GONGB_EVENT);
+	return 1;
+}
+
+void CheckJunqiEvent(Engine *pEngine)
+{
+	u8 isMove = 0;
+	int i;
+	Junqi *pJunqi = pEngine->pJunqi;
+	ChessLineup *pLineup;
+
+	if( ENGINE_DIR%2!=pJunqi->eTurn%2 )
+	{
+		return;
+	}
+
+	CLEARBIT(aEventBit, MOVE_EVENT);
+	CLEARBIT(aEventBit, JUNQI_EVENT);
+
+	ClearPathCnt(pJunqi);
+	for(i=0; i<30; i++)
+	{
+		pLineup = &pJunqi->Lineup[pJunqi->eTurn][i];
+		if( pLineup->bDead || pLineup->type==NONE ||
+			pLineup->type==DILEI || pLineup->type==JUNQI )
+		{
+			continue;
+		}
+		isMove = CanMovetoJunqi(pEngine, pLineup->pChess);
+		(void)isMove;
+	}
+
+}
+
+u8 ProJunqiEvent(Engine *pEngine)
+{
+	Junqi *pJunqi = pEngine->pJunqi;
+
+	assert( pEngine->pPath[1]==NULL );
+	assert( IsEnableMove(pJunqi, pEngine->pMove[0], pEngine->pMove[1]) );
+	SendMove(pJunqi, pEngine->pMove[0], pEngine->pMove[1]);
+
+	CLEARBIT(aEventBit, MOVE_EVENT);
+	CLEARBIT(aEventBit, JUNQI_EVENT);
+
 	return 1;
 }

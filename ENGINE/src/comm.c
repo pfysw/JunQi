@@ -9,6 +9,7 @@
 #include "junqi.h"
 #include "engine.h"
 
+extern int preTurn;
 #if 1
 void memout(u8 *pdata,u8 len)
 {
@@ -120,6 +121,7 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		assert(0);
 		break;
 	case COMM_START:
+		preTurn = 1000;
 		InitChess(pJunqi, data);
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
 		pJunqi->eTurn = pHead->iDir;

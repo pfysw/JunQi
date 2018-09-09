@@ -61,6 +61,9 @@ struct BoardChess
 {
 	enum ChessType type;
 	ChessLineup *pLineup;
+	int pathCnt;
+	u8  pathFlag;
+	u8  sameFlag;
 	////下面为固定属性，不能改变///////////
 	enum SpcRail eCurveRail;
 	enum ChessDir iDir;
@@ -98,8 +101,9 @@ struct GraphPath
 typedef struct PartyInfo
 {
 	u8 bDead;
+	u8 bFlag;
 	u8 cntJump;
-	u8 bDeadSiling;
+	u8 bShowFlag;
 }PartyInfo;
 
 struct Junqi
@@ -128,7 +132,6 @@ void InitChess(Junqi* pJunqi, u8 *data);
 void DestroyAllChess(Junqi *pJunqi, int iDir);
 void IncJumpCnt(Junqi *pJunqi, int iDir);
 void ChessTurn(Junqi *pJunqi);
-int IsEnableMove(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst);
 void PlayResult(
 		Junqi *pJunqi,
 		BoardChess *pSrc,

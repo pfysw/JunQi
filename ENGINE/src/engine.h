@@ -12,14 +12,16 @@
 #include <fcntl.h>
 
 enum MoveEvent{
+	CAMP_EVENT,
+	MOVE_EVENT,
 	GONGB_EVENT,
 	DARK_EVENT,
-	CAMP_EVENT,
 	EAT_EVENT,
+	JUNQI_EVENT,
 	BOMB_EVENT
 };
 
-//#define TEST
+#define TEST
 
 #ifdef  TEST
 #define ENGINE_DIR   0
@@ -35,6 +37,8 @@ typedef struct ENGINE
 	BoardChess *pCamp[2];
 	BoardChess *pBomb[2];
 	BoardChess *pEat[2];
+	BoardChess *pMove[2];
+	GraphPath *pPath[2];//pPath[0] 暂时不用
 	u16 eventId;
     u8  eventFlag;
 }Engine;
