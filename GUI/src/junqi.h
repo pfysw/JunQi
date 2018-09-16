@@ -169,7 +169,8 @@ struct Junqi
 	BoardGraph aBoard[17][17];
 	//0：之前显示的路径，1：当前确定的最优路径，2：其他尝试的路径
 	GraphPath  *pPath[3];
-	int szPath;
+	u8 szPath;
+	u8 szPathForSound;
 	u8 aReplay[4096];
 	int iReOfst;
 	int iRpStep;

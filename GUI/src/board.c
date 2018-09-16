@@ -215,14 +215,9 @@ GtkWidget *SetMenuItem(GtkWidget *menu, char *zLabel, void *call_back, char *arg
 	return menuitem;
 }
 
-static void save_lineup_handle(GtkWidget *item,gpointer data)
+int GetColorDir(Junqi *pJunqi, char *zDir)
 {
-	enum ChessDir iDir;
-	Junqi *pJunqi = gJunqi;
-	char *zDir = (char*)data;
-
-	if(zDir==NULL) return;
-
+	int iDir = 0;
     if( strcmp(zDir,"orange" )==0 )
     {
     	iDir = (4-pJunqi->eColor)%4;
@@ -239,9 +234,34 @@ static void save_lineup_handle(GtkWidget *item,gpointer data)
     {
     	iDir = (4-pJunqi->eColor+3)%4;
     }
+    return iDir;
+}
+
+static void save_lineup_handle(GtkWidget *item,gpointer data)
+{
+	enum ChessDir iDir;
+	Junqi *pJunqi = gJunqi;
+	char *zDir = (char*)data;
+
+	if(zDir==NULL) return;
+
+	iDir = GetColorDir(pJunqi,zDir);
+
     pJunqi->eLineupDir = iDir;
 
     CreatSaveDialog(pJunqi, G_CALLBACK (SaveLineup));
+}
+
+static void set_first_turn(GtkWidget *item,gpointer data)
+{
+	enum ChessDir iDir;
+	Junqi *pJunqi = gJunqi;
+	char *zDir = (char*)data;
+
+	if(zDir==NULL) return;
+
+	iDir = GetColorDir(pJunqi,zDir);
+	pJunqi->eTurn = iDir;
 }
 
 void CreatSaveLineupMenu(GtkWidget *menu)
@@ -255,6 +275,19 @@ void CreatSaveLineupMenu(GtkWidget *menu)
 	SetMenuItem(save_menu, "绿色", save_lineup_handle, "green");
 	SetMenuItem(save_menu, "蓝色", save_lineup_handle, "blue");
 	SetMenuItem(save_menu, "紫色", save_lineup_handle, "purple");
+}
+
+void CreatFirstTurnMenu(GtkWidget *menu)
+{
+	GtkWidget *menuitem,*sub_menu;
+	menuitem = gtk_menu_item_new_with_label("先手");
+	gtk_menu_shell_append (GTK_MENU_SHELL (menu), menuitem);
+	sub_menu = gtk_menu_new();
+	gtk_menu_item_set_submenu(GTK_MENU_ITEM(menuitem),sub_menu);
+	SetMenuItem(sub_menu, "橙色", set_first_turn, "orange");
+	SetMenuItem(sub_menu, "绿色", set_first_turn, "green");
+	SetMenuItem(sub_menu, "蓝色", set_first_turn, "blue");
+	SetMenuItem(sub_menu, "紫色", set_first_turn, "purple");
 }
 
 /*
@@ -287,7 +320,7 @@ void set_menu(GtkWidget *vbox)
 
 	SetMenuItem(menu, "暂停", event_handle, "stop");
 	SetMenuItem(menu, "继续", event_handle, "continue");
-
+	CreatFirstTurnMenu(menu);
 }
 
 /*
@@ -630,7 +663,9 @@ static void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data
 	for(int i=0; i<4; i++)
 	{
 		gtk_widget_hide(gBoard.lineup_button[i]);
+#if NOT_DEBUG1
 		if(i%2==0)
+#endif
 		{
 			gtk_widget_show(gBoard.surrender_button[i]);
 			gtk_widget_show(gBoard.jump_button[i]);
@@ -640,7 +675,7 @@ static void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data
 
 	pJunqi->bReplay = 0;
 	pJunqi->bStart = 1;
-	pJunqi->bStop = 0;
+	//pJunqi->bStop = 0;
 	gtk_widget_hide(pJunqi->begin_button);
 	gtk_widget_show(pJunqi->start_button);
 	gtk_widget_set_sensitive(gBoard.open_menu, FALSE);
@@ -748,7 +783,7 @@ void *sound_thread(void *arg)
 	{
 	    if( pJunqi->sound_type>0 )
 	    {
-	    	if( pJunqi->szPath>3 )
+	    	if( pJunqi->szPathForSound>2 )
 	    	{
 	    		PlaySound (MOVE_SOUND, NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
     			Sleep(250);
@@ -761,11 +796,11 @@ void *sound_thread(void *arg)
 	        switch(pJunqi->sound_type)
 	        {
 	        case MOVE:
-    			PlaySound (MOVE_SOUND, NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
+    			//PlaySound (MOVE_SOUND, NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
     			//通过调整时间使非铁路上的移动只响一下
-    			Sleep(190);
+    			//Sleep(190);
     			//异步播放后，非异步的移动声就播不出，此处做暂停用
-	    		PlaySound (MOVE_SOUND, NULL, SND_FILENAME | SND_NODEFAULT);
+    			PlaySound (MOVE_SOUND, NULL, SND_FILENAME | SND_NODEFAULT);
 	        	break;
 	        case BOMB:
 	        	PlaySound (BOMB_SOUND, NULL, SND_FILENAME | SND_NODEFAULT);
@@ -794,13 +829,11 @@ void *sound_thread(void *arg)
 	        default:
 	        	break;
 	        }
+	        pJunqi->sound_type = 0;
+	        pJunqi->szPathForSound = 0;
+	        pJunqi->szPath = 0;
 	    }
 
-	    pJunqi->sound_type = 0;
-	    if( pJunqi->szPath>3 )
-	    {
-	    	pJunqi->szPath = 0;
-	    }
 	    Sleep(100);
 	    //usleep(100000);
 	}
@@ -817,6 +850,7 @@ void SendSoundEvent(Junqi *pJunqi, enum CompareType type)
 	{
 		pJunqi->sound_replay = type;
 	}
+	pJunqi->szPathForSound = pJunqi->szPath;
 }
 
 void CreatBeginButton(Junqi *pJunqi)

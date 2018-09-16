@@ -174,9 +174,6 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 	int x,y;
 	int i;
 
-	pJunqi->eColor = PURPLE;
-	pJunqi->eTurn = (4-pJunqi->eColor)%4;
-
     //从方阵的左上角从上往下，从左往右遍历
 	for(i=0;i<30;i++)
 	{
@@ -1263,6 +1260,8 @@ void CreatBoardChess(GtkWidget *window, Junqi *pJunqi)
 			G_CALLBACK(deal_mouse_press), pJunqi);
 
 	LoadChessImage(pJunqi);
+	pJunqi->eColor = ORANGE;
+	pJunqi->eTurn = (4-pJunqi->eColor)%4;
 	for(int i=0; i<4; i++)
 	{
 		InitLineup(pJunqi,i);
