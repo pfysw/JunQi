@@ -240,7 +240,7 @@ u8 CanEatChess(Engine *pEngine, BoardChess *pSrc, int iDir)
 			}
 			if( pSrc->pLineup->type!=GONGB )
 			{
-				log_b("index %d %d",pLineup->index,pLineup->isNotLand);
+				log_a("index %d %d",pLineup->index,pLineup->isNotLand);
 				if( pLineup->type==DARK )
 				{
 					if( pLineup->index<20 || pLineup->isNotLand )

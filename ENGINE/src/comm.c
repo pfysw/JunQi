@@ -49,10 +49,8 @@ void SendData(Junqi* pJunqi, CommHeader *header, void *data, int len)
 
 	sendto(pJunqi->socket_fd, buf, length, 0,
 			(struct sockaddr *)&pJunqi->addr, sizeof(struct sockaddr));
-	log_a("send");
-	//pthread_mutex_lock(&pJunqi->mutex);
+	log_b("send");
 	memout(buf,length);
-	//pthread_mutex_unlock(&pJunqi->mutex);
 }
 
 void SendHeader(Junqi* pJunqi, u8 iDir, u8 eFun)

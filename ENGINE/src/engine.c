@@ -10,6 +10,7 @@
 #include "event.h"
 #include "engine.h"
 #include "path.h"
+#include "evaluate.h"
 
 int preTurn = 1000;
 
@@ -67,6 +68,7 @@ Engine *OpneEnigne(Junqi *pJunqi)
 	memset(pEngine, 0, sizeof(Engine));
 	memset(aEventBit, 0, sizeof(aEventBit));
 	pEngine->pJunqi = pJunqi;
+	InitValuePara(&pEngine->valPara);
 	return pEngine;
 }
 
@@ -155,8 +157,11 @@ void ProMoveResult(Junqi* pJunqi, u8 iDir, u8 *data)
 	}
 	assert( pSrc->pLineup->iDir==iDir );
 	PlayResult(pJunqi, pSrc, pDst, pResult);
-	ChessTurn(pJunqi);
-	CheckMoveEvent(pJunqi->pEngine, pSrc, pDst, pResult);
+	if( pJunqi->bStart )
+	{
+		ChessTurn(pJunqi);
+		CheckMoveEvent(pJunqi->pEngine, pSrc, pDst, pResult);
+	}
 
 
 }
@@ -238,6 +243,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	pHead = (CommHeader *)data;
 	u8 event;
 	u8 isMove = 0;
+	int value;
 
 	if( memcmp(pHead->aMagic, aMagic, 4)!=0 )
 	{
@@ -262,17 +268,20 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	default:
 		break;
 	}
+	value = EvalSituation(pJunqi);
+
+	log_b("value %d",value);
 
 	if( !pJunqi->bStart || pJunqi->bStop )
 	{
 		return;
 	}
 
-//	if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
-//	{
-//		return;
-//	}
-//	pJunqi->bGo = 0;
+	if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
+	{
+		return;
+	}
+	pJunqi->bGo = 0;
 
 	if( pJunqi->eTurn%2==ENGINE_DIR )
 	{

@@ -24,7 +24,7 @@ enum RailType {GONGB_RAIL,HORIZONTAL_RAIL,VERTICAL_RAIL,CURVE_RAIL};
 enum CompareType {MOVE=1,EAT,BOMB,KILLED,SELECT,SHOW_FLAG,DEAD,BEGIN,TIMER};
 
 ////////// test /////////////////////
-#define log_a(format,...)   printf(format"\n",## __VA_ARGS__)
+#define log_a(format,...)   //printf(format"\n",## __VA_ARGS__)
 #define log_fun(format,...)  //printf(format"\n",## __VA_ARGS__)
 #define log_b(format,...)  printf(format"\n",## __VA_ARGS__)
 #define log_c(format,...)  //printf(format"\n",## __VA_ARGS__)
@@ -39,15 +39,16 @@ void memout(u8 *pdata,u8 len);
 typedef struct BoardChess BoardChess;
 typedef struct ChessLineup
 {
-	//表示棋子是哪家的棋
-	enum ChessDir iDir;
-	enum ChessType type;
-	enum ChessType mx_type;
+	enum ChessDir iDir;//表示棋子是哪家的棋
+	//要注意子力越大，type值越小，见ChessType定义
+	enum ChessType type;//如果是地方的棋，则表示最小可能
+	enum ChessType mx_type;//预测敌方棋的最大可能
 	BoardChess *pChess;
 	u8 bDead;
 	u8 bBomb;
 	u8 index;
 	u8 isNotLand;
+	u8 isNotBomb;
 }ChessLineup;
 
 typedef struct BoardPoint
@@ -104,6 +105,7 @@ typedef struct PartyInfo
 	u8 bFlag;
 	u8 cntJump;
 	u8 bShowFlag;
+	u8 aTypeNum[14];
 }PartyInfo;
 
 struct Junqi

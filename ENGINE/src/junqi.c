@@ -363,28 +363,65 @@ int aseertChess(BoardChess *pChess)
 	return rc;
 }
 
-int GetTypeNum(u8 *aBombNum, const u8 *aTpyeNum, int type)
+void GetTypeNum(u8 *aBombNum, u8 *aTpyeNum, u8 *aTypeNumSum)
 {
 	int i;
 	int sum = 0;
 	int sum1 = 0;
-	for(i=SILING; i<=type; i++)
+	int nBomb = 0;
+	int sub;
+
+	for(i=SILING; i<=GONGB; i++)
 	{
 		sum += aTpyeNum[i];
 		sum1 += aBombNum[i];
+		aTypeNumSum[i] = sum - ((sum1<(2-aTpyeNum[ZHADAN]))?sum1:(2-aTpyeNum[ZHADAN]));
+		//高于当前级别的数量已超出最大值，那么超出的部分必定是炸弹
+		if( (sub=sum-aMaxTypeNum[i])>nBomb )
+		{
+			nBomb = sub;
+		}
 	}
-
-	sum -= (sum1<(2-aTpyeNum[ZHADAN]))?sum1:(2-aTpyeNum[ZHADAN]);
-	return sum;
+	aTpyeNum[ZHADAN] += nBomb;
+	assert( aTpyeNum[ZHADAN]<=2 );
 }
 
+int GetMaxType(int mx_type, int type, u8 *aTypeNumSum)
+{
+	enum ChessType tmp;
+
+	tmp = mx_type;
+	while( tmp<type )
+	{
+		//大于等于tmp的数量已经到最大值，所以mx_type已经不可能是tmp
+		//那这里为什么不退出而要继续搜索呢，这里还是举个例子
+		//司令死掉，有2个子吃掉37，而大于等于39的子并没有到最大数量
+		//那么是否可以判断最大就是39了呢，显然不是，后面发现，大于等于
+		//38的数量也到了最大值，所以当前这个子最大只可能是37
+		if( aTypeNumSum[tmp]>=aMaxTypeNum[tmp] )
+		{
+			mx_type = ++tmp;
+		}
+		else
+		{
+			++tmp;
+		}
+	}
+	return mx_type;
+}
+
+//待优化
 void AdjustMaxType(Junqi *pJunqi, int iDir)
 {
 	int i;
 	ChessLineup *pLineup;
-	u8 aTypeNum[14] = {0};
+	u8 *aTypeNum = pJunqi->aInfo[iDir].aTypeNum;
 	u8 aBombNum[14] = {0};
+	u8 aTypeNumSum[14] = {0};
+	enum ChessType tmp;
 
+
+	memset(aTypeNum, 0, 14);
 	for(i=0; i<30; i++)
 	{
 		pLineup = &pJunqi->Lineup[iDir][i];
@@ -392,37 +429,75 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		{
 			continue;
 		}
+		//疑似地雷的棋，不要把pLineup->type统计进去
+		if( pLineup->index>=20 && !pLineup->isNotLand )
+		{
+			if( pLineup->type!=DILEI )
+				continue;
+		}
+		//计算该子类型的总和
 		aTypeNum[pLineup->type]++;
+		//计算该子暗打兑的数量，打兑当中有些是炸弹，需要在后续判断排除
 		if( pLineup->bBomb )
 		{
 			aBombNum[pLineup->type]++;
 		}
 	}
+	//工兵大于3，说明多余的飞了炸
 	if( aTypeNum[GONGB]>3 )
 	{
 		log_b("gongb zhad %d %d",aTypeNum[GONGB], aTypeNum[ZHADAN]);
 		aTypeNum[ZHADAN] += aTypeNum[GONGB]-3;
-		//assert(0);
+		assert( aTypeNum[ZHADAN]<=2 );
 	}
+	//获取某个级别以上的数量总和，保存在aTypeNumSum里
+	//这里是先把aTypeNumSum都算好，因为aTypeNumSum是固定的
+	//如果后面再循环中算则重复了
+	GetTypeNum(aBombNum,aTypeNum,aTypeNumSum);
+    //这里先计算好暗子的最大可能性
+	tmp = GetMaxType(SILING, GONGB, aTypeNumSum);
 
 	for(i=0; i<30; i++)
 	{
 		pLineup = &pJunqi->Lineup[iDir][i];
-		if( pLineup->type==NONE || pLineup->type==DARK )
+		//NONE ~ SILING
+		if( pLineup->type<=SILING && pLineup->type!=DARK )
 		{
 			continue;
 		}
-		while( pLineup->mx_type<pLineup->type )
+		//当现在估计的子力比之前算的小的话才更新
+		if( pLineup->type==DARK )
 		{
-			if( GetTypeNum(aBombNum,aTypeNum,pLineup->mx_type)<aMaxTypeNum[pLineup->mx_type] )
+			if( pLineup->mx_type<tmp )
 			{
-				break;
-			}
-			else
-			{
-				pLineup->mx_type++;
+				pLineup->mx_type = tmp;
 			}
 		}
+		else
+		{
+			assert( pLineup->type>SILING );
+			//这里计算吃过子的棋的最大可能
+			pLineup->mx_type = GetMaxType(pLineup->mx_type,
+					pLineup->type, aTypeNumSum);
+			//这里计算疑似地雷的棋，举个例子，对方司令已经死了
+			//此时38撞雷，我们还不能判断是地雷，也可能是39，
+			//如果又有另一个子吃了38，那么可以判断是地雷
+			//这里比当前棋级别大的数量已经为最大值
+			//后2排的pLineup->type是没有统计到aTypeNumSum里的，所以可以断定为地雷
+			if( aTypeNumSum[pLineup->type]==aMaxTypeNum[pLineup->type] )
+			{
+				//后2排疑似地雷的type不会统计到aTypeNumSum里
+				if( pLineup->index>=20 && !pLineup->isNotLand )
+				{
+					if( pLineup->type != DILEI)
+					{
+						pLineup->type = DILEI;
+						aTypeNum[DILEI]++;
+					}
+				}
+			}
+		}
+
 	}
 }
 
@@ -435,7 +510,7 @@ void JudgeIfBomb(
 {
 	if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
 	{
-		if( pDst->pLineup->type==DARK )
+		if( pDst->pLineup->type==DARK && pDst->pLineup->index>=5 )
 		{
 			pDst->pLineup->bBomb = 1;
 		}
@@ -447,12 +522,13 @@ void JudgeIfBomb(
 		else if( pSrc->pLineup->type!=ZHADAN )
 		{
 			pDst->pLineup->type = pSrc->pLineup->type;
+			pDst->pLineup->mx_type = pSrc->pLineup->type;
 		}
 
 	}
 	else
 	{
-		if( pSrc->pLineup->type==DARK )
+		if( pSrc->pLineup->type==DARK && pSrc->pLineup->index>=5 )
 		{
 			pSrc->pLineup->bBomb = 1;
 		}
@@ -465,8 +541,8 @@ void JudgeIfBomb(
 		else if( pDst->pLineup->type!=ZHADAN )
 		{
 			pSrc->pLineup->type = pDst->pLineup->type;
+			pSrc->pLineup->mx_type = pDst->pLineup->type;
 		}
-
 	}
 }
 
@@ -527,7 +603,7 @@ void PlayResult(
 		pJunqi->aInfo[pDst->iDir].bShowFlag = 1;
 	}
 
-	if( iDir1%2!=ENGINE_DIR%2 && pSrc->pLineup->index>=20 )
+	if( pSrc->pLineup->index>=20 )
 	{
 		pSrc->pLineup->isNotLand = 1;
 	}
@@ -552,24 +628,37 @@ void PlayResult(
 
 			JudgeIfBomb(pJunqi, pSrc, pDst, pResult);
 		}
-		else if( pSrc->pLineup->iDir%2!=ENGINE_DIR%2 )
-		{
-			if( pDst->type!=DILEI && pDst->type!=JUNQI &&
-					(pDst->type<=pSrc->pLineup->type || pSrc->pLineup->type==DARK) )
-			{
-				log_a("change type %d %d",pSrc->pLineup->type,pDst->type);
-				pSrc->pLineup->type = pDst->type-1;
-			}
-			else if( pDst->type==DILEI )
-			{
-				pSrc->pLineup->type = GONGB;
-			}
-		}
 		else
 		{
-			if( pSrc->pLineup->type==PAIZH )
+			if( pSrc->pLineup->index>=5 )
 			{
-				pDst->pLineup->type = GONGB;
+				pSrc->pLineup->isNotBomb = 1;
+			}
+
+			if( pSrc->pLineup->iDir%2!=ENGINE_DIR%2 )
+			{
+				if( pDst->type!=DILEI && pDst->type!=JUNQI &&
+						(pDst->type<=pSrc->pLineup->type || pSrc->pLineup->type==DARK) )
+				{
+					log_a("change type %d %d",pSrc->pLineup->type,pDst->type);
+					pSrc->pLineup->type = pDst->type-1;
+				}
+				else if( pDst->type==DILEI )
+				{
+					pSrc->pLineup->type = GONGB;
+				}
+			}
+			else
+			{
+				if( pSrc->pLineup->type==GONGB )
+				{
+					pDst->pLineup->type = DILEI;
+				}
+				//如果是用40吃的子，对方最大39，只有对方的最大值比39大时才更新
+				else if( pDst->pLineup->mx_type < pSrc->pLineup->type+1 )
+				{
+					pDst->pLineup->mx_type = pSrc->pLineup->type+1;
+				}
 			}
 		}
 
@@ -589,39 +678,52 @@ void PlayResult(
 	{
 		pSrc->pLineup->bDead = 1;
 
+		if( pSrc->type==GONGB && pDst->pLineup->index>=20 )
+		{
+			pDst->pLineup->isNotLand = 1;
+		}
+		if( pDst->pLineup->index>=5 )
+		{
+			pDst->pLineup->isNotBomb = 1;
+		}
+
+
 		if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
 		{
-			if( pSrc->type==GONGB )
-			{
-				pDst->pLineup->isNotLand = 1;
-			}
 			if( pDst->pLineup->type>=pSrc->type || pDst->pLineup->type==DARK )
 			{
 				pDst->pLineup->type = pSrc->type-1;
 			}
-			if( pDst->pLineup->type<pDst->pLineup->mx_type )
+			if( pSrc->pLineup->type<=pDst->pLineup->mx_type )
 			{
+				assert( pDst->pLineup->index>=20 );
 				pDst->pLineup->type = DILEI;
 			}
 		}
 		else
 		{
-			if( pDst->pLineup->type==PAIZH )
+			if( pDst->pLineup->type!=DILEI )
 			{
-				pSrc->pLineup->type = GONGB;
+				//如果是用40吃的子，对方最大39，只有对方的最大值比39大时才更新
+				if( pSrc->pLineup->mx_type < pDst->pLineup->type+1 )
+					pSrc->pLineup->mx_type = pDst->pLineup->type+1;
 			}
+
 		}
 
 	}
 	pSrc->type = NONE;
 	//预测敌方最大的棋子
-	if( iDir1%2!=ENGINE_DIR%2 )
+	if( type!=MOVE )
 	{
-		AdjustMaxType(pJunqi, iDir1);
-	}
-	else if( type!=MOVE )
-	{
-		AdjustMaxType(pJunqi, iDir2);
+		if( iDir1%2!=ENGINE_DIR%2 )
+		{
+			AdjustMaxType(pJunqi, iDir1);
+		}
+		else
+		{
+			AdjustMaxType(pJunqi, iDir2);
+		}
 	}
 
 	assert( aseertChess(pSrc) );

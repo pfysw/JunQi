@@ -10,6 +10,7 @@
 #include "type.h"
 #include <unistd.h>
 #include <fcntl.h>
+#include "evaluate.h"
 
 enum MoveEvent{
 	CAMP_EVENT,
@@ -41,6 +42,7 @@ typedef struct ENGINE
 	GraphPath *pPath[2];//pPath[0] 暂时不用
 	u16 eventId;
     u8  eventFlag;
+    Value_Parameter valPara;
 }Engine;
 
 typedef struct EventHandle
