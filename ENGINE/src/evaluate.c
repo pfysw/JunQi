@@ -34,10 +34,6 @@ int EvalSituation(Junqi *pJunqi)
 	Engine *pEngine = pJunqi->pEngine;
 	Value_Parameter *pVal;
 
-	if( !pJunqi->bStart )
-	{
-		return 0;
-	}
 	pVal= &pEngine->valPara;
 	for(i=0; i<4; i++)
 	{

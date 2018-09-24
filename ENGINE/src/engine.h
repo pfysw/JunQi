@@ -42,6 +42,7 @@ typedef struct ENGINE
 	GraphPath *pPath[2];//pPath[0] 暂时不用
 	u16 eventId;
     u8  eventFlag;
+
     Value_Parameter valPara;
 }Engine;
 

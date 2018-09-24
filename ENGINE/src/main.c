@@ -20,7 +20,7 @@ int main(int argc, char *argv[])
 
 	t1 = CreatCommThread(pJunqi);
 	CreatEngineThread(pJunqi);
-
+	CreatPrintThread(pJunqi);
 	pthread_join(t1,NULL);
 
 	return 0;

@@ -11,9 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include "type.h"
-#include "comm.h"
 #include <assert.h>
 #include "engine.h"
+#include "utiliy.h"
+#include "movegen.h"
 
 enum ChessColor {ORANGE,PURPLE,GREEN,BLUE};
 enum ChessType {NONE,DARK,JUNQI,DILEI,ZHADAN,SILING,JUNZH,SHIZH,
@@ -23,18 +24,12 @@ enum SpcRail {RAIL1=1,RAIL2,RAIL3,RAIL4};
 enum RailType {GONGB_RAIL,HORIZONTAL_RAIL,VERTICAL_RAIL,CURVE_RAIL};
 enum CompareType {MOVE=1,EAT,BOMB,KILLED,SELECT,SHOW_FLAG,DEAD,BEGIN,TIMER};
 
-////////// test /////////////////////
-#define log_a(format,...)   //printf(format"\n",## __VA_ARGS__)
-#define log_fun(format,...)  //printf(format"\n",## __VA_ARGS__)
-#define log_b(format,...)  printf(format"\n",## __VA_ARGS__)
-#define log_c(format,...)  //printf(format"\n",## __VA_ARGS__)
-
-void memout(u8 *pdata,u8 len);
 
 #define PLAY_EVENT 0xF5
 #define JUMP_EVENT 0x00
 #define SURRENDER_EVENT 0x01
 
+#define MOVE_OFFSET (8+30*4)//4字节起始标志+4字节总步数+4家布阵
 
 typedef struct BoardChess BoardChess;
 typedef struct ChessLineup
@@ -122,10 +117,15 @@ struct Junqi
 
 	PartyInfo aInfo[4];
 	Engine *pEngine;
+	MoveList *pMoveList;
+
+	int nRpStep;
+	int iRpOfst;
 
 	struct sockaddr_in addr;
 	int socket_fd;
 	mqd_t qid;
+	mqd_t print_qid;
 	pthread_mutex_t mutex;
 };
 

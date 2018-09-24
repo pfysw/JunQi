@@ -16,6 +16,7 @@
 #include "pthread.h"
 #include "type.h"
 #include <mqueue.h>
+#include "utiliy.h"
 
 #define COMM_OK          0
 #define COMM_ERROR       1
@@ -27,7 +28,7 @@
 #define COMM_LINEUP      7
 #define COMM_INIT        8
 #define COMM_STOP        9
-
+#define COMM_REPLAY      10
 
 #define REC_LEN          200
 const static u8 aMagic[4]={0x57,0x04,0,0};
@@ -45,10 +46,11 @@ typedef struct MoveResultData
 	u8 src[2];
 	u8 dst[2];
 	u8 result;
-	u8 extra_info;
+	u8 extra_info;//0~2bit的含义：0：军旗阵亡 1：src是司令 2：dst是司令
 	u8 junqi_src[2];
 	u8 junqi_dst[2];
 }MoveResultData;
+
 
 pthread_t CreatCommThread(Junqi* pJunqi);
 void SendHeader(Junqi* pJunqi, u8 iDir, u8 eFun);

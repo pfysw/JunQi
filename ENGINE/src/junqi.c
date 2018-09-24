@@ -7,6 +7,8 @@
 #include "junqi.h"
 #include "path.h"
 
+extern Junqi* gJunqi;
+
 //>=司令：1，>=军长：2，>=师长：4，>=旅长：6
 const u8 aMaxTypeNum[14] =
 {
@@ -17,10 +19,24 @@ Junqi *JunqiOpen(void)
 {
 	Junqi *pJunqi = (Junqi*)malloc(sizeof(Junqi));
 	memset(pJunqi, 0, sizeof(Junqi));
+	gJunqi = pJunqi;
 	pthread_mutex_init(&pJunqi->mutex, NULL);
 	return pJunqi;
 }
 
+void InitReplyLineup(Junqi* pJunqi, u8 *data)
+{
+	int i,j;
+	u8 aRpLineup[4][30];
+
+	for(j=0; j<4; j++)
+	{
+		for(i=0; i<30; i++)
+		{
+			aRpLineup[j][i] = data[30*j+i];
+		}
+	}
+}
 
 void InitLineup(Junqi* pJunqi, u8 *data, u8 isInit)
 {
@@ -119,6 +135,8 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 		pJunqi->Lineup[dir][i].bDead = 0;
 		pJunqi->Lineup[dir][i].index = i;
 		pJunqi->Lineup[dir][i].mx_type= SILING;
+		if( i<5 )   pJunqi->Lineup[dir][i].isNotBomb = 1;
+		if( i<20 )  pJunqi->Lineup[dir][i].isNotLand = 1;
 		SetBoardCamp(pJunqi, dir, i);
 		SetBoardRailway(pJunqi, dir, i);
 	}
@@ -575,7 +593,7 @@ void PlayResult(
 		pJunqiChess->pLineup->type = JUNQI;
 		pJunqiChess->type = JUNQI;
 		pSrc->pLineup->type = SILING;
-		pJunqi->aInfo[iDir1].bShowFlag = 1;
+		pJunqi->aInfo[iDir1].bShowFlag |= 2;
 	}
 	if( pResult->extra_info&0x04 )
 	{
@@ -585,7 +603,7 @@ void PlayResult(
 		pJunqiChess->pLineup->type = JUNQI;
 		pJunqiChess->type = JUNQI;
 		pDst->pLineup->type = SILING;
-		pJunqi->aInfo[iDir2].bShowFlag = 1;
+		pJunqi->aInfo[iDir2].bShowFlag |= 2;
 	}
 	if( pDst->isStronghold && ((pResult->extra_info&1)==0) )
 	{
@@ -600,7 +618,7 @@ void PlayResult(
 			pJunqi->Lineup[pDst->iDir][26].type = JUNQI;
 			pJunqi->ChessPos[pDst->iDir][26].type = JUNQI;
 		}
-		pJunqi->aInfo[pDst->iDir].bShowFlag = 1;
+		pJunqi->aInfo[pDst->iDir].bShowFlag |= 1;
 	}
 
 	if( pSrc->pLineup->index>=20 )
@@ -613,6 +631,7 @@ void PlayResult(
 		if( !IsEnableMove(pJunqi, pSrc, pDst) )
 		{
 			pSrc->pLineup->type = GONGB;
+			pSrc->pLineup->mx_type = GONGB;
 		}
 	}
 
@@ -646,6 +665,7 @@ void PlayResult(
 				else if( pDst->type==DILEI )
 				{
 					pSrc->pLineup->type = GONGB;
+					pSrc->pLineup->mx_type = GONGB;
 				}
 			}
 			else
@@ -664,6 +684,10 @@ void PlayResult(
 
 		if( pResult->extra_info&1 )
 		{
+			if( type==BOMB )
+			{
+				pSrc->pLineup->type = ZHADAN;
+			}
 			pDst->pLineup->type = JUNQI;
 			DestroyAllChess(pJunqi, pDst->pLineup->iDir);
 		}
@@ -674,6 +698,7 @@ void PlayResult(
 		pDst->pLineup = pSrc->pLineup;
 		pDst->pLineup->pChess = pDst;
 	}
+
 	if( type==KILLED )
 	{
 		pSrc->pLineup->bDead = 1;
@@ -698,6 +723,7 @@ void PlayResult(
 			{
 				assert( pDst->pLineup->index>=20 );
 				pDst->pLineup->type = DILEI;
+
 			}
 		}
 		else
@@ -713,6 +739,7 @@ void PlayResult(
 
 	}
 	pSrc->type = NONE;
+
 	//预测敌方最大的棋子
 	if( type!=MOVE )
 	{

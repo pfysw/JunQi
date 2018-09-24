@@ -8,24 +8,10 @@
 #include "comm.h"
 #include "junqi.h"
 #include "engine.h"
+#include <stdarg.h>
+
 
 extern int preTurn;
-#if 1
-void memout(u8 *pdata,u8 len)
-{
-	int i;
-	for(i=0;i<len;i++)
-	{
-		printf("%02X ",*(pdata+i));
-		if((i+1)%8==0)
-		{
-			printf("\n");
-		}
-	}
-	printf("\n");
-}
-#endif
-////////////////////////////////
 
 void PacketHeader(CommHeader *header, u8 iDir, u8 eFun)
 {
@@ -50,7 +36,9 @@ void SendData(Junqi* pJunqi, CommHeader *header, void *data, int len)
 	sendto(pJunqi->socket_fd, buf, length, 0,
 			(struct sockaddr *)&pJunqi->addr, sizeof(struct sockaddr));
 	log_b("send");
-	memout(buf,length);
+	//memout(buf,length);
+	SafeMemout(buf,length);
+
 }
 
 void SendHeader(Junqi* pJunqi, u8 iDir, u8 eFun)
@@ -100,10 +88,14 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 	pHead = (CommHeader *)data;
 	static int isInitBoard = 0;
 
+//	struct mq_attr attr;
+//	mq_getattr(pJunqi->qid,&attr);
+
 	if( memcmp(pHead->aMagic, aMagic, 4)!=0 )
 	{
 		return;
 	}
+
 
 	switch(pHead->eFun)
 	{
@@ -120,10 +112,13 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		break;
 	case COMM_START:
 		preTurn = 1000;
+		//更换布阵后重新初始化棋盘
 		InitChess(pJunqi, data);
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
 		pJunqi->eTurn = pHead->iDir;
 		pJunqi->bStart = 1;
+		pJunqi->nRpStep = 0;
+		pJunqi->iRpOfst = 0;
 		//mq_send(pJunqi->qid, (char*)data, len, 0);
 		break;
 	case COMM_READY:
@@ -147,6 +142,9 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		data = (u8*)&pHead[1];
 		SetRecLineup(pJunqi, data,  pHead->iDir);
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
+		break;
+	case COMM_REPLAY:
+        //在引擎线程中处理
 		break;
 	default:
 		//mq_send(pJunqi->qid, (char*)data, len, 0);
@@ -193,15 +191,12 @@ void *comm_thread(void *arg)
 
 	while(1)
 	{
-		recvbytes=recvfrom(socket_fd, buf, 200, 0,NULL ,NULL);
-		//log_a("rec");
-		pthread_mutex_lock(&pJunqi->mutex);
-		//memout(buf, recvbytes);
-
+		recvbytes=recvfrom(socket_fd, buf, REC_LEN, 0,NULL ,NULL);
+		//log_a("rec %d",recvbytes);
+		//log_b("rec %d",recvbytes);
+		//SafeMemout(buf, recvbytes);
 		DealRecData(pJunqi, buf, recvbytes);
-
 		mq_send(pJunqi->qid, (char*)buf, recvbytes, 0);
-		pthread_mutex_unlock(&pJunqi->mutex);
 
 	}
 
@@ -215,6 +210,3 @@ pthread_t CreatCommThread(Junqi* pJunqi)
     pthread_create(&tidp,NULL,(void*)comm_thread,pJunqi);
     return tidp;
 }
-
-
-

@@ -11,6 +11,7 @@
 #include "engine.h"
 #include "path.h"
 #include "evaluate.h"
+#include "movegen.h"
 
 int preTurn = 1000;
 
@@ -160,7 +161,7 @@ void ProMoveResult(Junqi* pJunqi, u8 iDir, u8 *data)
 	if( pJunqi->bStart )
 	{
 		ChessTurn(pJunqi);
-		CheckMoveEvent(pJunqi->pEngine, pSrc, pDst, pResult);
+		//CheckMoveEvent(pJunqi->pEngine, pSrc, pDst, pResult);
 	}
 
 
@@ -170,7 +171,7 @@ BoardChess * GetMoveDst(Junqi* pJunqi, BoardChess *pSrc)
 {
 	BoardChess *pDst=NULL;
 	BoardChess *pTemp;
-	u32 rand;
+	u32 rand = 0;
 	int i,j;
 
 	rand = random_()%129;
@@ -237,6 +238,7 @@ void SendRandMove(Junqi* pJunqi)
 
 }
 
+
 void ProRecMsg(Junqi* pJunqi, u8 *data)
 {
 	CommHeader *pHead;
@@ -262,20 +264,43 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 		preTurn = pJunqi->eTurn;
 		assert( pHead->iDir==pJunqi->eTurn );
 		data = (u8*)&pHead[1];
+
 		ProMoveResult(pJunqi, pHead->iDir, data);
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
+		break;
+	case COMM_REPLAY:
+		log_b("reply %d",pHead->iDir);
+		SendHeader(pJunqi, pHead->iDir, COMM_OK);
+		pJunqi->eTurn = pHead->iDir;
+		pJunqi->bStart = 1;
+		//在COMM_START指令中清0
+		pJunqi->nRpStep = *((u16*)pHead->reserve);
+		pJunqi->iRpOfst = 0;
+
+		//获取复盘布阵，以后可能有用
+//		data = (u8*)&pHead[1];
+//		InitReplyLineup(pJunqi,&data[8]);
+
+		//没有必要再往下执行，等待接收棋谱
+		return;
 		break;
 	default:
 		break;
 	}
-	value = EvalSituation(pJunqi);
-
-	log_b("value %d",value);
 
 	if( !pJunqi->bStart || pJunqi->bStop )
 	{
 		return;
 	}
+    if( 0==pJunqi->nRpStep ||
+    	pJunqi->iRpOfst==pJunqi->nRpStep-1 )
+    {
+		value = EvalSituation(pJunqi);
+		log_b("value %d",value);
+		GenerateMoveList(pJunqi);
+		ClearMoveList(pJunqi);
+    }
+    pJunqi->iRpOfst++;
 
 	if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
 	{
@@ -309,10 +334,10 @@ void *engine_thread(void *arg)
     while (1)
     {
     	len = mq_receive(pJunqi->qid, (char *)aBuf, REC_LEN, NULL);
-    	log_b("engine");
+    	log_b("engine %d\n",len);
         if ( len > 0)
         {
-        	memout(aBuf,len);
+        	SafeMemout(aBuf,len);
         	ProRecMsg(pJunqi, aBuf);
         }
     }
@@ -325,8 +350,9 @@ pthread_t CreatEngineThread(Junqi* pJunqi)
 {
     pthread_t tidp;
     mqd_t qid;
-    struct mq_attr attr = {0,5,REC_LEN};
+    struct mq_attr attr = {0,15,REC_LEN};
 
+    struct mq_attr attr1 = {0,20,REC_LEN};
 
     mq_unlink("engine_msg");
     qid = mq_open("engine_msg", O_CREAT | O_RDWR, 644, &attr);
@@ -335,6 +361,12 @@ pthread_t CreatEngineThread(Junqi* pJunqi)
         perror("mq_open");
         exit(EXIT_FAILURE);
     }
+    if(mq_setattr(qid,&attr1,&attr)<0)
+    {
+        perror("mq_setattr");
+        exit(EXIT_FAILURE);
+    }
+
     pJunqi->qid = qid;
 
     pthread_create(&tidp,NULL,(void*)engine_thread,pJunqi);
