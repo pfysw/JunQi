@@ -12,6 +12,7 @@
 #include "rule.h"
 #include "comm.h"
 
+
 static GdkPixbuf *background;
 static Junqi *gJunqi;
 
@@ -204,6 +205,23 @@ static void event_handle(GtkWidget *item,gpointer data)
 	{
 		CreaOpenDialog(pJunqi);
 	}
+	else if(  strcmp(event,"analyse" )==0 )
+	{
+		if( pJunqi->bReplay )
+		{
+			pJunqi->bReplay = 0;
+			pJunqi->bAnalyse = 1;
+			SendHeader(pJunqi, 0, COMM_READY);
+		    SendHeader(pJunqi, 1, COMM_READY);
+		}
+
+//		pJunqi->addr = pJunqi->addr_tmp[0];
+//		SendReplyToEngine(pJunqi);
+//	#ifndef NOT_DEBUG2
+//		pJunqi->addr = pJunqi->addr_tmp[1];
+//		SendReplyToEngine(pJunqi);
+//	#endif
+	}
 }
 
 GtkWidget *SetMenuItem(GtkWidget *menu, char *zLabel, void *call_back, char *arg)
@@ -262,6 +280,7 @@ static void set_first_turn(GtkWidget *item,gpointer data)
 
 	iDir = GetColorDir(pJunqi,zDir);
 	pJunqi->eTurn = iDir;
+	pJunqi->eFirstTurn = iDir;
 }
 
 void CreatSaveLineupMenu(GtkWidget *menu)
@@ -321,6 +340,7 @@ void set_menu(GtkWidget *vbox)
 	SetMenuItem(menu, "暂停", event_handle, "stop");
 	SetMenuItem(menu, "继续", event_handle, "continue");
 	CreatFirstTurnMenu(menu);
+	SetMenuItem(menu, "分析", event_handle, "analyse");
 }
 
 /*
@@ -687,10 +707,10 @@ static void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data
 	AddLineupToReplay(pJunqi);
 
 	pJunqi->addr = pJunqi->addr_tmp[0];
-	SendHeader(pJunqi, pJunqi->eTurn, COMM_START);
+	SendHeader(pJunqi, pJunqi->eFirstTurn, COMM_START);
 #ifndef NOT_DEBUG2
 	pJunqi->addr = pJunqi->addr_tmp[1];
-	SendHeader(pJunqi, pJunqi->eTurn, COMM_START);
+	SendHeader(pJunqi, pJunqi->eFirstTurn, COMM_START);
 #endif
 
 }

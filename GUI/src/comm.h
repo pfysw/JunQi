@@ -25,6 +25,7 @@
 #define COMM_LINEUP      7
 #define COMM_INIT        8
 #define COMM_STOP        9
+#define COMM_REPLAY      10
 
 
 #define LOCAL_PORT  1234
@@ -53,5 +54,6 @@ void SendHeader(Junqi* pJunqi, u8 iDir, u8 eFun);
 void SendLineup(Junqi* pJunqi, int iDir);
 void SendMoveResult(Junqi* pJunqi, int iDir, MoveResultData *pData);
 void SendEvent(Junqi* pJunqi, int iDir, u8 event);
+void SendReplyToEngine(Junqi *pJunqi);
 
 #endif /* COMM_H_ */

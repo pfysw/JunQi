@@ -744,7 +744,7 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 	ShowRectangle(pJunqi, pDst, RECTANGLE_RED);
 	ShowPathArrow(pJunqi, 0);
 
-	if(!pJunqi->bReplay)
+	if(!pJunqi->bReplay && !pJunqi->bAnalyse)
 	{
 		AddMoveRecord(pJunqi, pSrc, pDst);
 	}
@@ -1319,6 +1319,11 @@ void LoadLineup(Junqi *pJunqi, int iDir, u8 *chess)
 					{
 						SwapChess(pJunqi,i,j,iDir);
 					}
+					else
+					{
+//						log_b("err swap %d %d %d type %d %d",
+//								iDir,i,j,chess[i],pJunqi->ChessPos[iDir][i].type);
+					}
 					break;
 				}
 			}
@@ -1369,8 +1374,15 @@ void LoadReplayLineup(Junqi *pJunqi)
 	for(int i=0; i<4; i++)
 	{
 		memcpy(aChess, &pJunqi->aReplay[8+30*i], 30);
-		LoadLineup(pJunqi, i, aChess);
+		for(int j=0; j<30; j++)
+		{
+			pJunqi->Lineup[i][j].type = aChess[j];
+		}
+
+		//LoadLineup(pJunqi, i, aChess);
+
 	}
+	//memout(pJunqi->aReplay,128);
 
 }
 
@@ -1394,12 +1406,12 @@ void OpenReplay(GtkNativeDialog *dialog,
 		{
 			pJunqi->bReplay = 1;
 			memcpy(pJunqi->aReplay, aBuf, PAGE_SIZE);
-			ReSetChessBoard(pJunqi);
 			LoadReplayLineup(pJunqi);
+			ReSetChessBoard(pJunqi);
 			ShowReplaySlider(pJunqi);
 			int max_step = *(int *)(&pJunqi->aReplay[4]);
 			gtk_adjustment_set_upper(pJunqi->slider_adj, max_step);
-
+			gtk_adjustment_set_value(pJunqi->slider_adj, 0);
 			pJunqi->bStart = 1;
 			pJunqi->bStop = 1;
 			pJunqi->iRpStep = 0;
@@ -1410,34 +1422,46 @@ void OpenReplay(GtkNativeDialog *dialog,
 	g_object_unref (native);
 }
 
+
 void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
 {
 	int i;
 	BoardChess *pSrc, *pDst;
 	BoardPoint p1,p2;
+	static int preStep = 0;
+	u8 event;
 
+    if( !next_flag )
+    {
+    	preStep = 0;
+    	ReSetChessBoard(pJunqi);
+    }
 
-	ReSetChessBoard(pJunqi);
-
-	for(i=0; i<pJunqi->iRpStep; i++)
+	for(i=preStep; i<pJunqi->iRpStep; i++)
 	{
 		pJunqi->sound_type = 0;
 
 		if( *((u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i))==PLAY_EVENT )
 		{
-			int iDir = *((u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+2));
-			if( *((u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+1))==SURRENDER_EVENT )
+			int iDir;
+			//iDir = *((u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+2));
+			iDir=pJunqi->eTurn;
+			event = *((u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+1));
+			if( event==SURRENDER_EVENT )
 			{
 				DestroyAllChess(pJunqi, iDir);
 				SendSoundEvent(pJunqi,DEAD);
 				ClearChessFlag(pJunqi,iDir);
 			}
-			else if( *((u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+1))==JUMP_EVENT )
+			else if( event==JUMP_EVENT )
 			{
 				IncJumpCnt(pJunqi, iDir);
 				if( i==pJunqi->iRpStep-1 && next_flag)
 					ShowDialogMessage(pJunqi, "跳过次数", pJunqi->aInfo[iDir].cntJump);
 			}
+			SendEvent(pJunqi, iDir, event);
+
+			ChessTurn(pJunqi);
 			continue;
 		}
 		p1.x = *(u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i);
@@ -1445,21 +1469,25 @@ void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
 		p2.x = *(u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+2);
 		p2.y = *(u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+3);
 
+
+
 		assert( p1.x>=0 && p1.x<17 );
 		assert( p1.y>=0 && p1.y<17 );
 		assert( p2.x>=0 && p2.x<17 );
 		assert( p2.x>=0 && p2.x<17 );
 		pSrc = pJunqi->aBoard[p1.x][p1.y].pAdjList->pChess;
 		pDst = pJunqi->aBoard[p2.x][p2.y].pAdjList->pChess;
+		//设置当前下棋方
+		pJunqi->eTurn = pSrc->pLineup->iDir;
 
 		if( IsEnableMove(pJunqi, pSrc, pDst, 1) )
 		{
 			gtk_widget_hide(pJunqi->redRectangle[0]);
 			gtk_widget_hide(pJunqi->redRectangle[1]);
-
 			int type;
 			type = CompareChess(pSrc, pDst);
 			PlayResult(pJunqi, pSrc, pDst, type);
+			ChessTurn(pJunqi);
 			if( i==pJunqi->iRpStep-1 )
 			{
 				pJunqi->sound_type = pJunqi->sound_replay;
@@ -1467,9 +1495,12 @@ void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
 		}
 		else
 		{
+//			log_b("err %d %d %d %d %d",i,pSrc->point.x,pSrc->point.y,
+//					pDst->point.x,pDst->point.y);
 			assert(0);
 		}
 	}
+	preStep = pJunqi->iRpStep;
 
 }
 

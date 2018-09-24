@@ -147,8 +147,10 @@ struct Junqi
 	u8 bSelect;
 	u8 bStart;
 	u8 bStop;
+	u8 bAnalyse;
 	enum ChessColor eColor;
 	enum ChessDir eTurn;
+	enum ChessDir eFirstTurn;
 	BoardChess *pSelect;
 	GdkPixbuf *ChessImage[4];
 	GdkPixbuf *Chess[4][14];

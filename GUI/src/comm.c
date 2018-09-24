@@ -23,7 +23,7 @@ void PacketHeader(CommHeader *header, u8 iDir, u8 eFun)
 
 void SendData(Junqi* pJunqi, CommHeader *header, void *data, int len)
 {
-	u8 buf[100];
+	u8 buf[200];
 	int length = 0;
 
 	length += sizeof(CommHeader);
@@ -38,11 +38,27 @@ void SendData(Junqi* pJunqi, CommHeader *header, void *data, int len)
     }
 }
 
+void SendReplyData(Junqi* pJunqi, CommHeader *header, void *data, int len)
+{
+	u8 buf[4096];
+	int length = 0;
+
+	length += sizeof(CommHeader);
+	memcpy(buf, header, length);
+
+	memcpy(buf+length, data, len);
+	length += len;
+
+	sendto(pJunqi->socket_fd, buf, length, 0,
+			(struct sockaddr *)&pJunqi->addr, sizeof(struct sockaddr));
+
+}
+
 void SendHeader(Junqi* pJunqi, u8 iDir, u8 eFun)
 {
 	CommHeader header;
 
-	if( eFun!=COMM_START )
+	if( eFun!=COMM_START && eFun!=COMM_REPLAY )
 	{
 		pJunqi->addr = pJunqi->addr_tmp[(iDir+1)%2];
 	}
@@ -94,6 +110,20 @@ void SendMoveResult(Junqi* pJunqi, int iDir, MoveResultData *pData)
 	SendData(pJunqi, &header, pData, sizeof(MoveResultData));
 }
 
+void SendReplyToEngine(Junqi *pJunqi)
+{
+
+	CommHeader header;
+	int len;
+	PacketHeader(&header, pJunqi->eFirstTurn, COMM_REPLAY);
+	memcpy(header.reserve,&pJunqi->iRpStep,2);
+	//len = (*((int *)(&pJunqi->aReplay[4])))*4+128;
+	len = 128;
+	printf("len %d\n",len);
+	SendReplyData(pJunqi, &header, pJunqi->aReplay,len);
+
+}
+
 void SendEvent(Junqi* pJunqi, int iDir, u8 event)
 {
 	CommHeader header;
@@ -140,6 +170,7 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 			GetSendLineup(pJunqi, data+34, 2);
 		}
 		SendData(pJunqi, pHead, data, 64);
+
 		break;
 	case COMM_MOVE:
 		data = (u8*)&pHead[1];
@@ -238,6 +269,16 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 		if( pHead->iDir%2==1 )
 		{
 			LoadLineup(pJunqi, pHead->iDir, (u8*)&pHead[1]);
+		}
+		break;
+	case COMM_OK:
+		if( pJunqi->bAnalyse )
+		{
+			//SendHeader(pJunqi, pJunqi->eFirstTurn, COMM_REPLAY);
+			SendReplyToEngine(pJunqi);
+			ShowReplayStep(pJunqi, 0);
+			pJunqi->bAnalyse = 0;
+			pJunqi->bReplay = 1;
 		}
 		break;
 	default:
