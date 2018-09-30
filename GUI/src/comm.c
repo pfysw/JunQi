@@ -119,7 +119,6 @@ void SendReplyToEngine(Junqi *pJunqi)
 	memcpy(header.reserve,&pJunqi->iRpStep,2);
 	//len = (*((int *)(&pJunqi->aReplay[4])))*4+128;
 	len = 128;
-	printf("len %d\n",len);
 	SendReplyData(pJunqi, &header, pJunqi->aReplay,len);
 
 }
