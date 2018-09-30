@@ -97,7 +97,6 @@ struct GraphPath
 typedef struct PartyInfo
 {
 	u8 bDead;
-	u8 bFlag;
 	u8 cntJump;
 	u8 bShowFlag;
 	u8 aTypeNum[14];
@@ -108,6 +107,8 @@ struct Junqi
 	u8 bStart;
 	u8 bStop;
 	u8 bGo;
+	u8 bSearch;
+	u8 bMove;
 	enum ChessDir eTurn;
 	ChessLineup Lineup[4][30];
 	BoardChess ChessPos[4][30];
@@ -121,6 +122,8 @@ struct Junqi
 
 	int nRpStep;
 	int iRpOfst;
+	int begin_time;
+	int test_num;
 
 	struct sockaddr_in addr;
 	int socket_fd;

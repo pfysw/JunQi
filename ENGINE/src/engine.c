@@ -12,6 +12,7 @@
 #include "path.h"
 #include "evaluate.h"
 #include "movegen.h"
+#include "search.h"
 
 int preTurn = 1000;
 
@@ -156,8 +157,61 @@ void ProMoveResult(Junqi* pJunqi, u8 iDir, u8 *data)
 		SendHeader(pJunqi, iDir, COMM_ERROR);
 		return;
 	}
+	//log_c("dir %d %d\n",pSrc->pLineup->iDir,iDir);
 	assert( pSrc->pLineup->iDir==iDir );
+
+	//test
+//#define POS_TEST
+#ifdef POS_TEST
+
+	ChessLineup Lineup[4][30];
+	BoardChess ChessPos[4][30];
+	PartyInfo aInfo[4];
+	int dir;
+	memcpy(Lineup, pJunqi->Lineup,sizeof(Lineup));
+	memcpy(ChessPos, pJunqi->ChessPos,sizeof(ChessPos));
+	memcpy(aInfo, pJunqi->aInfo,sizeof(aInfo));
+	if( pJunqi->iRpOfst==307 )
+	{
+		log_c("debug");
+	}
+	PushMoveToStack(pJunqi, pSrc, pDst, pResult);
+	assert( !memcmp(Lineup, pJunqi->Lineup,sizeof(Lineup)) );
+#endif
 	PlayResult(pJunqi, pSrc, pDst, pResult);
+#ifdef POS_TEST
+	//assert( !memcmp(Lineup, pJunqi->Lineup,sizeof(Lineup)) );
+	PopMoveFromStack(pJunqi, pSrc, pDst, pResult);
+//	 log_c("----------");
+//    memout(pJunqi->ChessPos[pSrc->pLineup->iDir], sizeof(pJunqi->ChessPos[0]));
+//    log_c("+++++++++++");
+//    memout(ChessPos[pSrc->pLineup->iDir], sizeof(pJunqi->ChessPos[0]));
+//    log_c("----------");
+//	if( pResult->result!=MOVE )
+//	{
+//		memout(pJunqi->ChessPos[pDst->pLineup->iDir], sizeof(pJunqi->ChessPos[0]));
+//		 log_c("+++++++++++");
+//		 memout(pJunqi->ChessPos[pDst->pLineup->iDir], sizeof(pJunqi->ChessPos[0]));
+//	}
+	assert( !memcmp(Lineup, pJunqi->Lineup,sizeof(Lineup)) );
+	assert( !memcmp(ChessPos, pJunqi->ChessPos,sizeof(ChessPos)) );
+	if( pResult->result!=MOVE )
+	{
+		if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
+		{
+			dir = pDst->pLineup->iDir;
+		}
+		else
+		{
+			dir = pSrc->pLineup->iDir;
+		}
+		assert( !memcmp(&aInfo[dir], &pJunqi->aInfo[dir],sizeof(PartyInfo)) );
+	}
+
+	assert( aInfo[ENGINE_DIR].bDead == pJunqi->aInfo[ENGINE_DIR].bDead );
+	PlayResult(pJunqi, pSrc, pDst, pResult);
+#endif
+	//-----------------
 	if( pJunqi->bStart )
 	{
 		ChessTurn(pJunqi);
@@ -246,6 +300,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	u8 event;
 	u8 isMove = 0;
 	int value;
+	int eTurn;
 
 	if( memcmp(pHead->aMagic, aMagic, 4)!=0 )
 	{
@@ -262,6 +317,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 		break;
 	case COMM_MOVE:
 		preTurn = pJunqi->eTurn;
+		//log_c("turn %d %d",pHead->iDir,pJunqi->eTurn);
 		assert( pHead->iDir==pJunqi->eTurn );
 		data = (u8*)&pHead[1];
 
@@ -295,11 +351,39 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
     if( 0==pJunqi->nRpStep ||
     	pJunqi->iRpOfst==pJunqi->nRpStep-1 )
     {
-		value = EvalSituation(pJunqi);
-		log_b("value %d",value);
-		GenerateMoveList(pJunqi);
-		ClearMoveList(pJunqi);
+		//value = EvalSituation(pJunqi);
+    	eTurn = pJunqi->eTurn;
+    	log_b("search");
+//		pJunqi->eTurn = eTurn;
+//		value = AlphaBeta(pJunqi,4,-INFINITY,INFINITY);
+//		log_b("depth %d value %d",4,value);
+    	pJunqi->bGo = 0;
+    	pJunqi->bMove = 0;
+    	for(int i=1; ;i++)
+    	{
+    		pJunqi->eTurn = eTurn;
+    		pthread_mutex_lock(&pJunqi->mutex);
+    		pJunqi->bSearch = 1;
+    		pJunqi->test_num = 0;
+			value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
+			log_b("search num %d",pJunqi->test_num);
+			pJunqi->bSearch = 0;
+			pthread_mutex_unlock(&pJunqi->mutex);
+			if( TimeOut(pJunqi) )
+			{
+				log_b("break");
+				break;
+			}
+			if( eTurn%2!=ENGINE_DIR%2 )
+			{
+				value = -value;
+			}
+			log_b("depth %d value %d",i,value);
+    	}
+    	pJunqi->eTurn = eTurn;
+
     }
+    pJunqi->bMove = 0;
     pJunqi->iRpOfst++;
 
 	if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
@@ -315,7 +399,8 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 			ChessTurn(pJunqi);
 		}
 
-		isMove = DealEvent(pJunqi->pEngine);
+		//isMove = DealEvent(pJunqi->pEngine);
+		isMove = SendBestMove(pJunqi->pEngine);
 
 		if( !isMove )
 		{
@@ -337,6 +422,7 @@ void *engine_thread(void *arg)
     	log_b("engine %d\n",len);
         if ( len > 0)
         {
+        	//memout(aBuf,len);
         	SafeMemout(aBuf,len);
         	ProRecMsg(pJunqi, aBuf);
         }

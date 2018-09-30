@@ -20,6 +20,7 @@ struct MoveList
 	u8 isHead;
 };
 
-void ClearMoveList(Junqi* pJunqi);
-void GenerateMoveList(Junqi* pJunqi);
+void ClearMoveList(MoveList *pHead);
+MoveList *GenerateMoveList(Junqi* pJunqi, int iDir);
+
 #endif /* MOVEGEN_H_ */

@@ -102,6 +102,7 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 	case COMM_GO:
 		pJunqi->bGo = 1;
 		pJunqi->bStop = 0;
+		log_c("go");
 		//mq_send(pJunqi->qid, (char*)data, len, 0);
 		break;
 	case COMM_STOP:
@@ -117,20 +118,26 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
 		pJunqi->eTurn = pHead->iDir;
 		pJunqi->bStart = 1;
-		pJunqi->nRpStep = 0;
-		pJunqi->iRpOfst = 0;
 		//mq_send(pJunqi->qid, (char*)data, len, 0);
 		break;
 	case COMM_READY:
 		pJunqi->bStart = 0;
+		pJunqi->nRpStep = 0;
+		pJunqi->iRpOfst = 0;
+		pJunqi->bGo = 1;
+		pJunqi->bSearch = 0;
+		pthread_mutex_lock(&pJunqi->mutex);
 		CloseEngine(pJunqi->pEngine);
+		pthread_mutex_unlock(&pJunqi->mutex);
 		SendHeader(pJunqi, pHead->iDir, COMM_READY);
 		break;
 	case COMM_INIT:
+		pthread_mutex_lock(&pJunqi->mutex);
 		memset(pJunqi->Lineup,0,sizeof(pJunqi->Lineup));
 		pJunqi->pEngine = OpneEnigne(pJunqi);
 		InitLineup(pJunqi, data, isInitBoard);
 		InitChess(pJunqi, data);
+		pthread_mutex_unlock(&pJunqi->mutex);
 		if( !isInitBoard )
 		{
 			isInitBoard = 1;
@@ -145,6 +152,10 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		break;
 	case COMM_REPLAY:
         //在引擎线程中处理
+		break;
+	case COMM_MOVE:
+	case COMM_EVNET:
+		pJunqi->bMove = 1;
 		break;
 	default:
 		//mq_send(pJunqi->qid, (char*)data, len, 0);

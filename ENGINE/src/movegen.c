@@ -26,7 +26,7 @@ void InsertMoveList(
 	pMove->move.dst[0] = pDst->point.x;
 	pMove->move.dst[1] = pDst->point.y;
 	memcpy(&pMove->move.result, &pData->result,  sizeof(MoveResultData)-4);
-    SafeMemout((u8*)&pMove->move,10);
+    //SafeMemout((u8*)&pMove->move,10);
 	if( pHead==NULL )
 	{
 		pMove->isHead = 1;
@@ -95,33 +95,36 @@ void AddJunqiPos(
 {
 	BoardChess *pChess;
 	BoardChess *pBanner;
+	u8 *junqi_dir;
 
 	pTemp->extra_info |= extra_info;
 	assert( extra_info==2 || extra_info==4 );
 	if(extra_info==2)
 	{
 		pChess = pSrc;
+		junqi_dir = pTemp->junqi_src;
 	}
 	else
 	{
 		pChess = pDst;
+		junqi_dir = pTemp->junqi_dst;
 	}
 	if( pJunqi->aInfo[pChess->pLineup->iDir].bShowFlag )
 	{
 		pBanner = ShowBanner(pJunqi,pChess->pLineup->iDir);
-		pTemp->junqi_dst[0] = pBanner->point.x;
-		pTemp->junqi_dst[1] = pBanner->point.y;
+		junqi_dir[0] = pBanner->point.x;
+		junqi_dir[1] = pBanner->point.y;
 		InsertMoveList(pJunqi,pSrc,pDst,pTemp);
 	}
 	else
 	{
 		pBanner = &pJunqi->ChessPos[pChess->pLineup->iDir][26];
-		pTemp->junqi_dst[0] = pBanner->point.x;
-		pTemp->junqi_dst[1] = pBanner->point.y;
+		junqi_dir[0] = pBanner->point.x;
+		junqi_dir[1] = pBanner->point.y;
 		InsertMoveList(pJunqi,pSrc,pDst,pTemp);
 		pBanner = &pJunqi->ChessPos[pChess->pLineup->iDir][28];
-		pTemp->junqi_dst[0] = pBanner->point.x;
-		pTemp->junqi_dst[1] = pBanner->point.y;
+		junqi_dir[0] = pBanner->point.x;
+		junqi_dir[1] = pBanner->point.y;
 		InsertMoveList(pJunqi,pSrc,pDst,pTemp);
 	}
 }
@@ -134,8 +137,6 @@ void AddCommanderMove(
 	MoveResultData *pTemp
 	)
 {
-
-	MoveList *pHead = pJunqi->pMoveList;
 
     //不考虑自家司令阵亡记录的信息，因为这是本来就知道的事情
 	if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
@@ -448,11 +449,10 @@ BoardChess * GetValideMove(Junqi* pJunqi, BoardChess *pSrc, int j)
 	return pDst;
 }
 
-void ClearMoveList(Junqi *pJunqi)
+void ClearMoveList(MoveList *pHead)
 {
 	MoveList *p;
 	MoveList *pTmp;
-	MoveList *pHead = pJunqi->pMoveList;
 
 	if( pHead==NULL )
 	{
@@ -465,7 +465,6 @@ void ClearMoveList(Junqi *pJunqi)
 		if(p->isHead)
 		{
 			free(p);
-			pJunqi->pMoveList = NULL;
 			break;
 		}
 		else
@@ -478,17 +477,18 @@ void ClearMoveList(Junqi *pJunqi)
 	}
 
 }
-void GenerateMoveList(Junqi* pJunqi)
+MoveList *GenerateMoveList(Junqi* pJunqi, int iDir)
 {
     int i,j;
     BoardChess *pSrc;
     BoardChess *pDst;
     ChessLineup *pLineup;
     int temp[3] = {3,7,5};
-
+    int flag = 0;
+    pJunqi->pMoveList = NULL;
     for(i=0;  i<30; i++)
     {
-    	pLineup = &pJunqi->Lineup[pJunqi->eTurn][i];
+    	pLineup = &pJunqi->Lineup[iDir][i];
     	if( pLineup->bDead )
     	{
     		continue;
@@ -503,13 +503,14 @@ void GenerateMoveList(Junqi* pJunqi)
     			//只有敌方的棋才可能是暗棋,只考虑没碰撞过的
     			//pSrc->pLineup->type是dark，那么pSrc->type必然是dark，
     			//反之则不一定，反之则不一定，pSrc->type只是确定有无棋子，而不管棋子是什么
-        		if( pSrc->pLineup->type==DARK && pSrc->isRailway &&
+        		if( flag!=2 && pSrc->pLineup->type==DARK && pSrc->isRailway &&
         			pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[GONGB]<3 )
         		{
         			 //暂时设置棋子的位置为工兵，获取工兵路线
         			//棋子的类型pSrc->pLineup->type还是dark没有变
         			assert( pSrc->type==DARK );
         			pSrc->type = GONGB;
+        			flag = 1;
         		}
     			pDst = GetValideMove(pJunqi, pSrc, j);
     			pSrc->type = temp[0];
@@ -519,7 +520,7 @@ void GenerateMoveList(Junqi* pJunqi)
 
         		if( pDst!=NULL )
         		{
-        	   		if( pSrc->pLineup->type==DARK )
+        	   		if( flag!=2 && pSrc->pLineup->type==DARK )
     				{
         	   			//如果得到的是工兵路线，则按工兵处理
         	   			if( !IsEnableMove(pJunqi, pSrc, pDst) )
@@ -529,17 +530,18 @@ void GenerateMoveList(Junqi* pJunqi)
         	   			}
     				}
         			AddMoveToList(pJunqi, pSrc, pDst);
-        			log_a("i %d j %d src %d %d dst %d %d",i,j,
-        					pSrc->point.x,pSrc->point.y,
-        					pDst->point.x,pDst->point.y);
+//        			log_a("i %d j %d src %d %d dst %d %d",i,j,
+//        					pSrc->point.x,pSrc->point.y,
+//        					pDst->point.x,pDst->point.y);
 
         		}
         		//恢复类型
         		pSrc->pLineup->mx_type = temp[1];
         		pSrc->pLineup->type = temp[2];
     		}
-
+            if( flag==1 ) flag = 2;
     	}
     }
 
+    return pJunqi->pMoveList;
 }

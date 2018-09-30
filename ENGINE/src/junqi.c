@@ -334,7 +334,10 @@ void DestroyAllChess(Junqi *pJunqi, int iDir)
 	pJunqi->aInfo[iDir].bDead = 1;
 	if( pJunqi->aInfo[(iDir+2)%4].bDead==1 )
 	{
+		if( !pJunqi->bSearch )
+		{
 			pJunqi->bStart = 0;
+		}
 	}
 
 }
@@ -659,7 +662,7 @@ void PlayResult(
 				if( pDst->type!=DILEI && pDst->type!=JUNQI &&
 						(pDst->type<=pSrc->pLineup->type || pSrc->pLineup->type==DARK) )
 				{
-					log_a("change type %d %d",pSrc->pLineup->type,pDst->type);
+					//log_a("change type %d %d",pSrc->pLineup->type,pDst->type);
 					pSrc->pLineup->type = pDst->type-1;
 				}
 				else if( pDst->type==DILEI )

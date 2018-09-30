@@ -31,9 +31,10 @@ int EvalSituation(Junqi *pJunqi)
 	int i,j;
 	ChessLineup *pLineup;
 	int value = 0;
-	Engine *pEngine = pJunqi->pEngine;
+	Engine *pEngine;
 	Value_Parameter *pVal;
 
+	pEngine = pJunqi->pEngine;
 	pVal= &pEngine->valPara;
 	for(i=0; i<4; i++)
 	{
@@ -50,9 +51,9 @@ int EvalSituation(Junqi *pJunqi)
 					value += pVal->vDarkJunqi;
 				}
 			}
-			log_b("i %d dilei %d zhadan %d",i,
-					pJunqi->aInfo[i].aTypeNum[DILEI],
-					pJunqi->aInfo[i].aTypeNum[ZHADAN]);
+//			log_b("i %d dilei %d zhadan %d",i,
+//					pJunqi->aInfo[i].aTypeNum[DILEI],
+//					pJunqi->aInfo[i].aTypeNum[ZHADAN]);
 			for(j=0; j<30; j++)
 			{
 				pLineup = &pJunqi->Lineup[i][j];

@@ -8,5 +8,6 @@ typedef unsigned short u16;
 typedef struct Junqi Junqi;
 typedef struct BoardChess BoardChess;
 typedef struct GraphPath GraphPath;
+typedef struct PositionList PositionList;
 
 #endif

@@ -30,11 +30,14 @@ enum MoveEvent{
 #define ENGINE_DIR   1
 #endif
 
+#define INFINITY 10000
 extern u8 aEventBit[100];
 
 typedef struct ENGINE
 {
 	Junqi *pJunqi;
+	//++++++++++++++
+	//早期的代码，现在不用
 	BoardChess *pCamp[2];
 	BoardChess *pBomb[2];
 	BoardChess *pEat[2];
@@ -42,7 +45,9 @@ typedef struct ENGINE
 	GraphPath *pPath[2];//pPath[0] 暂时不用
 	u16 eventId;
     u8  eventFlag;
-
+    //--------------------------
+    BoardChess *pBest[2];
+    PositionList *pPos;
     Value_Parameter valPara;
 }Engine;
 
