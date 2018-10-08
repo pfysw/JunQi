@@ -16,7 +16,9 @@
 ////////// test /////////////////////
 #define log_a(format,...)   SafePrint(format"\n",## __VA_ARGS__)
 #define log_fun(format,...)  //printf(format"\n",## __VA_ARGS__)
-#define log_b(format,...)   SafePrint(format"\n",## __VA_ARGS__)
+//用作子力概率分析
+#define log_b(format,...)   //SafePrint(format"\n",## __VA_ARGS__)
+//#define log_b(format,...)   printf(format"\n",## __VA_ARGS__)
 #define log_c(format,...)   printf(format"\n",## __VA_ARGS__)
 
 void memout(u8 *pdata,int len);

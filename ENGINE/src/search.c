@@ -33,7 +33,7 @@ void PushMoveToStack(
 	int iDir;
 
 	p = (PositionList *)malloc(sizeof(PositionList));
-	memset(p, 0, sizeof(PositionList));//³õÊ¼»¯
+	memset(p, 0, sizeof(PositionList));//åˆå§‹åŒ–
 	pHead = pEngine->pPos;
 	pStorage = &p->data;
 	//log_c("make %d",++tt);
@@ -57,7 +57,7 @@ void PushMoveToStack(
 	memcpy(&pStorage->xSrcLineup, pSrc->pLineup, sizeof(ChessLineup));
 
 
-	//todo Ä¿Ç°Ã»ÓĞ¿¼ÂÇÍ¶½µ¡¢Ìø¹ı¡¢ÎŞÆå¿É×ßµÄÇé¿ö
+	//todo ç›®å‰æ²¡æœ‰è€ƒè™‘æŠ•é™ã€è·³è¿‡ã€æ— æ£‹å¯èµ°çš„æƒ…å†µ
 	if( pMove->result!=MOVE )
 	{
 		memcpy(&pStorage->xDstLineup, pDst->pLineup, sizeof(ChessLineup));
@@ -73,7 +73,8 @@ void PushMoveToStack(
 		pStorage->junqi_chess_type[1] = pJunqi->ChessPos[iDir][28].type;
 		pStorage->junqi_type[0] = pJunqi->Lineup[iDir][26].type;
 		pStorage->junqi_type[1] = pJunqi->Lineup[iDir][28].type;
-		memcpy(&pStorage->enemyInfo, &pJunqi->aInfo[iDir], sizeof(PartyInfo));
+		memcpy(&pStorage->info[0], &pJunqi->aInfo[pSrc->pLineup->iDir], sizeof(PartyInfo));
+		memcpy(&pStorage->info[1], &pJunqi->aInfo[pDst->pLineup->iDir], sizeof(PartyInfo));
         for(int i=0; i<30; i++)
         {
         	pStorage->mx_type[i] = pJunqi->Lineup[iDir][i].mx_type;
@@ -129,7 +130,7 @@ void PopMoveFromStack(
         	pJunqi->Lineup[iDir][i].mx_type = pStorage->mx_type[i];
         }
 
-    	//ÔİÊ±²»¿¼ÂÇÎŞÆå¿É×ßµÄÇé¿ö
+    	//æš‚æ—¶ä¸è€ƒè™‘æ— æ£‹å¯èµ°çš„æƒ…å†µ
     	iDir1 = pDst->pLineup->iDir;
     	if( pJunqi->aInfo[iDir1].bDead )
     	{
@@ -144,8 +145,9 @@ void PopMoveFromStack(
     		}
     		pJunqi->aInfo[iDir1].bDead = 0;
     	}
-    	//pJunqi->aInfo²»ÒªÔÚÖ®Ç°»¹Ô­£¬ÒòÎªÒªÓÃµ½ÅĞ¶ÏÊÇ·ñÕóÍö
-    	memcpy(&pJunqi->aInfo[iDir], &pStorage->enemyInfo, sizeof(PartyInfo));
+    	//pJunqi->aInfoä¸è¦åœ¨ä¹‹å‰è¿˜åŸï¼Œå› ä¸ºè¦ç”¨åˆ°åˆ¤æ–­æ˜¯å¦é˜µäº¡
+    	memcpy(&pJunqi->aInfo[pSrc->pLineup->iDir], &pStorage->info[0], sizeof(PartyInfo));
+    	memcpy(&pJunqi->aInfo[pDst->pLineup->iDir], &pStorage->info[1], sizeof(PartyInfo));
 
 	}
 
@@ -233,7 +235,7 @@ int TimeOut(Junqi *pJunqi)
 	{
 		rc = 1;
 	}
-
+	//rc = 0;//æµ‹è¯•è®¾æ–­ç‚¹ç”¨ï¼Œå¦åˆ™åœä¸‹æ¥å°±è¶…æ—¶äº†
 	return rc;
 }
 int AlphaBeta(
@@ -248,22 +250,17 @@ int AlphaBeta(
 	MoveResultData *pBest = NULL;
 	int val;
 	int sum = 0;
-	int k = 0;
 	static int cnt = 0;
 	int iDir = pJunqi->eTurn;
 
-	if(!cnt)
-	{
-		pJunqi->begin_time = (unsigned int)time(NULL);
-	}
 	cnt++;
-	//±éÀúµ½×îºóÒ»²ãÊ±¼ÆËã¾ÖÃæ·ÖÖµ
+	//éå†åˆ°æœ€åä¸€å±‚æ—¶è®¡ç®—å±€é¢åˆ†å€¼
 	if( depth==0 )
 	{
 		val = EvalSituation(pJunqi);
 		pJunqi->test_num++;
 		//val = 5;
-		//EvalSituationÊÇÕë¶ÔÒıÇæÆÀ¼ÛµÄ£¬ËùÒÔ¶Ô·½µÄ·ÖÖµÓ¦È¡¸ºÖµ
+		//EvalSituationæ˜¯é’ˆå¯¹å¼•æ“è¯„ä»·çš„ï¼Œæ‰€ä»¥å¯¹æ–¹çš„åˆ†å€¼åº”å–è´Ÿå€¼
 		if( iDir%2!=ENGINE_DIR%2 )
 		{
 			val = -val;
@@ -271,20 +268,20 @@ int AlphaBeta(
 		cnt--;
 		return val;
 	}
-	//Éú³É×Å·¨ÁĞ±í
+	//ç”Ÿæˆç€æ³•åˆ—è¡¨
 	pHead = GenerateMoveList(pJunqi, iDir);
 	if( pHead!=NULL )
 	{
 		pBest = &pHead->move;
 	}
-	//ÎŞÆå¿É×ßÊ±Ö±½ÓÌøµ½ÏÂÒ»²ã
+	//æ— æ£‹å¯èµ°æ—¶ç›´æ¥è·³åˆ°ä¸‹ä¸€å±‚
 	else
 	{
 		pJunqi->eTurn = iDir;
 		ChessTurn(pJunqi);
     	if( iDir%2==pJunqi->eTurn%2 )
     	{
-    		//ÏÂ¼ÒÕóÍöÂÖµ½¶Ô¼Ò×ß
+    		//ä¸‹å®¶é˜µäº¡è½®åˆ°å¯¹å®¶èµ°
     		val = AlphaBeta(pJunqi,depth-1,alpha,beta);
     	}
     	else
@@ -293,47 +290,60 @@ int AlphaBeta(
     	}
 	}
 
-    //±éÀúÃ¿Ò»¸ö×Å·¨
+    //éå†æ¯ä¸€ä¸ªç€æ³•
     for(p=pHead; pHead!=NULL; p=p->pNext)
     {
     	pJunqi->eTurn = iDir;
-    	//Ä£Äâ×Å·¨²úÉúºóµÄ¾ÖÃæ
+    	//æ¨¡æ‹Ÿç€æ³•äº§ç”Ÿåçš„å±€é¢
     	MakeNextMove(pJunqi,&p->move);
     	assert(pJunqi->pEngine->pPos!=NULL);
+//    	if( p->move.src[0]==10&&p->move.src[1]==11 &&
+//    			p->move.dst[0]==10&&p->move.dst[1]==6 )
+//    	{
+//    		log_c("ds");
+//    	}
     	if( iDir%2==pJunqi->eTurn%2 )
     	{
-    		//ÏÂ¼ÒÕóÍöÂÖµ½¶Ô¼Ò×ß
+    		//ä¸‹å®¶é˜µäº¡è½®åˆ°å¯¹å®¶èµ°
     		val = AlphaBeta(pJunqi,depth-1,alpha,beta);
     	}
     	else
     	{
     		val = -AlphaBeta(pJunqi,depth-1,-beta,-alpha);
     	}
-    	//°Ñ¾ÖÃæ³·»Øµ½ÉÏÒ»²½
+//    	log_a("cnt %d val %d per %d",cnt,val,p->percent);
+//    	SafeMemout((u8*)&p->move, sizeof(p->move));
+    	//æŠŠå±€é¢æ’¤å›åˆ°ä¸Šä¸€æ­¥
     	assert(pJunqi->pEngine->pPos!=NULL);
     	UnMakeMove(pJunqi,&p->move);
+//        if( val>0 )
+//        {
+//        	log_c("sd");
+//        }
 
-		sum += val;
-		k++;
-		//×Å·¨ÏàÍ¬µ«ÊÇÅĞ¾ö½á¹û²»Í¬£¬È¡Æ½¾ùÖµ
-		val = sum/k;
-    	if( !p->pNext->isHead )
+    	if( p->move.result!=MOVE && !p->pNext->isHead )
     	{
+    		sum += val*p->percent;
+
     		pData = &p->pNext->move;
-            //ÏÂÒ»¸ö×Å·¨
+            //ä¸‹ä¸€ä¸ªç€æ³•
     		if( memcmp(&p->move, pData, 4) )
     		{
+    			val = sum>>8;
     			sum = 0;
-    			k = 0;
+    		}
+    		else
+    		{
+    			continue;
     		}
     	}
-        //²úÉú½Ø¶Ï
+        //äº§ç”Ÿæˆªæ–­
     	if( val>=beta )
     	{
-    		alpha = beta;
+    		alpha = val;
     		break;
     	}
-    	//¸üĞÂalphaÖµ
+    	//æ›´æ–°alphaå€¼
     	if( val>alpha )
     	{
     		pBest = &p->move;
@@ -343,7 +353,7 @@ int AlphaBeta(
     	{
     		break;
     	}
-        //Ê±¼ä½áÊø»òÊÕµ½goÖ¸Áî½áÊøËÑË÷
+        //æ—¶é—´ç»“æŸæˆ–æ”¶åˆ°goæŒ‡ä»¤ç»“æŸæœç´¢
     	if( TimeOut(pJunqi) )
     	{
     		break;

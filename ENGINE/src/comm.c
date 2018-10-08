@@ -35,7 +35,7 @@ void SendData(Junqi* pJunqi, CommHeader *header, void *data, int len)
 
 	sendto(pJunqi->socket_fd, buf, length, 0,
 			(struct sockaddr *)&pJunqi->addr, sizeof(struct sockaddr));
-	log_b("send");
+	log_a("send");
 	//memout(buf,length);
 	SafeMemout(buf,length);
 
@@ -107,6 +107,7 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		break;
 	case COMM_STOP:
 		pJunqi->bStop = 1;
+		log_c("stop");
 		break;
 	case COMM_ERROR:
 		assert(0);
@@ -118,7 +119,9 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
 		pJunqi->eTurn = pHead->iDir;
 		pJunqi->bStart = 1;
-		//mq_send(pJunqi->qid, (char*)data, len, 0);
+		mq_send(pJunqi->qid, (char*)data, len, 0);
+		log_a("start");
+		SafeMemout(data, len);
 		break;
 	case COMM_READY:
 		pJunqi->bStart = 0;
@@ -127,6 +130,7 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		pJunqi->bGo = 1;
 		pJunqi->bSearch = 0;
 		pthread_mutex_lock(&pJunqi->mutex);
+		sleep(1);
 		CloseEngine(pJunqi->pEngine);
 		pthread_mutex_unlock(&pJunqi->mutex);
 		SendHeader(pJunqi, pHead->iDir, COMM_READY);
@@ -143,19 +147,26 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 			isInitBoard = 1;
 			InitBoard(pJunqi);
 		}
+		log_a("inti");
+		SafeMemout(data, len);
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
 		break;
 	case COMM_LINEUP:
 		data = (u8*)&pHead[1];
 		SetRecLineup(pJunqi, data,  pHead->iDir);
+		log_a("lineup");
+		SafeMemout(data, len);
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
 		break;
 	case COMM_REPLAY:
         //在引擎线程中处理
+		mq_send(pJunqi->qid, (char*)data, len, 0);
 		break;
 	case COMM_MOVE:
 	case COMM_EVNET:
 		pJunqi->bMove = 1;
+		log_a("move");
+		mq_send(pJunqi->qid, (char*)data, len, 0);
 		break;
 	default:
 		//mq_send(pJunqi->qid, (char*)data, len, 0);
@@ -207,7 +218,7 @@ void *comm_thread(void *arg)
 		//log_b("rec %d",recvbytes);
 		//SafeMemout(buf, recvbytes);
 		DealRecData(pJunqi, buf, recvbytes);
-		mq_send(pJunqi->qid, (char*)buf, recvbytes, 0);
+		//mq_send(pJunqi->qid, (char*)buf, recvbytes, 0);
 
 	}
 

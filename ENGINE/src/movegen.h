@@ -10,14 +10,17 @@
 
 #include "comm.h"
 
+extern char *aTypeName[14];
 typedef struct MoveList MoveList;
 struct MoveList
 {
 	MoveResultData move;
+	u16 percent;
 	MoveList *pNext;
 	MoveList *pPre;
-	int value;
 	u8 isHead;
+	int value;
+
 };
 
 void ClearMoveList(MoveList *pHead);

@@ -75,12 +75,12 @@ int EvalSituation(Junqi *pJunqi)
 						}
 						else
 						{
-							if( pLineup->isNotLand )
+							if( pLineup->isNotLand && pLineup->index>=20 )
 							{
 								value -= pVal->vDarkLand;
 							}
-							if( pLineup->isNotBomb ||
-								(2==pJunqi->aInfo[i].aTypeNum[ZHADAN] && pLineup->index>=5) )
+							if( ( pLineup->isNotBomb || 2==pJunqi->aInfo[i].aTypeNum[ZHADAN] )
+									&& pLineup->index>=5 )
 							{
 								value -= pVal->vDarkBomb;
 							}
@@ -124,12 +124,12 @@ int EvalSituation(Junqi *pJunqi)
 						}
 						else
 						{
-							if( pLineup->isNotLand )
+							if( pLineup->isNotLand && pLineup->index>=20 )
 							{
 								value += pVal->vDarkLand;
 							}
-							if( pLineup->isNotBomb ||
-								(2==pJunqi->aInfo[i].aTypeNum[ZHADAN] && pLineup->index>=5) )
+							if( ( pLineup->isNotBomb || 2==pJunqi->aInfo[i].aTypeNum[ZHADAN] )
+									&& pLineup->index>=5 )
 							{
 								value += pVal->vDarkBomb;
 							}

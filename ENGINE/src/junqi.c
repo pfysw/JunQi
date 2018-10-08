@@ -384,7 +384,7 @@ int aseertChess(BoardChess *pChess)
 	return rc;
 }
 
-void GetTypeNum(u8 *aBombNum, u8 *aTpyeNum, u8 *aTypeNumSum)
+void GetTypeNum(u8 *aBombNum, u8 *aTypeNum, u8 *aTypeNumSum)
 {
 	int i;
 	int sum = 0;
@@ -394,17 +394,51 @@ void GetTypeNum(u8 *aBombNum, u8 *aTpyeNum, u8 *aTypeNumSum)
 
 	for(i=SILING; i<=GONGB; i++)
 	{
-		sum += aTpyeNum[i];
+		sum += aTypeNum[i];
 		sum1 += aBombNum[i];
-		aTypeNumSum[i] = sum - ((sum1<(2-aTpyeNum[ZHADAN]))?sum1:(2-aTpyeNum[ZHADAN]));
+		aTypeNumSum[i] = sum - ((sum1<(2-aTypeNum[ZHADAN]))?sum1:(2-aTypeNum[ZHADAN]));
 		//高于当前级别的数量已超出最大值，那么超出的部分必定是炸弹
 		if( (sub=sum-aMaxTypeNum[i])>nBomb )
 		{
 			nBomb = sub;
 		}
 	}
-	aTpyeNum[ZHADAN] += nBomb;
-	assert( aTpyeNum[ZHADAN]<=2 );
+	aTypeNum[ZHADAN] += nBomb;
+	assert( aTypeNum[ZHADAN]<=2 );
+}
+
+void GetLiveTypeAll(
+		u8 *aDeadType,
+		u8 *aLiveTpyeAll,
+		u8 *aBombNum,
+		u8 *aTypeNum)
+{
+	int i;
+	int sum = 0;
+	int sum1 = 0;
+    int nBomb = 0;
+
+	for(i=SILING; i<=GONGB; i++)
+	{
+		sum += aDeadType[i];
+        sum1 += aBombNum[i];
+        nBomb = (sum1<(2-aTypeNum[ZHADAN]))?sum1:(2-aTypeNum[ZHADAN]);
+		aLiveTpyeAll[i] = aMaxTypeNum[i]-sum+nBomb;
+
+	}
+}
+
+void GetLiveTypeSum(
+		u8 *aLiveTypeSum,
+		u8 *aLiveTpyeNum )
+{
+	int i;
+	int sum = 0;
+	for(i=SILING; i<=GONGB; i++)
+	{
+		sum += aLiveTpyeNum[i];
+		aLiveTypeSum[i] = sum;
+	}
 }
 
 int GetMaxType(int mx_type, int type, u8 *aTypeNumSum)
@@ -416,7 +450,7 @@ int GetMaxType(int mx_type, int type, u8 *aTypeNumSum)
 	{
 		//大于等于tmp的数量已经到最大值，所以mx_type已经不可能是tmp
 		//那这里为什么不退出而要继续搜索呢，这里还是举个例子
-		//司令死掉，有2个子吃掉37，而大于等于39的子并没有到最大数量
+		//司令死掉，有3个子吃掉37，而大于等于39的子并没有到最大数量
 		//那么是否可以判断最大就是39了呢，显然不是，后面发现，大于等于
 		//38的数量也到了最大值，所以当前这个子最大只可能是37
 		if( aTypeNumSum[tmp]>=aMaxTypeNum[tmp] )
@@ -437,8 +471,12 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 	int i;
 	ChessLineup *pLineup;
 	u8 *aTypeNum = pJunqi->aInfo[iDir].aTypeNum;
+	u8 *aLiveTypeSum = pJunqi->aInfo[iDir].aLiveTypeSum;
+	u8 aLiveTypeNum[14] = {0};
+	u8 *aLiveAllNum = pJunqi->aInfo[iDir].aLiveAllNum;
 	u8 aBombNum[14] = {0};
 	u8 aTypeNumSum[14] = {0};
+	u8 aDeadType[14] = {0};
 	enum ChessType tmp;
 
 
@@ -455,6 +493,14 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		{
 			if( pLineup->type!=DILEI )
 				continue;
+		}
+		if( pLineup->bDead )
+		{
+			aDeadType[pLineup->type]++;
+		}
+		else
+		{
+			aLiveTypeNum[pLineup->type]++;
 		}
 		//计算该子类型的总和
 		aTypeNum[pLineup->type]++;
@@ -475,6 +521,8 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 	//这里是先把aTypeNumSum都算好，因为aTypeNumSum是固定的
 	//如果后面再循环中算则重复了
 	GetTypeNum(aBombNum,aTypeNum,aTypeNumSum);
+	GetLiveTypeAll(aDeadType,aLiveAllNum,aBombNum,aTypeNum);
+	GetLiveTypeSum(aLiveTypeSum,aLiveTypeNum);
     //这里先计算好暗子的最大可能性
 	tmp = GetMaxType(SILING, GONGB, aTypeNumSum);
 
@@ -588,8 +636,10 @@ void PlayResult(
 	{
 		iDir2 = pDst->pLineup->iDir;
 	}
+	//在模拟行棋时，为了搜索数量，己方的司令信息并没有记录在extra_info
 	if( pResult->extra_info&0x02 )
 	{
+
 		p.x = pResult->junqi_src[0];
 		p.y = pResult->junqi_src[1];
 		pJunqiChess = pJunqi->aBoard[p.x][p.y].pAdjList->pChess;
@@ -600,6 +650,7 @@ void PlayResult(
 	}
 	if( pResult->extra_info&0x04 )
 	{
+
 		p.x = pResult->junqi_dst[0];
 		p.y = pResult->junqi_dst[1];
 		pJunqiChess = pJunqi->aBoard[p.x][p.y].pAdjList->pChess;
@@ -647,7 +698,14 @@ void PlayResult(
 		{
 			pDst->type = NONE;
 			pSrc->pLineup->bDead = 1;
-
+            if( pSrc->pLineup->type==SILING )
+            {
+            	pJunqi->aInfo[iDir1].bShowFlag |= 2;
+            }
+            if( pDst->pLineup->type==SILING )
+            {
+            	pJunqi->aInfo[iDir2].bShowFlag |= 2;
+            }
 			JudgeIfBomb(pJunqi, pSrc, pDst, pResult);
 		}
 		else
@@ -740,6 +798,11 @@ void PlayResult(
 
 		}
 
+        if( pSrc->pLineup->type==SILING )
+        {
+        	pJunqi->aInfo[iDir1].bShowFlag |= 2;
+        }
+
 	}
 	pSrc->type = NONE;
 
@@ -776,6 +839,8 @@ void InitChess(Junqi* pJunqi, u8 *data)
 		pJunqi->NineGrid[i].type = NONE;
 	}
 	memset(pJunqi->aInfo, 0, sizeof(pJunqi->aInfo));
+	AdjustMaxType(pJunqi,1);
+	AdjustMaxType(pJunqi,3);
 }
 
 void InitBoard(Junqi* pJunqi)

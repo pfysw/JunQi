@@ -100,6 +100,8 @@ typedef struct PartyInfo
 	u8 cntJump;
 	u8 bShowFlag;
 	u8 aTypeNum[14];
+	u8 aLiveTypeSum[14];//大于某个级别的明棋总和
+	u8 aLiveAllNum[14];//大于某个级别的明棋和暗棋总和
 }PartyInfo;
 
 struct Junqi

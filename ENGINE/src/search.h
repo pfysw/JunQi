@@ -18,7 +18,7 @@ struct PositionData
 	ChessLineup xSrcLineup;
 	ChessLineup xDstLineup;
 	u8 mx_type[30];
-	PartyInfo enemyInfo;
+	PartyInfo info[2];
 	u8 junqi_type[2];
 	u8 junqi_chess_type[2];
 	BoardChess xJunqiChess[2];

@@ -13,7 +13,8 @@ void InsertMoveList(
 	Junqi *pJunqi,
 	BoardChess *pSrc,
 	BoardChess *pDst,
-	MoveResultData *pData
+	MoveResultData *pData,
+	int percent
 	)
 {
 	MoveList *pMove;
@@ -26,6 +27,7 @@ void InsertMoveList(
 	pMove->move.dst[0] = pDst->point.x;
 	pMove->move.dst[1] = pDst->point.y;
 	memcpy(&pMove->move.result, &pData->result,  sizeof(MoveResultData)-4);
+	pMove->percent = percent;
     //SafeMemout((u8*)&pMove->move,10);
 	if( pHead==NULL )
 	{
@@ -43,32 +45,67 @@ void InsertMoveList(
 	}
 }
 
-void AddJunqiMove(
+int AddJunqiMove(
 	Junqi *pJunqi,
 	BoardChess *pSrc,
 	BoardChess *pDst,
 	MoveResultData *pTemp
 	)
 {
+	int percent;
+	int percent1;
+	int percent2;
 
+	log_b("stronghold");
+	if( pTemp->result==EAT )
+	{
+		if( pSrc->pLineup->type==DARK )
+		{
+			percent1 = 120;
+		}
+		else
+		{
+			percent1 = 128;
+		}
 
-	if( !pJunqi->aInfo[pDst->pLineup->iDir].bShowFlag )
-	{
-		pTemp->extra_info |= 1;
-		InsertMoveList(pJunqi,pSrc,pDst,pTemp);
-		pTemp->extra_info &= ~1;//第1个bit清0
-		InsertMoveList(pJunqi,pSrc,pDst,pTemp);
-	}
-	else if( pDst->pLineup->type==JUNQI )
-	{
-		pTemp->extra_info |= 1;
-		InsertMoveList(pJunqi,pSrc,pDst,pTemp);
+		percent2 = 60;
 	}
 	else
 	{
-		pTemp->extra_info &= ~1;//第1个bit清0
-		InsertMoveList(pJunqi,pSrc,pDst,pTemp);
+		if( pSrc->pLineup->type==ZHADAN )
+		{
+			percent1 = 128;
+			percent2 = 128;
+		}
+		else
+		{
+			percent1 = 8;
+			percent2 = 60;
+		}
 	}
+	if( !pJunqi->aInfo[pDst->pLineup->iDir].bShowFlag )
+	{
+		pTemp->extra_info |= 1;
+		InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent1);
+		pTemp->extra_info &= ~1;//第1个bit清0
+		InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent2);
+		percent = percent1+percent2;
+	}
+	else if( pDst->pLineup->type==JUNQI )
+	{
+		percent = percent1*2;
+		pTemp->extra_info |= 1;
+		InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent);
+
+	}
+	else
+	{
+		percent = percent2*2;
+		pTemp->extra_info &= ~1;//第1个bit清0
+		InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent);
+
+	}
+	return percent;
 }
 
 BoardChess *ShowBanner(Junqi *pJunqi, int iDir)
@@ -90,7 +127,8 @@ void AddJunqiPos(
 	BoardChess *pSrc,
 	BoardChess *pDst,
 	MoveResultData *pTemp,
-	u8 extra_info
+	u8 extra_info,
+	int percent
 	)
 {
 	BoardChess *pChess;
@@ -114,29 +152,33 @@ void AddJunqiPos(
 		pBanner = ShowBanner(pJunqi,pChess->pLineup->iDir);
 		junqi_dir[0] = pBanner->point.x;
 		junqi_dir[1] = pBanner->point.y;
-		InsertMoveList(pJunqi,pSrc,pDst,pTemp);
+		InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent);
 	}
 	else
 	{
 		pBanner = &pJunqi->ChessPos[pChess->pLineup->iDir][26];
 		junqi_dir[0] = pBanner->point.x;
 		junqi_dir[1] = pBanner->point.y;
-		InsertMoveList(pJunqi,pSrc,pDst,pTemp);
+		InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent>>1);
 		pBanner = &pJunqi->ChessPos[pChess->pLineup->iDir][28];
 		junqi_dir[0] = pBanner->point.x;
 		junqi_dir[1] = pBanner->point.y;
-		InsertMoveList(pJunqi,pSrc,pDst,pTemp);
+		InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent>>1);
 	}
 }
 
 
-void AddCommanderMove(
+int AddCommanderMove(
 	Junqi *pJunqi,
 	BoardChess *pSrc,
 	BoardChess *pDst,
-	MoveResultData *pTemp
+	MoveResultData *pTemp,
+	int per
 	)
 {
+
+	int percent = 0;
+
 
     //不考虑自家司令阵亡记录的信息，因为这是本来就知道的事情
 	if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
@@ -146,7 +188,23 @@ void AddCommanderMove(
 			//司令没死
 			if( (pJunqi->aInfo[pDst->pLineup->iDir].bShowFlag&2)==0 )
 			{
-				AddJunqiPos(pJunqi,pSrc,pDst,pTemp,4);
+
+				if( pSrc->pLineup->type==ZHADAN )
+				{
+					percent = per>>3;// per/8
+				}
+				else
+				{
+					if( pDst->pLineup->isNotBomb )
+					{
+						percent = per;
+					}
+					else
+					{
+						percent = per>>1;
+					}
+				}
+				AddJunqiPos(pJunqi,pSrc,pDst,pTemp,4,percent);
 			}
 		}
 	}
@@ -157,17 +215,34 @@ void AddCommanderMove(
 			//司令没死
 			if( (pJunqi->aInfo[pSrc->pLineup->iDir].bShowFlag&2)==0 )
 			{
-				AddJunqiPos(pJunqi,pSrc,pDst,pTemp,2);
+				if( pDst->pLineup->type==ZHADAN )
+				{
+					percent = per>>3;// per/8
+				}
+				else
+				{
+					if( pSrc->pLineup->isNotBomb )
+					{
+						percent = per;
+					}
+					else
+					{
+						percent = per>>1;
+					}
+				}
+				AddJunqiPos(pJunqi,pSrc,pDst,pTemp,2,percent);
 			}
 		}
 	}
+	return percent;
 }
 
 void AddCommanderKilled(
 	Junqi *pJunqi,
 	BoardChess *pSrc,
 	BoardChess *pDst,
-	MoveResultData *pTemp
+	MoveResultData *pTemp,
+	int percent
 	)
 {
 
@@ -176,17 +251,339 @@ void AddCommanderKilled(
 		if( (pJunqi->aInfo[pSrc->pLineup->iDir].bShowFlag&2)==0 &&
 			pDst->pLineup->type==DILEI )
 		{
-			AddJunqiPos(pJunqi,pSrc,pDst,pTemp,2);
+			AddJunqiPos(pJunqi,pSrc,pDst,pTemp,2,percent);
 		}
 
 	}
 }
 
+int GetEatPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
+{
+	int percent = 0;
+	u8 *aLiveTypeSum;
+	u8 *aLiveTypeAll;//aLiveTypeAll[x]==0  如果x<SILING
+	int src = pSrc->pLineup->type;
+	int dst = pDst->pLineup->type;
+	int mxSrcType = pSrc->pLineup->mx_type;
+	int mxDstType = pDst->pLineup->mx_type;
+
+
+	int nBomb = 0;
+	int nLand = 0;
+	int nSapper = 0;
+	int num;
+	int mxNum;
+	int nSrc;
+	int nDst;
+
+
+
+	if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
+	{
+		aLiveTypeSum = pJunqi->aInfo[pDst->pLineup->iDir].aLiveTypeSum;
+		aLiveTypeAll = pJunqi->aInfo[pDst->pLineup->iDir].aLiveAllNum;
+		if( !pDst->pLineup->isNotBomb )
+		{
+			nBomb = 2-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[ZHADAN];
+		}
+		if( !pDst->pLineup->isNotLand )
+		{
+			nLand = 3-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[DILEI];
+		}
+		if( pSrc->pLineup->type!=GONGB)
+		{
+			if( pDst->pLineup->type==DARK )
+			{
+				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb+nLand;
+				mxNum = (aLiveTypeAll[mxDstType-1]-aLiveTypeSum[mxDstType-1]);
+				nSrc = aLiveTypeAll[src]-aLiveTypeSum[src]+nBomb+nLand;
+			}
+			else
+			{
+				assert( pDst->pLineup->type>SILING );
+				num = aLiveTypeAll[dst] + nLand;
+				mxNum = aLiveTypeAll[mxDstType-1];
+				nSrc = aLiveTypeAll[src] + nLand;
+			}
+
+
+			nSrc = (nSrc>mxNum)?nSrc:mxNum;
+
+			log_b("num %d max %d",num,mxNum);
+			log_b("src %s %d",aTypeName[src],nSrc);
+			//用2^8代替百分比
+			percent = ((num-nSrc)<<8)/(num-mxNum);
+		}
+		else
+		{
+			if( pDst->pLineup->type==DILEI )
+			{
+				percent = 256;
+			}
+			else
+			{
+				assert( pDst->pLineup->type==DARK );
+				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb+nLand;
+				mxNum = (aLiveTypeAll[mxDstType-1]-aLiveTypeSum[mxDstType-1]);
+				percent = (nLand<<8)/(num-mxNum);
+			}
+		}
+	}
+	else
+	{
+
+		aLiveTypeSum = pJunqi->aInfo[pSrc->pLineup->iDir].aLiveTypeSum;
+		aLiveTypeAll = pJunqi->aInfo[pSrc->pLineup->iDir].aLiveAllNum;
+		if( !pSrc->pLineup->isNotBomb )
+		{
+			nBomb = 2-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN];
+		}
+		if( pDst->pLineup->type!=DILEI)
+		{
+			assert( pDst->pLineup->type>SILING );
+			if( pSrc->pLineup->type==DARK )
+			{
+
+				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb;
+				mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
+				nDst = aLiveTypeAll[dst-1]-aLiveTypeSum[dst-1];
+			}
+			else
+			{
+				assert( pDst->pLineup->type>SILING );
+				num = aLiveTypeAll[src];
+				mxNum = aLiveTypeAll[mxSrcType-1];
+				nDst = aLiveTypeAll[dst-1];
+			}
+			nDst = (nDst>num)?num:nDst;
+			log_b("num %d max %d",num,mxNum);
+			log_b("dst %s %d",aTypeName[dst],nDst);
+			//用2^8代替百分比
+			percent = ((nDst-mxNum)<<8)/(num-mxNum);
+		}
+		else
+		{
+			if( pSrc->pLineup->type==GONGB )
+			{
+				percent = 256;
+			}
+			else
+			{
+				nSapper = 3-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[GONGB];
+				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb;
+				mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
+				percent = (nSapper<<8)/(num-mxNum);
+				log_b("num %d max %d",num,mxNum);
+				log_b("gongb %d",nSapper);
+			}
+		}
+	}
+
+	return percent;
+}
+
+int GetBombPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
+{
+	int percent = 0;
+	u8 *aLiveTypeSum;
+	u8 *aLiveTypeAll;
+	int src = pSrc->pLineup->type;
+	int dst = pDst->pLineup->type;
+	int mxSrcType = pSrc->pLineup->mx_type;
+	int mxDstType = pDst->pLineup->mx_type;
+
+	int nBomb = 0;
+	int nLand = 0;
+	int num;
+	int mxNum;
+	int nSrc;
+	int nDst;
+
+
+    if( pDst->pLineup->type==ZHADAN || pSrc->pLineup->type==ZHADAN )
+    {
+    	return 256;
+    }
+
+	if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
+	{
+		aLiveTypeSum = pJunqi->aInfo[pDst->pLineup->iDir].aLiveTypeSum;
+		aLiveTypeAll = pJunqi->aInfo[pDst->pLineup->iDir].aLiveAllNum;
+		if( !pDst->pLineup->isNotBomb )
+		{
+			nBomb = 2-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[ZHADAN];
+		}
+		if( !pDst->pLineup->isNotLand )
+		{
+			nLand = 3-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[DILEI];
+		}
+
+		if( pDst->pLineup->type==DARK )
+		{
+			num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb+nLand;
+			mxNum = (aLiveTypeAll[mxDstType-1]-aLiveTypeSum[mxDstType-1]);
+			nSrc = (aLiveTypeAll[src]-aLiveTypeSum[src])-
+					(aLiveTypeAll[src-1]-aLiveTypeSum[src-1])+nBomb;
+		}
+		else
+		{
+			assert( pDst->pLineup->type>SILING );
+			num = aLiveTypeAll[dst] + nLand;
+			mxNum = aLiveTypeAll[mxDstType-1];
+			nSrc = aLiveTypeAll[src]-aLiveTypeAll[src-1];
+		}
+
+		log_b("bomb num %d max %d",num,mxNum);
+		log_b("bomb src %s %d",aTypeName[src],nSrc);
+		//用2^8代替百分比
+		percent = (nSrc<<8)/(num-mxNum);
+	}
+	else
+	{
+		aLiveTypeSum = pJunqi->aInfo[pSrc->pLineup->iDir].aLiveTypeSum;
+		aLiveTypeAll = pJunqi->aInfo[pSrc->pLineup->iDir].aLiveAllNum;
+		if( !pSrc->pLineup->isNotBomb )
+		{
+			nBomb = 2-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN];
+		}
+
+		if( pSrc->pLineup->type==DARK )
+		{
+			num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb;
+			mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
+			nDst = (aLiveTypeAll[dst]-aLiveTypeSum[dst])-
+					(aLiveTypeAll[dst-1]-aLiveTypeSum[dst-1])+nBomb;
+		}
+		else
+		{
+			num = aLiveTypeAll[src];
+			mxNum = aLiveTypeAll[mxSrcType-1];
+			nDst = aLiveTypeAll[dst]-aLiveTypeAll[dst-1];
+		}
+
+		log_b("bomb num %d max %d",num,mxNum);
+		log_b("bomb dst %s %d",aTypeName[dst],nDst);
+		//用2^8代替百分比
+		percent = (nDst<<8)/(num-mxNum);
+	}
+
+	return percent;
+}
+
+
+int GetKilledPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
+{
+	int percent = 0;
+	u8 *aLiveTypeSum;
+	u8 *aLiveTypeAll;
+	int src = pSrc->pLineup->type;
+	int dst = pDst->pLineup->type;
+	int mxSrcType = pSrc->pLineup->mx_type;
+	int mxDstType = pDst->pLineup->mx_type;
+
+	int nBomb = 0;
+	int nLand = 0;
+	int nSapper = 0;
+	int num;
+	int mxNum;
+	int nSrc;
+	int nDst;
+
+	if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
+	{
+		aLiveTypeSum = pJunqi->aInfo[pDst->pLineup->iDir].aLiveTypeSum;
+		aLiveTypeAll = pJunqi->aInfo[pDst->pLineup->iDir].aLiveAllNum;
+		if( !pDst->pLineup->isNotBomb )
+		{
+			nBomb = 2-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[ZHADAN];
+		}
+		if( !pDst->pLineup->isNotLand )
+		{
+			nLand = 3-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[DILEI];
+		}
+
+		if( pDst->pLineup->type==DARK )
+		{
+			num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb+nLand;
+			mxNum = (aLiveTypeAll[mxDstType-1]-aLiveTypeSum[mxDstType-1]);
+			nSrc = aLiveTypeAll[src-1]-aLiveTypeSum[src-1];
+
+
+		}
+		else
+		{
+			num = aLiveTypeAll[dst] + nLand;
+			mxNum = aLiveTypeAll[mxDstType-1];
+			nSrc = aLiveTypeAll[src-1];
+		}
+		if( pSrc->pLineup->type!=GONGB ) nSrc += nLand;
+		log_b("kill num %d max %d",num,mxNum);
+		log_b("kill dst %s %d",aTypeName[dst],nSrc);
+		nSrc = (nSrc>num)?num:nSrc;
+		//用2^8代替百分比
+		percent = ((nSrc-mxNum)<<8)/(num-mxNum);
+	}
+	else
+	{
+		aLiveTypeSum = pJunqi->aInfo[pSrc->pLineup->iDir].aLiveTypeSum;
+		aLiveTypeAll = pJunqi->aInfo[pSrc->pLineup->iDir].aLiveAllNum;
+		if( !pSrc->pLineup->isNotBomb )
+		{
+			nBomb = 2-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN];
+		}
+		if( pDst->pLineup->type!=DILEI )
+		{
+			if( pSrc->pLineup->type==DARK )
+			{
+				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb;
+				mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
+				nDst = (aLiveTypeAll[dst]-aLiveTypeSum[dst])+nBomb;
+			}
+			else
+			{
+				assert( pSrc->pLineup->type>SILING );
+				num = aLiveTypeAll[src];
+				mxNum = aLiveTypeAll[mxSrcType-1];
+				nDst = aLiveTypeAll[dst];
+			}
+			log_b("kill num %d max %d",num,mxNum);
+			log_b("kill dst %s %d",aTypeName[dst],nDst);
+			nDst = (nDst>mxNum)?nDst:mxNum;
+			//用2^8代替百分比
+			percent = ((num-nDst)<<8)/(num-mxNum);
+		}
+		else
+		{
+			nSapper = 3-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[GONGB];
+
+			if( pSrc->pLineup->type==DARK )
+			{
+
+				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb;
+				mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
+				percent = ((num-mxNum-nSapper-nBomb)<<8)/(num-mxNum);
+				log_b("kill: num %d max %d",num,mxNum);
+				log_b("nSapper %d",nSapper);
+			}
+			else
+			{
+				num = aLiveTypeAll[src];
+				mxNum = aLiveTypeAll[mxSrcType-1];
+				percent = 256;
+			}
+		}
+
+	}
+
+	return percent;
+}
+
+
 
 u8 IsPossibleEat(
 	Junqi *pJunqi,
 	BoardChess *pSrc,
-	BoardChess *pDst)
+	BoardChess *pDst )
 {
 	u8 rc = 1;
 
@@ -203,6 +600,7 @@ u8 IsPossibleEat(
 			return  0;
 		}
 		if( pSrc->pLineup->type==ZHADAN ) return  0;
+
 	}
 	else
 	{
@@ -239,6 +637,11 @@ u8 IsPossibleKilled(
 		{
 			return  0;
 		}
+		if( pDst->pLineup->type==JUNQI )
+		{
+			return 0;
+		}
+		if( pSrc->pLineup->type==ZHADAN ) return  0;
 	}
 	else
 	{
@@ -254,6 +657,8 @@ u8 IsPossibleKilled(
 			return  0;
 		}
 		if( pDst->pLineup->type==ZHADAN ) return  0;
+		if( pSrc->pLineup->type==JUNQI ) return 0;
+
 	}
 
 	return rc;
@@ -307,7 +712,8 @@ u8 IsPossibleBomb(
 			}
 		}
 		//只有炸弹才能和地雷军旗打兑
-		if( pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN]==2 &&
+		if( ( pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN]==2 ||
+				pSrc->pLineup->isNotBomb ) &&
 			(pDst->pLineup->type==DILEI || pDst->pLineup->type==JUNQI) )
 		{
 			return  0;
@@ -317,35 +723,35 @@ u8 IsPossibleBomb(
 	return rc;
 }
 
-int SpecialCase(
-	Junqi *pJunqi,
-	BoardChess *pSrc,
-	BoardChess *pDst)
-{
-	int rc = 0;
-	if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
-	{
-		if( pSrc->pLineup->type==SILING )
-		{
-			if( pDst->pLineup->isNotBomb )
-			{
-				return 1;
-			}
-		}
-	}
-	else
-	{
-		if( pDst->pLineup->type==SILING )
-		{
-			if( pSrc->pLineup->isNotBomb )
-			{
-				return 1;
-			}
-		}
-	}
-
-	return rc;
-}
+//int SpecialCase(
+//	Junqi *pJunqi,
+//	BoardChess *pSrc,
+//	BoardChess *pDst)
+//{
+//	int rc = 0;
+//	if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
+//	{
+//		if( pSrc->pLineup->type==SILING )
+//		{
+//			if( pDst->pLineup->isNotBomb )
+//			{
+//				return 1;
+//			}
+//		}
+//	}
+//	else
+//	{
+//		if( pDst->pLineup->type==SILING )
+//		{
+//			if( pSrc->pLineup->isNotBomb )
+//			{
+//				return 1;
+//			}
+//		}
+//	}
+//
+//	return rc;
+//}
 
 void AddMoveToList(
 	Junqi *pJunqi,
@@ -355,6 +761,7 @@ void AddMoveToList(
 
 	MoveResultData temp;
 	enum CompareType type;
+	int aPercent[3] = {0};
 
 	for(type=MOVE; type<=KILLED; type++)
 	{
@@ -367,20 +774,27 @@ void AddMoveToList(
 		switch(type)
 		{
 		case MOVE:
-			InsertMoveList(pJunqi,pSrc,pDst,&temp);
+			InsertMoveList(pJunqi,pSrc,pDst,&temp,256);
 			break;
 		case EAT:
             if( !IsPossibleEat(pJunqi,pSrc,pDst) )
             {
             	continue;
             }
+
         	if( pDst->isStronghold )
         	{
-        		AddJunqiMove(pJunqi,pSrc,pDst,&temp);
+        		aPercent[0] = AddJunqiMove(pJunqi,pSrc,pDst,&temp);
         	}
         	else
         	{
-        		InsertMoveList(pJunqi,pSrc,pDst,&temp);
+        		log_b("per eat");
+        		aPercent[0] = GetEatPercent(pJunqi,pSrc,pDst);
+        		log_b("per %d",aPercent[0]);
+        		log_b("eat %d %d %d %d",pSrc->point.x,pSrc->point.y,
+        				pDst->point.x,pDst->point.y);
+        		InsertMoveList(pJunqi,pSrc,pDst,&temp,aPercent[0]);
+
         	}
 			break;
 		case BOMB:
@@ -390,17 +804,26 @@ void AddMoveToList(
             }
         	if( pDst->isStronghold )
         	{
-        		AddJunqiMove(pJunqi,pSrc,pDst,&temp);
+        		aPercent[1] = AddJunqiMove(pJunqi,pSrc,pDst,&temp);
         	}
         	//暂时不考虑大本营是司令的情况
         	else
         	{
+        		int percent;
+        		aPercent[1] = GetBombPercent(pJunqi,pSrc,pDst);
+        		if( 0==aPercent[1] ) continue;
+        		log_b("per %d",aPercent[1]);
+        		log_b("bomb %d %d %d %d",pSrc->point.x,pSrc->point.y,
+        				pDst->point.x,pDst->point.y);
+        		percent = aPercent[1]-AddCommanderMove(pJunqi,pSrc,pDst,&temp,aPercent[1]);
         		//己方司令不可能碰到第一排被炸
-        		if( !SpecialCase(pJunqi,pSrc,pDst) )
+        		//if( !SpecialCase(pJunqi,pSrc,pDst) )
+        		log_b("spe %d",percent);
+        		if( percent!=0 )
         		{
-        			InsertMoveList(pJunqi,pSrc,pDst,&temp);
+        			InsertMoveList(pJunqi,pSrc,pDst,&temp,percent);
         		}
-        		AddCommanderMove(pJunqi,pSrc,pDst,&temp);
+
         	}
 			break;
 		case KILLED:
@@ -409,8 +832,20 @@ void AddMoveToList(
             {
             	continue;
             }
-            InsertMoveList(pJunqi,pSrc,pDst,&temp);
-            AddCommanderKilled(pJunqi,pSrc,pDst,&temp);
+            if( pDst->isStronghold )
+            {
+            	aPercent[2] = 256-aPercent[0]-aPercent[1];
+            }
+            else
+            {
+				aPercent[2] = GetKilledPercent(pJunqi,pSrc,pDst);
+				log_b("per %d",aPercent[2]);
+				log_b("Killed %d %d %d %d",pSrc->point.x,pSrc->point.y,
+						pDst->point.x,pDst->point.y);
+            }
+            InsertMoveList(pJunqi,pSrc,pDst,&temp,aPercent[2]);
+            //司令撞地雷，无论怎么样对方都是亏的，不考虑对方会下
+            //AddCommanderKilled(pJunqi,pSrc,pDst,&temp);
 			break;
 		default:
 			break;
@@ -420,6 +855,28 @@ void AddMoveToList(
 		if( pDst->type==NONE )
 		{
 			break;
+		}
+	}
+	if( pDst->type!=NONE )
+	{
+		log_b("percent %d %d %d",aPercent[0],aPercent[1],aPercent[2]);
+		int sum = aPercent[0]+aPercent[1]+aPercent[2];
+
+//		if( sum<251 && pDst->isStronghold )
+//		{
+//			for(int i=0;i<3;i++)
+//			{
+//				if( aPercent[i]!=0 )
+//				{
+//					aPercent[i] += 256-sum;
+//					break;
+//				}
+//			}
+//		}
+		if( !(sum>250&&sum<=256) )
+		{
+			sleep(1);
+			assert(sum>250&&sum<=256);
 		}
 	}
 }
@@ -530,6 +987,7 @@ MoveList *GenerateMoveList(Junqi* pJunqi, int iDir)
         	   			}
     				}
         			AddMoveToList(pJunqi, pSrc, pDst);
+
 //        			log_a("i %d j %d src %d %d dst %d %d",i,j,
 //        					pSrc->point.x,pSrc->point.y,
 //        					pDst->point.x,pDst->point.y);

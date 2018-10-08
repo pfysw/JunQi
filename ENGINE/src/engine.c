@@ -159,59 +159,8 @@ void ProMoveResult(Junqi* pJunqi, u8 iDir, u8 *data)
 	}
 	//log_c("dir %d %d\n",pSrc->pLineup->iDir,iDir);
 	assert( pSrc->pLineup->iDir==iDir );
-
-	//test
-//#define POS_TEST
-#ifdef POS_TEST
-
-	ChessLineup Lineup[4][30];
-	BoardChess ChessPos[4][30];
-	PartyInfo aInfo[4];
-	int dir;
-	memcpy(Lineup, pJunqi->Lineup,sizeof(Lineup));
-	memcpy(ChessPos, pJunqi->ChessPos,sizeof(ChessPos));
-	memcpy(aInfo, pJunqi->aInfo,sizeof(aInfo));
-	if( pJunqi->iRpOfst==307 )
-	{
-		log_c("debug");
-	}
-	PushMoveToStack(pJunqi, pSrc, pDst, pResult);
-	assert( !memcmp(Lineup, pJunqi->Lineup,sizeof(Lineup)) );
-#endif
 	PlayResult(pJunqi, pSrc, pDst, pResult);
-#ifdef POS_TEST
-	//assert( !memcmp(Lineup, pJunqi->Lineup,sizeof(Lineup)) );
-	PopMoveFromStack(pJunqi, pSrc, pDst, pResult);
-//	 log_c("----------");
-//    memout(pJunqi->ChessPos[pSrc->pLineup->iDir], sizeof(pJunqi->ChessPos[0]));
-//    log_c("+++++++++++");
-//    memout(ChessPos[pSrc->pLineup->iDir], sizeof(pJunqi->ChessPos[0]));
-//    log_c("----------");
-//	if( pResult->result!=MOVE )
-//	{
-//		memout(pJunqi->ChessPos[pDst->pLineup->iDir], sizeof(pJunqi->ChessPos[0]));
-//		 log_c("+++++++++++");
-//		 memout(pJunqi->ChessPos[pDst->pLineup->iDir], sizeof(pJunqi->ChessPos[0]));
-//	}
-	assert( !memcmp(Lineup, pJunqi->Lineup,sizeof(Lineup)) );
-	assert( !memcmp(ChessPos, pJunqi->ChessPos,sizeof(ChessPos)) );
-	if( pResult->result!=MOVE )
-	{
-		if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
-		{
-			dir = pDst->pLineup->iDir;
-		}
-		else
-		{
-			dir = pSrc->pLineup->iDir;
-		}
-		assert( !memcmp(&aInfo[dir], &pJunqi->aInfo[dir],sizeof(PartyInfo)) );
-	}
 
-	assert( aInfo[ENGINE_DIR].bDead == pJunqi->aInfo[ENGINE_DIR].bDead );
-	PlayResult(pJunqi, pSrc, pDst, pResult);
-#endif
-	//-----------------
 	if( pJunqi->bStart )
 	{
 		ChessTurn(pJunqi);
@@ -326,7 +275,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 		break;
 	case COMM_REPLAY:
 		log_b("reply %d",pHead->iDir);
-		SendHeader(pJunqi, pHead->iDir, COMM_OK);
+		SendHeader(pJunqi, pHead->iDir, COMM_REPLAY);
 		pJunqi->eTurn = pHead->iDir;
 		pJunqi->bStart = 1;
 		//在COMM_START指令中清0
@@ -337,8 +286,6 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 //		data = (u8*)&pHead[1];
 //		InitReplyLineup(pJunqi,&data[8]);
 
-		//没有必要再往下执行，等待接收棋谱
-		return;
 		break;
 	default:
 		break;
@@ -349,7 +296,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 		return;
 	}
     if( 0==pJunqi->nRpStep ||
-    	pJunqi->iRpOfst==pJunqi->nRpStep-1 )
+    	pJunqi->iRpOfst>pJunqi->nRpStep-1 )
     {
 		//value = EvalSituation(pJunqi);
     	eTurn = pJunqi->eTurn;
@@ -359,34 +306,39 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 //		log_b("depth %d value %d",4,value);
     	pJunqi->bGo = 0;
     	pJunqi->bMove = 0;
-    	for(int i=1; ;i++)
+    	pJunqi->begin_time = (unsigned int)time(NULL);
+    	for(int i=0; i<5; i++)
     	{
     		pJunqi->eTurn = eTurn;
     		pthread_mutex_lock(&pJunqi->mutex);
     		pJunqi->bSearch = 1;
     		pJunqi->test_num = 0;
 			value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
-			log_b("search num %d",pJunqi->test_num);
+			log_a("search num %d",pJunqi->test_num);
 			pJunqi->bSearch = 0;
 			pthread_mutex_unlock(&pJunqi->mutex);
 			if( TimeOut(pJunqi) )
 			{
-				log_b("break");
+				log_a("break");
 				break;
 			}
 			if( eTurn%2!=ENGINE_DIR%2 )
 			{
 				value = -value;
 			}
-			log_b("depth %d value %d",i,value);
+			log_a("depth %d value %d",i,value);
     	}
+//    	SafeMemout(pJunqi->aInfo[3].aLiveTypeSum,14);
+//    	SafeMemout(pJunqi->aInfo[3].aLiveAllNum,14);
+
     	pJunqi->eTurn = eTurn;
 
     }
     pJunqi->bMove = 0;
     pJunqi->iRpOfst++;
 
-	if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
+	//if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
+    if( preTurn == pJunqi->eTurn )
 	{
 		return;
 	}
@@ -419,7 +371,7 @@ void *engine_thread(void *arg)
     while (1)
     {
     	len = mq_receive(pJunqi->qid, (char *)aBuf, REC_LEN, NULL);
-    	log_b("engine %d\n",len);
+    	log_a("engine %d\n",len);
         if ( len > 0)
         {
         	//memout(aBuf,len);
@@ -438,7 +390,7 @@ pthread_t CreatEngineThread(Junqi* pJunqi)
     mqd_t qid;
     struct mq_attr attr = {0,15,REC_LEN};
 
-    struct mq_attr attr1 = {0,20,REC_LEN};
+  //  struct mq_attr attr1 = {0,20,REC_LEN};
 
     mq_unlink("engine_msg");
     qid = mq_open("engine_msg", O_CREAT | O_RDWR, 644, &attr);
@@ -447,11 +399,11 @@ pthread_t CreatEngineThread(Junqi* pJunqi)
         perror("mq_open");
         exit(EXIT_FAILURE);
     }
-    if(mq_setattr(qid,&attr1,&attr)<0)
-    {
-        perror("mq_setattr");
-        exit(EXIT_FAILURE);
-    }
+//    if(mq_setattr(qid,&attr1,&attr)<0)
+//    {
+//        perror("mq_setattr");
+//        exit(EXIT_FAILURE);
+//    }
 
     pJunqi->qid = qid;
 
