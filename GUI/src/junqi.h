@@ -43,7 +43,7 @@ static void memout(u8 *pdata,u8 len)
 #endif
 ////////////////////////////////
 
-#define NOT_DEBUG1   0
+#define NOT_DEBUG1   0  //0：开棋 1：关棋
 //#define NOT_DEBUG2
 
 #define MOVE_SOUND         "./sound/move.wav"
@@ -148,6 +148,7 @@ struct Junqi
 	u8 bStart;
 	u8 bStop;
 	u8 bAnalyse;
+	u8 bResetFlag;
 	enum ChessColor eColor;
 	enum ChessDir eTurn;
 	enum ChessDir eFirstTurn;

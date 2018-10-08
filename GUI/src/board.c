@@ -165,6 +165,7 @@ static void event_handle(GtkWidget *item,gpointer data)
 		pJunqi->bStart = 0;
 		pJunqi->bReplay = 0;
 		pJunqi->bStop = 0;
+		pJunqi->bAnalyse = 0;
 		pJunqi->eTurn = pJunqi->eFirstTurn;
 		ReSetChessBoard(pJunqi);
 		DestroyChessFlag(pJunqi);
@@ -424,6 +425,7 @@ on_slider_value_change (GtkAdjustment *adjustment,
 	assert( value>=0 && value<=max_step );
 	if( value!=pJunqi->iRpStep )
 	{
+		pJunqi->bAnalyse = 0;
 		pJunqi->iRpStep = value;
 		ShowReplayStep(pJunqi, 0);
 		pJunqi->sound_type = 0;
@@ -514,7 +516,12 @@ static void  surrender_cb(GtkWidget *button , gpointer data)
 	response = gtk_dialog_run (GTK_DIALOG (dialog));
 	if (response == GTK_RESPONSE_OK)
 	{
+		pJunqi->addr = pJunqi->addr_tmp[0];
 		SendEvent(pJunqi, iDir, SURRENDER_EVENT);
+#ifndef NOT_DEBUG2
+		pJunqi->addr = pJunqi->addr_tmp[1];
+		SendEvent(pJunqi, iDir, SURRENDER_EVENT);
+#endif
 		SendSoundEvent(pJunqi,DEAD);
 		DestroyAllChess(pJunqi, iDir);
 		ClearChessFlag(pJunqi,iDir);
@@ -539,7 +546,13 @@ static void  jump_cb(GtkWidget *button , gpointer data)
 		AddEventToReplay(pJunqi, JUMP_EVENT, iDir);
 		IncJumpCnt(pJunqi, iDir);
 		ChessTurn(pJunqi);
+
+		pJunqi->addr = pJunqi->addr_tmp[0];
 		SendEvent(pJunqi, iDir, JUMP_EVENT);
+#ifndef NOT_DEBUG2
+		pJunqi->addr = pJunqi->addr_tmp[1];
+		SendEvent(pJunqi, iDir, JUMP_EVENT);
+#endif
 	}
 }
 
@@ -671,11 +684,14 @@ GtkWidget *GetSelectImage(int isVertical, int color)
 static void send_go(GtkWidget *button, GdkEventButton *event, gpointer data)
 {
 	Junqi *pJunqi = (Junqi *)data;
+	log_b("go %d",pJunqi->eTurn);
 	if( pJunqi->bStart )
 	{
 		SendHeader(pJunqi, pJunqi->eTurn, COMM_GO);
+		//SendHeader(pJunqi, 0, COMM_GO);
 	}
 }
+
 
 static void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data)
 {
@@ -784,7 +800,9 @@ gboolean time_event(gpointer data)
 
     if( pJunqi->bStart && !pJunqi->bStop )
     {
-    	ShowTime(pJunqi, 0);
+    	//复盘时不要显示时间
+    	if( !pJunqi->bReplay )
+    		ShowTime(pJunqi, 0);
     }
     if( !pJunqi->bStart )
     {
@@ -874,6 +892,25 @@ void SendSoundEvent(Junqi *pJunqi, enum CompareType type)
 	pJunqi->szPathForSound = pJunqi->szPath;
 }
 
+
+static GtkWidget *
+add_section (GtkWidget   *button,
+             const gchar *info )
+{
+  GtkWidget *section;
+
+  section = gtk_flow_box_new ();
+  gtk_widget_set_halign (section, GTK_ALIGN_START);
+
+  gtk_flow_box_set_selection_mode (GTK_FLOW_BOX (section), GTK_SELECTION_NONE);
+  gtk_flow_box_set_min_children_per_line (GTK_FLOW_BOX (section), 2);
+  gtk_flow_box_set_max_children_per_line (GTK_FLOW_BOX (section), 20);
+  gtk_widget_set_tooltip_text (button, info);
+  gtk_container_add (GTK_CONTAINER (section), button);
+
+  return section;
+}
+
 void CreatBeginButton(Junqi *pJunqi)
 {
     //开始按钮
@@ -891,6 +928,7 @@ void CreatBeginButton(Junqi *pJunqi)
     gtk_widget_show(image);
     //立即出招按钮
     GtkWidget *start_button = gtk_event_box_new();
+    GtkWidget *section;
 	pixbuf = gdk_pixbuf_new_from_file_at_scale(
 			"./res/start2.png", 40,40,1,NULL);
 	image = gtk_image_new_from_pixbuf(pixbuf);
@@ -898,9 +936,22 @@ void CreatBeginButton(Junqi *pJunqi)
 	gtk_container_add(GTK_CONTAINER(start_button),image);
 	gtk_widget_show(start_button);
 	g_signal_connect(start_button,"button-press-event",G_CALLBACK(send_go),pJunqi);
-	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), start_button, 580,520);
+	section = add_section(start_button,"立即出招");
+	gtk_widget_show(section);
+	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), section, 580,520);
+	//gtk_fixed_put(GTK_FIXED(pJunqi->fixed), start_button, 580,520);
 	g_object_unref (pixbuf);
 
+}
+
+void CreatAPPIcon(Junqi *pJunqi)
+{
+	GdkPixbuf *pixbuf;
+	GtkWidget *window;
+
+	window = pJunqi->window;
+	pixbuf = gdk_pixbuf_new_from_file("./res/JunQi.ico", NULL);
+	gtk_window_set_icon(GTK_WINDOW(window), pixbuf);
 }
 
 void SetTimeStr(char *label_str, int time)
@@ -1010,7 +1061,7 @@ void OpenBoard(GtkWidget *window)
 #endif
     pthread_t tidp;
     pthread_create(&tidp,NULL,(void*)sound_thread,pJunqi);
-
+    //CreatAPPIcon(pJunqi);
     CreatStepSlider(pJunqi);
     CreatBoardChess(window, pJunqi);
     CreatCommThread(pJunqi);

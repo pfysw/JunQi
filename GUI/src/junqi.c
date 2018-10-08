@@ -228,7 +228,7 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 		if(iType!=NONE)
 		{
 #if NOT_DEBUG1
-			if( (dir==RIGHT||dir==LEFT) && !pJunqi->bReplay )
+			if( (dir==RIGHT||dir==LEFT) && !pJunqi->bReplay && !pJunqi->bAnalyse )
 			{
 				iType = DARK;
 			}
@@ -557,7 +557,7 @@ void DestroyAllChess(Junqi *pJunqi, int iDir)
 	pJunqi->aInfo[iDir].bDead = 1;
 	if( pJunqi->aInfo[(iDir+2)%4].bDead==1 )
 	{
-		if( !pJunqi->bReplay )
+		if( !pJunqi->bReplay && !pJunqi->bAnalyse )
 			pJunqi->bStart = 0;
 	}
 
@@ -889,13 +889,10 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
     		{
     			return;
     		}
+
 			if( pJunqi->bStart && pJunqi->eTurn!=pChess->pLineup->iDir )
 			{
-#if NOT_DEBUG1
-				if( pJunqi->eTurn%2!=0 )
-					return;
-#endif
-				if( !pJunqi->bReplay  )
+				if( !pJunqi->bReplay || pJunqi->bAnalyse )
 					return;
 			}
     		SendSoundEvent(pJunqi,SELECT);
@@ -933,6 +930,8 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
 
     				int type;
     				type = CompareChess(pJunqi->pSelect, pChess);
+    				//在复盘时，棋子被手工移动后要复位
+    				pJunqi->bResetFlag = 1;
     				PlayResult(pJunqi, pJunqi->pSelect, pChess, type);
     				ChessTurn(pJunqi);
 
@@ -1415,6 +1414,7 @@ void OpenReplay(GtkNativeDialog *dialog,
 			pJunqi->bStart = 1;
 			pJunqi->bStop = 1;
 			pJunqi->iRpStep = 0;
+			pJunqi->bResetFlag = 0;
 		}
 	}
 
@@ -1431,9 +1431,11 @@ void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
 	static int preStep = 0;
 	u8 event;
 
-    if( !next_flag )
+
+    if( !next_flag || pJunqi->bResetFlag )
     {
     	preStep = 0;
+    	pJunqi->bResetFlag = 0;
     	ReSetChessBoard(pJunqi);
     }
 
@@ -1459,7 +1461,13 @@ void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
 				if( i==pJunqi->iRpStep-1 && next_flag)
 					ShowDialogMessage(pJunqi, "跳过次数", pJunqi->aInfo[iDir].cntJump);
 			}
-			SendEvent(pJunqi, iDir, event);
+			//SendEvent(pJunqi, iDir, event);
+			pJunqi->addr = pJunqi->addr_tmp[0];
+			SendEvent(pJunqi, iDir, SURRENDER_EVENT);
+	#ifndef NOT_DEBUG2
+			pJunqi->addr = pJunqi->addr_tmp[1];
+			SendEvent(pJunqi, iDir, SURRENDER_EVENT);
+	#endif
 
 			ChessTurn(pJunqi);
 			continue;
@@ -1468,8 +1476,6 @@ void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
 		p1.y = *(u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+1);
 		p2.x = *(u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+2);
 		p2.y = *(u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+3);
-
-
 
 		assert( p1.x>=0 && p1.x<17 );
 		assert( p1.y>=0 && p1.y<17 );
@@ -1495,8 +1501,9 @@ void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
 		}
 		else
 		{
-//			log_b("err %d %d %d %d %d",i,pSrc->point.x,pSrc->point.y,
-//					pDst->point.x,pDst->point.y);
+			log_b("err %d %d %d %d %d",i,pSrc->point.x,pSrc->point.y,
+					pDst->point.x,pDst->point.y);
+			log_b("move %d %d %d %d",p1.x,p1.y,p2.x,p2.y);
 			assert(0);
 		}
 	}

@@ -31,7 +31,9 @@ void SendData(Junqi* pJunqi, CommHeader *header, void *data, int len)
 
 	memcpy(buf+length, data, len);
 	length += len;
-    if(!pJunqi->bReplay)
+	//在复盘中不可以向引擎发送行棋结果
+	//但是需要分析的时候可以
+    if( !pJunqi->bReplay || pJunqi->bAnalyse )
     {
 		sendto(pJunqi->socket_fd, buf, length, 0,
 				(struct sockaddr *)&pJunqi->addr, sizeof(struct sockaddr));
@@ -145,6 +147,15 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 	if( memcmp(pHead->aMagic, aMagic, 4)!=0 )
 	{
 		return;
+	}
+
+	//复盘的时候引擎发过来的行棋不要处理
+	if( pJunqi->bAnalyse || pJunqi->bReplay )
+	{
+		if( pHead->eFun==COMM_MOVE || pHead->eFun==COMM_EVNET )
+		{
+			return;
+		}
 	}
 
 	switch(pHead->eFun)
@@ -270,13 +281,17 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 			LoadLineup(pJunqi, pHead->iDir, (u8*)&pHead[1]);
 		}
 		break;
+	case COMM_REPLAY:
+		break;
 	case COMM_OK:
-		if( pJunqi->bAnalyse )
+		if( pJunqi->bAnalyse && !pJunqi->bReplay )
 		{
 			//SendHeader(pJunqi, pJunqi->eFirstTurn, COMM_REPLAY);
 			SendReplyToEngine(pJunqi);
 			ShowReplayStep(pJunqi, 0);
-			pJunqi->bAnalyse = 0;
+			//下一次进入ShowReplayStep再把bAnalyse清0
+			//因为分析该局面后可能还会再手动推演
+			pJunqi->bAnalyse = 1;
 			pJunqi->bReplay = 1;
 		}
 		break;
