@@ -13,6 +13,7 @@
 #include "evaluate.h"
 #include "movegen.h"
 #include "search.h"
+#include "windows.h"
 
 int preTurn = 1000;
 
@@ -307,16 +308,37 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
     	pJunqi->bGo = 0;
     	pJunqi->bMove = 0;
     	pJunqi->begin_time = (unsigned int)time(NULL);
-    	for(int i=0; i<5; i++)
+
+    	for(int i=0; i<30; i++)
     	{
     		pJunqi->eTurn = eTurn;
     		pthread_mutex_lock(&pJunqi->mutex);
     		pJunqi->bSearch = 1;
     		pJunqi->test_num = 0;
-			value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
+    		pJunqi->test_gen_num = 0;
+    		pJunqi->searche_num[0] = 0;
+    		pJunqi->searche_num[1] = 0;
+
+            LARGE_INTEGER nBeginTime;
+            LARGE_INTEGER nEndTime;
+            QueryPerformanceCounter(&nBeginTime);
+    		pJunqi->test_time[1] = 0;
+			//value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
+			value = AlphaBeta1(pJunqi,i,-INFINITY,INFINITY);
+    		//value = AlphaBetaTest(pJunqi,i,-INFINITY,INFINITY);
+    		//value = AlphaBetaTest(pJunqi,i,4,5);
 			log_a("search num %d",pJunqi->test_num);
+			log_a("gen num %d",pJunqi->test_gen_num);
+			log_a("key num %d %d",pJunqi->searche_num[0],
+			        pJunqi->searche_num[1]);
 			pJunqi->bSearch = 0;
 			pthread_mutex_unlock(&pJunqi->mutex);
+		    QueryPerformanceCounter(&nEndTime);
+		    pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
+
+			log_a("time %d",time(NULL)-pJunqi->begin_time);
+			log_a("gen time %d",pJunqi->test_time[1]);
+			log_a("gen0 time %d",pJunqi->test_time[0]);
 			if( TimeOut(pJunqi) )
 			{
 				log_a("break");
@@ -326,8 +348,10 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 			{
 				value = -value;
 			}
+
 			log_a("depth %d value %d",i,value);
     	}
+    	//GenerateMoveList1(pJunqi,eTurn);
 //    	SafeMemout(pJunqi->aInfo[3].aLiveTypeSum,14);
 //    	SafeMemout(pJunqi->aInfo[3].aLiveAllNum,14);
 
@@ -337,8 +361,8 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
     pJunqi->bMove = 0;
     pJunqi->iRpOfst++;
 
-	//if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
-    if( preTurn == pJunqi->eTurn )
+	if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
+    //if( preTurn == pJunqi->eTurn )
 	{
 		return;
 	}

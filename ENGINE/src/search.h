@@ -27,6 +27,12 @@ struct PositionData
 	u8 isDstDead;
 };
 
+typedef struct MoveHash MoveHash;
+struct MoveHash
+{
+    int iKey;
+    MoveHash *pNext;
+};
 typedef struct PositionList PositionList;
 struct PositionList
 {
@@ -57,5 +63,10 @@ int AlphaBeta(
 		int beta);
 int TimeOut(Junqi *pJunqi);
 u8 SendBestMove(Engine *pEngine);
+void AddMoveToHash(
+        Junqi *pJunqi,
+        BoardChess *pSrc,
+        BoardChess *pDst );
+u8 IsNotSameMove(MoveList *p);
 
 #endif /* SEARCH_H_ */

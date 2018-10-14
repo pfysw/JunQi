@@ -25,5 +25,8 @@ struct MoveList
 
 void ClearMoveList(MoveList *pHead);
 MoveList *GenerateMoveList(Junqi* pJunqi, int iDir);
-
+void SearchMovePath(
+        Junqi* pJunqi,
+        BoardChess *pSrc,
+        int flag );
 #endif /* MOVEGEN_H_ */

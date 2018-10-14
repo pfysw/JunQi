@@ -9,7 +9,7 @@
 #include "comm.h"
 #include "engine.h"
 #include <time.h>
-
+#include <signal.h>
 
 int main(int argc, char *argv[])
 {
@@ -21,6 +21,8 @@ int main(int argc, char *argv[])
 	t1 = CreatCommThread(pJunqi);
 	CreatEngineThread(pJunqi);
 	CreatPrintThread(pJunqi);
+
+
 	pthread_join(t1,NULL);
 
 	return 0;

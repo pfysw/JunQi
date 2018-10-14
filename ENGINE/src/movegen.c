@@ -8,6 +8,9 @@
 #include "junqi.h"
 #include "movegen.h"
 #include "path.h"
+#include "search.h"
+
+
 
 void InsertMoveList(
 	Junqi *pJunqi,
@@ -20,6 +23,18 @@ void InsertMoveList(
 	MoveList *pMove;
 	MoveList *pHead = pJunqi->pMoveList;
 
+
+//    static int index = 0;
+//    if( pHead==NULL )
+//    {
+//        index = 0;
+//    }
+//    else
+//    {
+//        index++;
+//        if(index>20) return;
+//    }
+	pJunqi->test_gen_num++;
 	pMove = (MoveList *)malloc(sizeof(MoveList));
 	memset(pMove, 0, sizeof(MoveList));
 	pMove->move.src[0] = pSrc->point.x;
@@ -28,7 +43,10 @@ void InsertMoveList(
 	pMove->move.dst[1] = pDst->point.y;
 	memcpy(&pMove->move.result, &pData->result,  sizeof(MoveResultData)-4);
 	pMove->percent = percent;
-    //SafeMemout((u8*)&pMove->move,10);
+//	if(pJunqi->test_gen_num==7)
+//	    log_c("test");
+//	log_a("gen num %d", pJunqi->test_gen_num);
+//    SafeMemout((u8*)&pMove->move,10);
 	if( pHead==NULL )
 	{
 		pMove->isHead = 1;
@@ -42,7 +60,10 @@ void InsertMoveList(
 		pMove->pPre = pHead->pPre;
 		pHead->pPre->pNext = pMove;
 		pHead->pPre = pMove;
+
 	}
+
+
 }
 
 int AddJunqiMove(
@@ -340,6 +361,7 @@ int GetEatPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 		}
 		if( pDst->pLineup->type!=DILEI)
 		{
+		    //log_c("dst %s %d %d",aTypeName[dst],pSrc->pLineup->iDir,pDst->pLineup->iDir);
 			assert( pDst->pLineup->type>SILING );
 			if( pSrc->pLineup->type==DARK )
 			{
@@ -753,6 +775,7 @@ u8 IsPossibleBomb(
 //	return rc;
 //}
 
+
 void AddMoveToList(
 	Junqi *pJunqi,
 	BoardChess *pSrc,
@@ -762,6 +785,8 @@ void AddMoveToList(
 	MoveResultData temp;
 	enum CompareType type;
 	int aPercent[3] = {0};
+	assert( pSrc->type!=NONE );
+
 
 	for(type=MOVE; type<=KILLED; type++)
 	{
@@ -859,6 +884,7 @@ void AddMoveToList(
 	}
 	if( pDst->type!=NONE )
 	{
+	    assert( (pSrc->pLineup->iDir&1)!=(pDst->pLineup->iDir&1) );
 		log_b("percent %d %d %d",aPercent[0],aPercent[1],aPercent[2]);
 		int sum = aPercent[0]+aPercent[1]+aPercent[2];
 
@@ -934,13 +960,15 @@ void ClearMoveList(MoveList *pHead)
 	}
 
 }
+
+#if 0
 MoveList *GenerateMoveList(Junqi* pJunqi, int iDir)
 {
     int i,j;
     BoardChess *pSrc;
     BoardChess *pDst;
     ChessLineup *pLineup;
-    int temp[3] = {3,7,5};
+    int temp[3] = {0};
     int flag = 0;
     pJunqi->pMoveList = NULL;
     for(i=0;  i<30; i++)
@@ -1001,5 +1029,202 @@ MoveList *GenerateMoveList(Junqi* pJunqi, int iDir)
     	}
     }
 
+    return pJunqi->pMoveList;
+}
+#endif
+
+u8 IsDirectRail(
+        Junqi *pJunqi,
+        BoardGraph *pSrc,
+        BoardGraph *pDst )
+{
+    BoardChess *pSrcChess;
+    BoardChess *pDstChess;
+    u8 rc =0;
+
+    pSrcChess = pSrc->pAdjList->pChess;
+    pDstChess = pDst->pAdjList->pChess;
+
+    if( pSrcChess->point.x==pDstChess->point.x )
+        rc = 1;
+
+    if( pSrcChess->point.y==pDstChess->point.y )
+        rc = 1;
+
+    if( pSrcChess->eCurveRail==pDstChess->eCurveRail && pSrcChess->eCurveRail>0 )
+        rc = 1;
+
+
+    return rc;
+}
+
+void SearchRailPath(
+        Junqi* pJunqi,
+        BoardGraph *pSrc,
+        BoardGraph *pDst,
+        int flag )
+{
+    AdjNode *p;
+    BoardGraph *pVertex;
+    BoardChess *pChess = pSrc->pAdjList->pChess;
+
+
+    pDst->passCnt++;
+
+    for(p=pDst->pAdjList->pNext; p!=NULL; p=p->pNext)
+    {
+        pVertex = &pJunqi->aBoard[p->pChess->point.x][p->pChess->point.y];
+
+        if( pVertex->passCnt!=0 )
+        {
+            continue;
+        }
+        else if( pChess->type!=GONGB && !IsDirectRail(pJunqi, pSrc, pVertex) )
+        {
+            continue;
+        }
+        else if( p->pChess->type!=NONE )
+        {
+            if( (p->pChess->pLineup->iDir&1)!=(pChess->pLineup->iDir&1) )
+            {
+                pVertex->passCnt++;
+                if( !flag )
+                {
+                    AddMoveToList(pJunqi, pChess, p->pChess);
+
+//                    log_a("dir %d %d",p->pChess->iDir,pChess->iDir);
+//                    log_a("dst %d %d %d %d",pChess->point.x,pChess->point.y,
+//                            p->pChess->point.x,p->pChess->point.y);
+                }
+                else
+                {
+                    AddMoveToHash(pJunqi, pChess, p->pChess);
+                }
+            }
+            continue;
+        }
+        else
+        {
+
+            if( !flag )
+            {
+                AddMoveToList(pJunqi, pChess, p->pChess);
+//                log_a("path %d %d %d %d",pChess->point.x,pChess->point.y,
+//                        p->pChess->point.x,p->pChess->point.y);
+            }
+            SearchRailPath(pJunqi, pSrc, pVertex,flag);
+        }
+    }
+
+}
+
+
+void SearchMovePath(
+        Junqi* pJunqi,
+        BoardChess *pSrc,
+        int flag )
+{
+
+    BoardGraph *pVertex;
+    BoardChess *pNbr;
+    BoardGraph *pNbrVertex;
+
+    int i,x,y;
+
+    ClearPassCnt(pJunqi);
+
+    if( pSrc->isStronghold )
+    {
+        return;
+    }
+    else if( pSrc->type==NONE )
+    {
+        return;
+    }
+    else if( pSrc->type==DILEI || pSrc->type==JUNQI )
+    {
+        return;
+    }
+
+    if( pSrc->isRailway )
+    {
+        pVertex = &pJunqi->aBoard[pSrc->point.x][pSrc->point.y];
+
+        SearchRailPath(pJunqi, pVertex, pVertex, flag);
+    }
+    for(i=0; i<9; i++)
+    {
+        if( i==4 ) continue;
+        x = pSrc->point.x+1-i%3;
+        y = pSrc->point.y+i/3-1;
+
+        if( x<0||x>16||y<0||y>16 ) continue;
+
+        if( pJunqi->aBoard[x][y].pAdjList )
+        {
+            pNbr = pJunqi->aBoard[x][y].pAdjList->pChess;
+            pNbrVertex = &pJunqi->aBoard[pNbr->point.x][pNbr->point.y];
+            if( pNbrVertex->passCnt )
+            {
+                continue;
+            }
+            else if( pNbr->isCamp && pNbr->type!=NONE )
+            {
+                continue;
+            }
+            else if( pNbr->type!=NONE && (pNbr->pLineup->iDir&1)==(pSrc->pLineup->iDir&1) )
+            {
+                continue;
+            }
+
+            if( pSrc->isCamp || pNbr->isCamp )
+            {
+                if( !flag )
+                {
+                    AddMoveToList(pJunqi, pSrc, pNbr);
+    //                log_a("nbr1 %d %d %d %d",pSrc->point.x,pSrc->point.y,
+    //                        pNbr->point.x,pNbr->point.y);
+                }
+                else if( pNbr->type!=NONE )
+                {
+                    AddMoveToHash(pJunqi, pSrc, pNbr);
+                }
+            }
+            //非斜相邻
+            else if( pNbr->point.x==pSrc->point.x || pNbr->point.y==pSrc->point.y)
+            {
+                if( !flag )
+                {
+                    AddMoveToList(pJunqi, pSrc, pNbr);
+    //                log_a("nbr2 %d %d %d %d",pSrc->point.x,pSrc->point.y,
+    //                        pNbr->point.x,pNbr->point.y);
+                }
+                else if( pNbr->type!=NONE )
+                {
+                    AddMoveToHash(pJunqi, pSrc, pNbr);
+                }
+            }
+
+        }
+    }
+}
+
+MoveList *GenerateMoveList(Junqi* pJunqi, int iDir)
+{
+    int i;
+    BoardChess *pSrc;
+    ChessLineup *pLineup;
+    pJunqi->searche_num[0]++;
+    pJunqi->pMoveList = NULL;
+    for(i=0;  i<30; i++)
+    {
+        pLineup = &pJunqi->Lineup[iDir][i];
+        if( pLineup->bDead || pLineup->type==NONE )
+        {
+            continue;
+        }
+        pSrc = pLineup->pChess;
+        SearchMovePath(pJunqi,pSrc,0);
+    }
     return pJunqi->pMoveList;
 }

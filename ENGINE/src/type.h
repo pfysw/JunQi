@@ -9,5 +9,6 @@ typedef struct Junqi Junqi;
 typedef struct BoardChess BoardChess;
 typedef struct GraphPath GraphPath;
 typedef struct PositionList PositionList;
+typedef struct MoveHash MoveHash;
 
 #endif

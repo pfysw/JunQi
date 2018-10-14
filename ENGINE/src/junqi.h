@@ -83,6 +83,7 @@ typedef struct BoardGraph
 {
 	AdjNode *pAdjList;
 	int passCnt;
+	u8 cnt[28];
 }BoardGraph;
 
 typedef struct GraphPath GraphPath;
@@ -125,7 +126,13 @@ struct Junqi
 	int nRpStep;
 	int iRpOfst;
 	int begin_time;
+	int test_time[2];
+	int test_gen_num;
 	int test_num;
+	int searche_num[2];
+	int iKey;
+	int test_flag;
+	MoveHash **paHash;
 
 	struct sockaddr_in addr;
 	int socket_fd;

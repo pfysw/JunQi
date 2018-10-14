@@ -11,8 +11,9 @@
 #include "search.h"
 #include "evaluate.h"
 #include <time.h>
+#include <windows.h>
 
-#include <omp.h>
+//#include <omp.h>
 
 
 #define OffSET(type,field) ((size_t)&(((type*)0)->field))
@@ -36,16 +37,19 @@ void PushMoveToStack(
 	memset(p, 0, sizeof(PositionList));//初始化
 	pHead = pEngine->pPos;
 	pStorage = &p->data;
-	//log_c("make %d",++tt);
+
 	if( pHead==NULL )
 	{
+
 		p->isHead = 1;
 		p->pNext = p;
 		p->pPre = p;
 		pEngine->pPos = p;
+
 	}
 	else
 	{
+
 		p->pNext = pHead;
 		p->pPre = pHead->pPre;
 		pHead->pPre->pNext = p;
@@ -54,8 +58,9 @@ void PushMoveToStack(
 
 	memcpy(&pStorage->xSrcChess, pSrc, VAR_OFFSET);
 	memcpy(&pStorage->xDstChess, pDst, VAR_OFFSET);
-	memcpy(&pStorage->xSrcLineup, pSrc->pLineup, sizeof(ChessLineup));
 
+
+	memcpy(&pStorage->xSrcLineup, pSrc->pLineup, sizeof(ChessLineup));
 
 	//todo 目前没有考虑投降、跳过、无棋可走的情况
 	if( pMove->result!=MOVE )
@@ -69,6 +74,7 @@ void PushMoveToStack(
 		{
 			iDir = pSrc->pLineup->iDir;
 		}
+
 		pStorage->junqi_chess_type[0] = pJunqi->ChessPos[iDir][26].type;
 		pStorage->junqi_chess_type[1] = pJunqi->ChessPos[iDir][28].type;
 		pStorage->junqi_type[0] = pJunqi->Lineup[iDir][26].type;
@@ -79,7 +85,9 @@ void PushMoveToStack(
         {
         	pStorage->mx_type[i] = pJunqi->Lineup[iDir][i].mx_type;
         }
+
 	}
+
 }
 
 void PopMoveFromStack(
@@ -153,18 +161,12 @@ void PopMoveFromStack(
 
 	if( !pTail->isHead )
 	{
-		//log_c("unmake %d",tt--);
 		pTail->pPre->pNext = pHead;
 		pHead->pPre = pTail->pPre;
 		free(pTail);
 	}
 	else
 	{
-//		if( tt==2 )
-//		{
-//			log_c("NULL unmake %d",tt);
-//		}
-//		tt--;
 		free(pTail);
 		pEngine->pPos = NULL;
 	}
@@ -179,11 +181,15 @@ void MakeNextMove(Junqi *pJunqi, MoveResultData *pResult)
 	p1.y = pResult->src[1]%17;
 	p2.x = pResult->dst[0]%17;
 	p2.y = pResult->dst[1]%17;
+
 	pSrc = pJunqi->aBoard[p1.x][p1.y].pAdjList->pChess;
+
+	assert( pSrc->type!=NONE );
 	pDst = pJunqi->aBoard[p2.x][p2.y].pAdjList->pChess;
 	PushMoveToStack(pJunqi, pSrc, pDst, pResult);
 	PlayResult(pJunqi, pSrc, pDst, pResult);
 	ChessTurn(pJunqi);
+
 
 
 }
@@ -200,8 +206,8 @@ void UnMakeMove(Junqi *pJunqi, MoveResultData *pResult)
 	p2.y = pResult->dst[1]%17;
 	pSrc = pJunqi->aBoard[p1.x][p1.y].pAdjList->pChess;
 	pDst = pJunqi->aBoard[p2.x][p2.y].pAdjList->pChess;
-	PopMoveFromStack(pJunqi, pSrc, pDst, pResult);
 
+	PopMoveFromStack(pJunqi, pSrc, pDst, pResult);
 
 }
 
@@ -238,6 +244,158 @@ int TimeOut(Junqi *pJunqi)
 	//rc = 0;//测试设断点用，否则停下来就超时了
 	return rc;
 }
+
+int CallAlphaBeta(
+        Junqi *pJunqi,
+        int depth,
+        int alpha,
+        int beta,
+        int iDir )
+{
+    int val;
+
+    if( iDir%2==pJunqi->eTurn%2 )
+    {
+        //下家阵亡轮到对家走
+        val = AlphaBeta(pJunqi,depth,alpha,beta);
+    }
+    else
+    {
+        val = -AlphaBeta(pJunqi,depth,-beta,-alpha);
+    }
+
+    return val;
+}
+
+int CheckMoveHash(MoveHash ***paHash, int iKey)
+{
+
+    int nHash = 1024;
+    int size;
+    int h;
+    int rc = 0;
+    MoveHash *pNew;
+    MoveHash *p;
+
+
+
+    if( *paHash==NULL )
+    {
+        size = sizeof(MoveHash *)*nHash;
+        *paHash = (MoveHash **)malloc(size+1);
+        memset(*paHash,0,size);
+    }
+    h = iKey&1023;
+    if( (*paHash)[h]==NULL )
+    {
+        size =sizeof(MoveHash);
+        pNew = (MoveHash *)malloc(size);
+        memset(pNew,0,size);
+        pNew->iKey = iKey;
+        (*paHash)[h] = pNew;
+        pNew = (MoveHash *)malloc(size);
+        memset(pNew,0,size);
+        pNew->iKey = iKey;
+        (*paHash)[1024] = pNew;
+    }
+    else
+    {
+        for(p=(*paHash)[h]; p!=NULL; p=p->pNext)
+        {
+            if( p->iKey==iKey )
+            {
+                rc = 1;
+                break;
+            }
+        }
+        if( !rc )
+        {
+            size =sizeof(MoveHash);
+            pNew = (MoveHash *)malloc(size);
+            memset(pNew,0,size);
+            pNew->iKey = iKey;
+            pNew->pNext = (*paHash)[h];
+
+            (*paHash)[h] = pNew;
+            pNew = (MoveHash *)malloc(size);
+            memset(pNew,0,size);
+            pNew->iKey = iKey;
+            pNew->pNext = (*paHash)[1024];
+            (*paHash)[1024] = pNew;
+        }
+    }
+
+    return rc;
+}
+
+void ClearMoveHash(MoveHash ***paHash)
+{
+
+    MoveHash *p;
+    MoveHash *pDel;
+    MoveHash *pTemp;
+    int h;
+
+
+    if( *paHash==NULL )
+    {
+        return;
+    }
+    for(p=(*paHash)[1024];p!=NULL;)
+    {
+        h = p->iKey&1023;
+
+        for(pDel=(*paHash)[h];pDel!=NULL;)
+        {
+            pTemp = pDel;
+            pDel = pDel->pNext;
+            free(pTemp);
+        }
+        (*paHash)[h] = NULL;
+        pTemp = p;
+        p=p->pNext;
+        free(pTemp);
+    }
+}
+
+int GetMoveHash(Junqi* pJunqi, int iDir, int iKey)
+{
+    int i;
+    BoardChess *pSrc;
+    ChessLineup *pLineup;
+    pJunqi->searche_num[1]++;
+    pJunqi->iKey = iKey;
+    for(i=0;  i<30; i++)
+    {
+        pLineup = &pJunqi->Lineup[iDir][i];
+        if( pLineup->bDead || pLineup->type==NONE )
+        {
+            continue;
+        }
+        pSrc = pLineup->pChess;
+        SearchMovePath(pJunqi,pSrc,1);
+    }
+    return pJunqi->iKey;
+}
+
+int GetHashKey(Junqi* pJunqi)
+{
+    int iKey = 0;
+    int iDir;
+
+    iDir = (pJunqi->eTurn)&3;
+    if( !pJunqi->aInfo[iDir].bDead )
+    {
+        iKey = GetMoveHash(pJunqi,iDir,iKey);
+    }
+    iDir = (pJunqi->eTurn+2)&3;
+    if( !pJunqi->aInfo[iDir].bDead )
+    {
+        iKey = GetMoveHash(pJunqi,iDir,iKey);
+    }
+    return iKey;
+}
+
 int AlphaBeta(
 		Junqi *pJunqi,
 		int depth,
@@ -252,6 +410,9 @@ int AlphaBeta(
 	int sum = 0;
 	static int cnt = 0;
 	int iDir = pJunqi->eTurn;
+	MoveHash **paHash = NULL;
+	int iKey;
+
 
 	cnt++;
 	//遍历到最后一层时计算局面分值
@@ -266,10 +427,13 @@ int AlphaBeta(
 			val = -val;
 		}
 		cnt--;
+
 		return val;
 	}
+
 	//生成着法列表
 	pHead = GenerateMoveList(pJunqi, iDir);
+
 	if( pHead!=NULL )
 	{
 		pBest = &pHead->move;
@@ -279,62 +443,70 @@ int AlphaBeta(
 	{
 		pJunqi->eTurn = iDir;
 		ChessTurn(pJunqi);
-    	if( iDir%2==pJunqi->eTurn%2 )
-    	{
-    		//下家阵亡轮到对家走
-    		val = AlphaBeta(pJunqi,depth-1,alpha,beta);
-    	}
-    	else
-    	{
-    		val = -AlphaBeta(pJunqi,depth-1,-beta,-alpha);
-    	}
+
+		val = CallAlphaBeta(pJunqi,depth-1,alpha,beta,iDir);
 	}
 
     //遍历每一个着法
     for(p=pHead; pHead!=NULL; p=p->pNext)
     {
     	pJunqi->eTurn = iDir;
+
+
     	//模拟着法产生后的局面
     	MakeNextMove(pJunqi,&p->move);
     	assert(pJunqi->pEngine->pPos!=NULL);
-//    	if( p->move.src[0]==10&&p->move.src[1]==11 &&
-//    			p->move.dst[0]==10&&p->move.dst[1]==6 )
-//    	{
-//    		log_c("ds");
-//    	}
-    	if( iDir%2==pJunqi->eTurn%2 )
+
+        LARGE_INTEGER nBeginTime;
+        LARGE_INTEGER nEndTime;
+        QueryPerformanceCounter(&nBeginTime);
+    	iKey = GetHashKey(pJunqi);
+
+        QueryPerformanceCounter(&nEndTime);
+        pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
+        pJunqi->test_time[1] += pJunqi->test_time[0];
+    	//if(iKey==117440526)
+    	//log_a("key %d",iKey);
+    	if( CheckMoveHash(&paHash,iKey) &&
+    	        IsNotSameMove(p) )
     	{
-    		//下家阵亡轮到对家走
-    		val = AlphaBeta(pJunqi,depth-1,alpha,beta);
+    	    if( p->move.result>MOVE )
+    	    {
+    	        while( !memcmp( &p->move, &p->pNext->move, 4) )
+    	        {
+    	            if( p->pNext->isHead ) break;
+    	            p = p->pNext;
+    	        }
+    	    }
+    	    UnMakeMove(pJunqi,&p->move);
+    	    goto continue_search;
     	}
     	else
     	{
-    		val = -AlphaBeta(pJunqi,depth-1,-beta,-alpha);
-    	}
-//    	log_a("cnt %d val %d per %d",cnt,val,p->percent);
-//    	SafeMemout((u8*)&p->move, sizeof(p->move));
-    	//把局面撤回到上一步
-    	assert(pJunqi->pEngine->pPos!=NULL);
-    	UnMakeMove(pJunqi,&p->move);
-//        if( val>0 )
-//        {
-//        	log_c("sd");
-//        }
+            val = CallAlphaBeta(pJunqi,depth-1,alpha,beta,iDir);
+//            log_a("cnt %d val %d per %d",cnt,val,p->percent);
+//            SafeMemout((u8*)&p->move, sizeof(p->move));
+            //把局面撤回到上一步
 
-    	if( p->move.result!=MOVE && !p->pNext->isHead )
+            assert(pJunqi->pEngine->pPos!=NULL);
+            UnMakeMove(pJunqi,&p->move);
+    	}
+
+    	//if( p->move.result!=MOVE && !p->pNext->isHead )
+    	if( p->move.result!=MOVE )
     	{
     		sum += val*p->percent;
 
     		pData = &p->pNext->move;
             //下一个着法
-    		if( memcmp(&p->move, pData, 4) )
+    		if( memcmp(&p->move, pData, 4) || p->pNext->isHead  )
     		{
     			val = sum>>8;
     			sum = 0;
     		}
     		else
     		{
-    			continue;
+    		    goto continue_search;
     		}
     	}
         //产生截断
@@ -349,6 +521,8 @@ int AlphaBeta(
     		pBest = &p->move;
     		alpha = val;
     	}
+continue_search:
+
     	if( p->pNext->isHead )
     	{
     		break;
@@ -358,19 +532,23 @@ int AlphaBeta(
     	{
     		break;
     	}
+
 //    	if(cnt==1)
 //    	log_c("src %d %d",p->move.src[0],p->move.src[1]);
     }
-
     cnt--;
     if( 0==cnt )
     {
     	cnt = 0;
     	SetBestMove(pJunqi,pBest);
+
     }
 	ClearMoveList(pHead);
+	ClearMoveHash(&paHash);
+
 	return alpha;
 }
+
 
 u8 SendBestMove(Engine *pEngine)
 {
@@ -389,3 +567,23 @@ u8 SendBestMove(Engine *pEngine)
 
 	return rc;
 }
+
+void AddMoveToHash(
+        Junqi *pJunqi,
+        BoardChess *pSrc,
+        BoardChess *pDst )
+{
+    u8 val[4];
+//    val[0] = pSrc->point.x;
+//    val[1] = pSrc->point.y;
+//    val[2] = pDst->point.x;
+//    val[3] = pDst->point.y;
+    val[0] = pSrc->pLineup->index<<pSrc->iDir;
+    val[1] = pSrc->pLineup->index;
+    val[2] = pDst->pLineup->index<<pDst->iDir;
+    val[3] = pDst->pLineup->index;
+    pJunqi->iKey ^= *((int*)val);
+    //log_a("val key %08x %08x",*((int*)val),pJunqi->iKey);
+}
+
+
