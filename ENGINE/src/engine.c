@@ -242,6 +242,15 @@ void SendRandMove(Junqi* pJunqi)
 
 }
 
+void ClearBestMoveFlag(Engine *pEngine)
+{
+    for(int i=0; i<30; i++)
+    {
+        pEngine->aBestMove[i].flag1 = 0;
+        pEngine->aBestMove[i].mxPerFlag = 0;
+        pEngine->aBestMove[i].mxPerFlag1 = 0;
+    }
+}
 
 void ProRecMsg(Junqi* pJunqi, u8 *data)
 {
@@ -251,6 +260,8 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	u8 isMove = 0;
 	int value;
 	int eTurn;
+	Engine *pEngine = pJunqi->pEngine;
+	int i;
 
 	if( memcmp(pHead->aMagic, aMagic, 4)!=0 )
 	{
@@ -301,7 +312,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
     {
 		//value = EvalSituation(pJunqi);
     	eTurn = pJunqi->eTurn;
-    	log_b("search");
+    	log_b("search1");
 //		pJunqi->eTurn = eTurn;
 //		value = AlphaBeta(pJunqi,4,-INFINITY,INFINITY);
 //		log_b("depth %d value %d",4,value);
@@ -309,7 +320,9 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
     	pJunqi->bMove = 0;
     	pJunqi->begin_time = (unsigned int)time(NULL);
 
-    	for(int i=0; i<30; i++)
+    	memset(pEngine->aBestMove,0,sizeof(pEngine->aBestMove));
+
+    	for(i=0; i<5; i++)
     	{
     		pJunqi->eTurn = eTurn;
     		pthread_mutex_lock(&pJunqi->mutex);
@@ -318,27 +331,34 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
     		pJunqi->test_gen_num = 0;
     		pJunqi->searche_num[0] = 0;
     		pJunqi->searche_num[1] = 0;
+    		ClearBestMoveFlag(pEngine);
 
-            LARGE_INTEGER nBeginTime;
-            LARGE_INTEGER nEndTime;
-            QueryPerformanceCounter(&nBeginTime);
-    		pJunqi->test_time[1] = 0;
+//            LARGE_INTEGER nBeginTime;
+//            LARGE_INTEGER nEndTime;
+//            QueryPerformanceCounter(&nBeginTime);
+//    		pJunqi->test_time[1] = 0;
+
 			//value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
 			value = AlphaBeta1(pJunqi,i,-INFINITY,INFINITY);
     		//value = AlphaBetaTest(pJunqi,i,-INFINITY,INFINITY);
     		//value = AlphaBetaTest(pJunqi,i,4,5);
-			log_a("search num %d",pJunqi->test_num);
+			log_a("search1 num %d",pJunqi->test_num);
 			log_a("gen num %d",pJunqi->test_gen_num);
 			log_a("key num %d %d",pJunqi->searche_num[0],
 			        pJunqi->searche_num[1]);
 			pJunqi->bSearch = 0;
 			pthread_mutex_unlock(&pJunqi->mutex);
-		    QueryPerformanceCounter(&nEndTime);
-		    pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
-
 			log_a("time %d",time(NULL)-pJunqi->begin_time);
-			log_a("gen time %d",pJunqi->test_time[1]);
-			log_a("gen0 time %d",pJunqi->test_time[0]);
+			BoardChess **pBest = pJunqi->pEngine->pBest;
+			if(i>0)
+			log_a("best %d %d %d %d",pBest[0]->point.x,pBest[0]->point.y,
+			        pBest[1]->point.x,pBest[1]->point.y);
+
+//		    QueryPerformanceCounter(&nEndTime);
+//		    pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
+//			log_a("gen time %d",pJunqi->test_time[1]);
+//			log_a("gen0 time %d",pJunqi->test_time[0]);
+
 			if( TimeOut(pJunqi) )
 			{
 				log_a("break");
@@ -351,6 +371,8 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 
 			log_a("depth %d value %d",i,value);
     	}
+
+    	FreeBestMoveList(pEngine->aBestMove,i);
     	//GenerateMoveList1(pJunqi,eTurn);
 //    	SafeMemout(pJunqi->aInfo[3].aLiveTypeSum,14);
 //    	SafeMemout(pJunqi->aInfo[3].aLiveAllNum,14);
@@ -361,8 +383,8 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
     pJunqi->bMove = 0;
     pJunqi->iRpOfst++;
 
-	if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
-    //if( preTurn == pJunqi->eTurn )
+	//if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
+    if( preTurn == pJunqi->eTurn )
 	{
 		return;
 	}

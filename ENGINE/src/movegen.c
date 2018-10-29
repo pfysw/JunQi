@@ -315,9 +315,13 @@ int GetEatPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 		{
 			if( pDst->pLineup->type==DARK )
 			{
+			    log_b("dark");
 				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb+nLand;
 				mxNum = (aLiveTypeAll[mxDstType-1]-aLiveTypeSum[mxDstType-1]);
 				nSrc = aLiveTypeAll[src]-aLiveTypeSum[src]+nBomb+nLand;
+				log_b("%d %d %d %d",aLiveTypeAll[GONGB],aLiveTypeSum[GONGB],nBomb,nLand);
+				log_b("%d %d %d",mxDstType,aLiveTypeAll[mxDstType-1],aLiveTypeSum[mxDstType-1]);
+				log_b("%d %d",aLiveTypeAll[src],aLiveTypeSum[src]);
 			}
 			else
 			{
@@ -444,8 +448,24 @@ int GetBombPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 		{
 			num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb+nLand;
 			mxNum = (aLiveTypeAll[mxDstType-1]-aLiveTypeSum[mxDstType-1]);
-			nSrc = (aLiveTypeAll[src]-aLiveTypeSum[src])-
-					(aLiveTypeAll[src-1]-aLiveTypeSum[src-1])+nBomb;
+			if( (aLiveTypeAll[src]-aLiveTypeSum[src])<
+			        (aLiveTypeAll[src-1]-aLiveTypeSum[src-1]) )
+			{
+			    nSrc = nBomb;
+			}
+			else
+			{
+                nSrc = (aLiveTypeAll[src]-aLiveTypeSum[src])-
+                        (aLiveTypeAll[src-1]-aLiveTypeSum[src-1])+nBomb;
+			}
+			//aLiveTypeSum[src]是明子，比如吃了38的39
+			//aLiveTypeAll[src-1]-aLiveTypeSum[src-1]是暗子，比如暗司令
+			//有可能吃了38的39就是40，而这里认为多出来一个暗司令
+			//所以aLiveTypeAll[src-1]-aLiveTypeSum[src-1]是偏大的
+			//具体场景，敌方39打兑，炸弹炸39，40吃38，此时我方39吃掉对方一个暗子，打印的值是
+			//6 1 1 1 0 1
+			log_b("%d %d %d %d %d %d ",src,aLiveTypeAll[src],aLiveTypeSum[src],
+			        aLiveTypeAll[src-1],aLiveTypeSum[src-1],nBomb);
 		}
 		else
 		{
@@ -663,6 +683,10 @@ u8 IsPossibleKilled(
 		{
 			return 0;
 		}
+		if( pDst->pLineup->type==DILEI && pSrc->pLineup->type==GONGB )
+		{
+		    return 0;
+		}
 		if( pSrc->pLineup->type==ZHADAN ) return  0;
 	}
 	else
@@ -787,7 +811,9 @@ void AddMoveToList(
 	int aPercent[3] = {0};
 	assert( pSrc->type!=NONE );
 
-
+//    log_c("add %d %d %d %d",pSrc->point.x,pSrc->point.y,
+//            pDst->point.x,pDst->point.y);
+//	log_c("dst %d",pDst->type);
 	for(type=MOVE; type<=KILLED; type++)
 	{
 		memset(&temp, 0 ,sizeof(temp));
@@ -834,12 +860,25 @@ void AddMoveToList(
         	//暂时不考虑大本营是司令的情况
         	else
         	{
+
+
         		int percent;
         		aPercent[1] = GetBombPercent(pJunqi,pSrc,pDst);
         		if( 0==aPercent[1] ) continue;
         		log_b("per %d",aPercent[1]);
         		log_b("bomb %d %d %d %d",pSrc->point.x,pSrc->point.y,
         				pDst->point.x,pDst->point.y);
+
+//        		static int test = 0;
+//        		test++;
+//                u8 test3[4] = {12,6,10,4};
+//                if( pSrc->point.x==12 && pSrc->point.y==6
+//                        && pDst->point.x==10 && pDst->point.y==4 )
+//                {
+//                    if(test==16896)
+//                        log_a("debug %d",test);
+//                }
+
         		percent = aPercent[1]-AddCommanderMove(pJunqi,pSrc,pDst,&temp,aPercent[1]);
         		//己方司令不可能碰到第一排被炸
         		//if( !SpecialCase(pJunqi,pSrc,pDst) )
@@ -848,6 +887,8 @@ void AddMoveToList(
         		{
         			InsertMoveList(pJunqi,pSrc,pDst,&temp,percent);
         		}
+
+
 
         	}
 			break;
@@ -960,78 +1001,6 @@ void ClearMoveList(MoveList *pHead)
 	}
 
 }
-
-#if 0
-MoveList *GenerateMoveList(Junqi* pJunqi, int iDir)
-{
-    int i,j;
-    BoardChess *pSrc;
-    BoardChess *pDst;
-    ChessLineup *pLineup;
-    int temp[3] = {0};
-    int flag = 0;
-    pJunqi->pMoveList = NULL;
-    for(i=0;  i<30; i++)
-    {
-    	pLineup = &pJunqi->Lineup[iDir][i];
-    	if( pLineup->bDead )
-    	{
-    		continue;
-    	}
-    	pSrc = pLineup->pChess;
-
-    	if(pLineup->type!=NONE && pLineup->type!=JUNQI && pLineup->type!=DILEI )
-    	{
-    		for(j=0; j<129; j++)
-    		{
-    			temp[0] = pSrc->type;
-    			//只有敌方的棋才可能是暗棋,只考虑没碰撞过的
-    			//pSrc->pLineup->type是dark，那么pSrc->type必然是dark，
-    			//反之则不一定，反之则不一定，pSrc->type只是确定有无棋子，而不管棋子是什么
-        		if( flag!=2 && pSrc->pLineup->type==DARK && pSrc->isRailway &&
-        			pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[GONGB]<3 )
-        		{
-        			 //暂时设置棋子的位置为工兵，获取工兵路线
-        			//棋子的类型pSrc->pLineup->type还是dark没有变
-        			assert( pSrc->type==DARK );
-        			pSrc->type = GONGB;
-        			flag = 1;
-        		}
-    			pDst = GetValideMove(pJunqi, pSrc, j);
-    			pSrc->type = temp[0];
-    			temp[1] = pSrc->pLineup->mx_type;
-    			temp[2] = pSrc->pLineup->type;
-
-
-        		if( pDst!=NULL )
-        		{
-        	   		if( flag!=2 && pSrc->pLineup->type==DARK )
-    				{
-        	   			//如果得到的是工兵路线，则按工兵处理
-        	   			if( !IsEnableMove(pJunqi, pSrc, pDst) )
-        	   			{
-        	   				pSrc->pLineup->type = GONGB;
-        	   				pSrc->pLineup->mx_type = GONGB;
-        	   			}
-    				}
-        			AddMoveToList(pJunqi, pSrc, pDst);
-
-//        			log_a("i %d j %d src %d %d dst %d %d",i,j,
-//        					pSrc->point.x,pSrc->point.y,
-//        					pDst->point.x,pDst->point.y);
-
-        		}
-        		//恢复类型
-        		pSrc->pLineup->mx_type = temp[1];
-        		pSrc->pLineup->type = temp[2];
-    		}
-            if( flag==1 ) flag = 2;
-    	}
-    }
-
-    return pJunqi->pMoveList;
-}
-#endif
 
 u8 IsDirectRail(
         Junqi *pJunqi,
@@ -1168,7 +1137,7 @@ void SearchMovePath(
             {
                 continue;
             }
-            else if( pNbr->isCamp && pNbr->type!=NONE )
+            else if( pNbr->isCamp && pNbr->type!=NONE && !flag )
             {
                 continue;
             }

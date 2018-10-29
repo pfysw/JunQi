@@ -134,6 +134,7 @@ struct Junqi
 	int test_flag;
 	MoveHash **paHash;
 
+
 	struct sockaddr_in addr;
 	int socket_fd;
 	mqd_t qid;

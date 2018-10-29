@@ -380,6 +380,10 @@ int aseertChess(BoardChess *pChess)
 		{
 			rc = 0;
 		}
+		else if( pChess->pLineup->type!=pChess->type )
+		{
+		    rc = 0;
+		}
 	}
 	return rc;
 }
@@ -409,7 +413,7 @@ void GetTypeNum(u8 *aBombNum, u8 *aTypeNum, u8 *aTypeNumSum)
 
 void GetLiveTypeAll(
 		u8 *aDeadType,
-		u8 *aLiveTpyeAll,
+		u8 *aLiveAllNum,
 		u8 *aBombNum,
 		u8 *aTypeNum)
 {
@@ -423,7 +427,7 @@ void GetLiveTypeAll(
 		sum += aDeadType[i];
         sum1 += aBombNum[i];
         nBomb = (sum1<(2-aTypeNum[ZHADAN]))?sum1:(2-aTypeNum[ZHADAN]);
-		aLiveTpyeAll[i] = aMaxTypeNum[i]-sum+nBomb;
+		aLiveAllNum[i] = aMaxTypeNum[i]-sum+nBomb;
 
 	}
 }
@@ -480,6 +484,13 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 	enum ChessType tmp;
 
 
+//    static int jj=0;
+//    jj++;
+//    if(jj==84)
+//    log_c("test");
+//    log_c("jj %d",jj);
+
+
 	memset(aTypeNum, 0, 14);
 	for(i=0; i<30; i++)
 	{
@@ -510,6 +521,7 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 			aBombNum[pLineup->type]++;
 		}
 	}
+
 	//工兵大于3，说明多余的飞了炸
 	if( aTypeNum[GONGB]>3 )
 	{
@@ -517,11 +529,14 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		aTypeNum[ZHADAN] += aTypeNum[GONGB]-3;
 		assert( aTypeNum[ZHADAN]<=2 );
 	}
+
+	//必须放在GetTypeNum前面，因为aTypeNum[ZHADAN]不能被先修改
+	GetLiveTypeAll(aDeadType,aLiveAllNum,aBombNum,aTypeNum);
 	//获取某个级别以上的数量总和，保存在aTypeNumSum里
 	//这里是先把aTypeNumSum都算好，因为aTypeNumSum是固定的
 	//如果后面再循环中算则重复了
 	GetTypeNum(aBombNum,aTypeNum,aTypeNumSum);
-	GetLiveTypeAll(aDeadType,aLiveAllNum,aBombNum,aTypeNum);
+	//assert(pJunqi->aInfo[1].aTypeNum[ZHADAN]==0);//test
 	GetLiveTypeSum(aLiveTypeSum,aLiveTypeNum);
     //这里先计算好暗子的最大可能性
 	tmp = GetMaxType(SILING, GONGB, aTypeNumSum);
@@ -568,6 +583,7 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		}
 
 	}
+
 }
 
 void JudgeIfBomb(
@@ -584,7 +600,7 @@ void JudgeIfBomb(
 			pDst->pLineup->bBomb = 1;
 		}
 
-		if( (pResult->extra_info&0x02) && !(pResult->extra_info&0x04))
+		if( (pSrc->pLineup->type==SILING) && !(pResult->extra_info&0x04))
 		{
 			pDst->pLineup->type = ZHADAN;
 		}
@@ -602,7 +618,7 @@ void JudgeIfBomb(
 			pSrc->pLineup->bBomb = 1;
 		}
 
-		if( ((pResult->extra_info&0x04) && !(pResult->extra_info&0x02)) ||
+		if( ((pDst->pLineup->type==SILING) && !(pResult->extra_info&0x02)) ||
 				pDst->pLineup->type==DILEI )
 		{
 			pSrc->pLineup->type = ZHADAN;
@@ -631,6 +647,8 @@ void PlayResult(
 	assert( aseertChess(pSrc) );
 	assert( aseertChess(pDst) );
 
+//    log_c("play %d %d %d %d type %d",pSrc->point.x,pSrc->point.y,
+//            pDst->point.x,pDst->point.y,type);
 	iDir1 = pSrc->pLineup->iDir;
 	if( type!=MOVE )
 	{
@@ -659,6 +677,7 @@ void PlayResult(
 		pDst->pLineup->type = SILING;
 		pJunqi->aInfo[iDir2].bShowFlag |= 2;
 	}
+
 	if( pDst->isStronghold && ((pResult->extra_info&1)==0) )
 	{
 		//假旗被挖后，另外一个大本营只能是军旗
@@ -696,6 +715,7 @@ void PlayResult(
 		assert(pDst->type!=NONE);
 		if( type==BOMB )
 		{
+
 			pDst->type = NONE;
 			pSrc->pLineup->bDead = 1;
             if( pSrc->pLineup->type==SILING )
@@ -706,6 +726,7 @@ void PlayResult(
             {
             	pJunqi->aInfo[iDir2].bShowFlag |= 2;
             }
+
 			JudgeIfBomb(pJunqi, pSrc, pDst, pResult);
 		}
 		else
@@ -753,6 +774,7 @@ void PlayResult(
 			DestroyAllChess(pJunqi, pDst->pLineup->iDir);
 		}
 	}
+
 	if( type==EAT || type==MOVE )
 	{
 		pDst->type = pSrc->pLineup->type;
@@ -779,11 +801,13 @@ void PlayResult(
 			if( pDst->pLineup->type>=pSrc->type || pDst->pLineup->type==DARK )
 			{
 				pDst->pLineup->type = pSrc->type-1;
+				pDst->type = pDst->pLineup->type;
 			}
 			if( pSrc->pLineup->type<=pDst->pLineup->mx_type )
 			{
 				assert( pDst->pLineup->index>=20 );
 				pDst->pLineup->type = DILEI;
+				pDst->type = DILEI;
 
 			}
 		}
@@ -818,7 +842,6 @@ void PlayResult(
 			AdjustMaxType(pJunqi, iDir2);
 		}
 	}
-
 	assert( aseertChess(pSrc) );
 	assert( aseertChess(pDst) );
 }

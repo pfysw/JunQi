@@ -27,7 +27,9 @@ typedef struct AlphaBetaData
     MoveResultData *pBest;
     MoveList *pCur;
     MoveList *pHead;
+    int mxVal;
     int iDir;
+    u8 cnt;
     u8 cut;
 }AlphaBetaData;
 
@@ -54,17 +56,6 @@ int CallAlphaBeta1(
     return val;
 }
 
-u8 IsNotSameMove(MoveList *p)
-{
-    u8 rc = 0;
-    if( !p->isHead )
-    {
-        rc = memcmp(&p->move, &p->pPre->move, 4);
-    }
-
-    return rc;
-}
-
 void SearchAlphaBeta(
         Junqi *pJunqi,
         AlphaBetaData *pData
@@ -73,12 +64,20 @@ void SearchAlphaBeta(
     int depth = pData->depth;
     int alpha = pData->alpha;
     int beta = pData->beta;
+    int cnt = pData->cnt;
+
     MoveResultData *pRslt;
     MoveList *p;
     int val;
     int sum = 0;
-
+    BestMove *aBestMove = pJunqi->pEngine->aBestMove;
+    static int new = 0;
+    int mxPercent;
+#ifdef MOVE_HASH
     int iKey;
+    int h;
+#endif
+    u8 isHashVal = 0;
 
     if( pData->pCur==NULL )
     {
@@ -90,6 +89,10 @@ void SearchAlphaBeta(
         pData->pCur = pData->pCur->pNext;
     }
 
+    aBestMove[cnt].mxPerFlag1 = 1;
+    mxPercent = 0;
+    sum = 0;
+
     for(p=pData->pCur; pData->pCur!=NULL; p=p->pNext)
     {
         pJunqi->eTurn = pData->iDir;
@@ -97,28 +100,33 @@ void SearchAlphaBeta(
         //test(pJunqi,&p->move,pHead);
         MakeNextMove(pJunqi,&p->move);
         assert(pJunqi->pEngine->pPos!=NULL);
+#ifdef MOVE_HASH
         iKey = GetHashKey(pJunqi);
-        //log_a("key %d",iKey);
-        if( CheckMoveHash(&pJunqi->paHash,iKey) &&
-                IsNotSameMove(p) )
+#endif
+//        log_a("key %d",iKey);
+//        SafeMemout((u8*)&p->move, sizeof(p->move));
+        if ( pData->pBest!=NULL && !memcmp(pData->pBest, &p->move, 4) )
         {
-            if( p->move.result>MOVE )
-            {
-                while( !memcmp( &p->move, &p->pNext->move, 4) )
-                {
-                    if( p->pNext->isHead ) break;
-
-                    p = p->pNext;
-                }
-            }
             UnMakeMove(pJunqi,&p->move);
             goto continue_search;
         }
+#ifdef MOVE_HASH
+        else if( ( p->move.result==MOVE &&
+              (h = CheckMoveHash(&pJunqi->paHash,iKey,depth,pJunqi->eTurn)) ) )
+        {
+            isHashVal = 1;
+            val = pJunqi->paHash[h-1]->value;
+            UnMakeMove(pJunqi,&p->move);
+        }
+#endif
         else
         {
             val = CallAlphaBeta1(pJunqi,depth-1,alpha,beta,pData->iDir);
+#ifdef MOVE_HASH
+            RecordMoveHash(&pJunqi->paHash,iKey,pJunqi->eTurn,depth,val);
+#endif
 
-//            log_a("depth %d val %d per %d",depth,val,p->percent);
+//            log_a("cnt %d val %d per %d",cnt,val,p->percent);
 //            SafeMemout((u8*)&p->move, sizeof(p->move));
 
             //把局面撤回到上一步
@@ -130,32 +138,64 @@ void SearchAlphaBeta(
         if( p->move.result!=MOVE )
         {
             sum += val*p->percent;
-
+            //log_a("sum %d val %d per %d",sum,val,p->percent);
             pRslt = &p->pNext->move;
             //下一个着法
-            if( memcmp(&p->move, pRslt, 4) || p->pNext->isHead )
+            if( memcmp(&p->move, pRslt, 4) || p->pNext->isHead  )
             {
+                aBestMove[cnt].mxPerFlag1 = 1;
                 val = sum>>8;
                 sum = 0;
             }
             else
             {
+                //标记最大概率的碰撞结果
+                //有3种结果，第一种始终置1
+                //此后如果概率非最大值置0
+                if( p->percent>mxPercent )
+                {
+                    mxPercent = p->percent;
+                }
+                if( p->pNext->percent>mxPercent )
+                {
+                    aBestMove[cnt].mxPerFlag1 = 1;
+                }
+                else
+                {
+                    aBestMove[cnt].mxPerFlag1 = 0;
+                }
                 goto continue_search;
             }
+
         }
         //产生截断
         if( val>=beta )
         {
-            pData->alpha = val;
+            if( -INFINITY==pData->mxVal && aBestMove[cnt-1].mxPerFlag1 )
+            {
+                UpdateBestMove(aBestMove,p,depth,cnt,isHashVal);
+            }
+            pData->mxVal = val;
             pData->cut = 1;
             break;
         }
-        //更新alpha值
-        if( val>alpha )
+        if( val>pData->mxVal )
         {
-            pData->pBest = &p->move;
-            pData->alpha = val;
+            pData->mxVal = val;
+            if( aBestMove[cnt-1].mxPerFlag1 )
+            {
+                UpdateBestMove(aBestMove,p,depth,cnt,isHashVal);
+            }
+            //更新alpha值
+            if( val>alpha )
+            {
+                pData->pBest = &p->move;
+                pData->alpha = val;
+                if( cnt==1 )
+                    new = 1;
+            }
         }
+        isHashVal = 0;
 
     continue_search:
 
@@ -168,6 +208,12 @@ void SearchAlphaBeta(
         {
             pData->cut = 1;
             break;
+        }
+
+        if( cnt==1 && new)
+        {
+            new = 0;
+            PrintBestMove(aBestMove,alpha,depth);
         }
     }
 
@@ -321,6 +367,7 @@ void SearchMoveList(
             {
                 if( !flag )
                 {
+
                     AddMoveToList(pJunqi, pSrc, pNbr);
     //                log_a("nbr1 %d %d %d %d",pSrc->point.x,pSrc->point.y,
     //                        pNbr->point.x,pNbr->point.y);
@@ -365,6 +412,16 @@ int AlphaBeta1(
     static int cnt = 0;
     int iDir = pJunqi->eTurn;
     AlphaBetaData search_data;
+    BestMove *aBestMove = pJunqi->pEngine->aBestMove;
+
+    if( !cnt )
+    {
+        pJunqi->paHash = NULL;
+        aBestMove[0].mxPerFlag = 1;
+        aBestMove[0].mxPerFlag1 = 1;
+        aBestMove[0].pNode = aBestMove[0].pHead;
+    }
+    cnt++;
 
     search_data.depth = depth;
     search_data.alpha = alpha;
@@ -374,13 +431,13 @@ int AlphaBeta1(
     search_data.iDir = iDir;
     search_data.pCur = NULL;
     search_data.pHead = NULL;
+    search_data.mxVal = -INFINITY;
+    search_data.cnt = cnt;
 
+    search_data.mxVal = SearchBestMove(pJunqi,aBestMove,cnt,alpha,beta,&search_data.pBest,depth,1);
+    if( search_data.mxVal>alpha )
+        search_data.alpha = search_data.mxVal;
 
-    if( !cnt )
-    {
-        pJunqi->paHash = NULL;
-    }
-    cnt++;
     //遍历到最后一层时计算局面分值
     if( depth==0 )
     {
@@ -410,7 +467,7 @@ int AlphaBeta1(
         }
         pSrc = pLineup->pChess;
         SearchMoveList(pJunqi,pSrc,0,&search_data);
-        val = search_data.alpha;
+        val = search_data.mxVal;
     }
 
     if( NULL==pJunqi->pMoveList )
@@ -426,7 +483,9 @@ int AlphaBeta1(
     {
         cnt = 0;
         SetBestMove(pJunqi,search_data.pBest);
+#ifdef MOVE_HASH
         ClearMoveHash(&pJunqi->paHash);
+#endif
     }
     ClearMoveList(search_data.pHead);
 

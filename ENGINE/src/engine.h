@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include "evaluate.h"
+#include "comm.h"
+#include "movegen.h"
 
 enum MoveEvent{
 	CAMP_EVENT,
@@ -33,6 +35,31 @@ enum MoveEvent{
 #define INFINITY 10000
 extern u8 aEventBit[100];
 
+typedef struct MoveResult
+{
+    MoveResultData move;
+    int percent;
+    u8 flag;//标记是移动还是碰撞
+}MoveResult;
+
+typedef struct  BestMoveList  BestMoveList;
+struct  BestMoveList
+{
+    MoveResult result[4];
+    BestMoveList *pNext;
+};
+
+struct BestMove
+{
+    BestMoveList *pHead;
+    BestMoveList *pNode;
+    MoveList *pTest;
+    u8 flag1; //判断是否已经搜索过
+    u8 flag2; //move是否不为空
+    u8 mxPerFlag;
+    u8 mxPerFlag1;
+};
+
 typedef struct ENGINE
 {
 	Junqi *pJunqi;
@@ -46,6 +73,7 @@ typedef struct ENGINE
 	u16 eventId;
     u8  eventFlag;
     //--------------------------
+    BestMove aBestMove[30];
     BoardChess *pBest[2];
     PositionList *pPos;
     Value_Parameter valPara;

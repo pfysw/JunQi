@@ -10,5 +10,6 @@ typedef struct BoardChess BoardChess;
 typedef struct GraphPath GraphPath;
 typedef struct PositionList PositionList;
 typedef struct MoveHash MoveHash;
+typedef struct BestMove BestMove;
 
 #endif
