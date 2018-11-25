@@ -17,12 +17,10 @@ struct PositionData
 	BoardChess xDstChess;
 	ChessLineup xSrcLineup;
 	ChessLineup xDstLineup;
+	ChessLineup xJunqiLineup[2];
 	u8 mx_type[30];
 	PartyInfo info[2];
-	u8 junqi_type[2];
 	u8 junqi_chess_type[2];
-	BoardChess xJunqiChess[2];
-	ChessLineup xJunqiLineup[2];
 	u8 isSrcdead;
 	u8 isDstDead;
 };
@@ -118,4 +116,5 @@ int GetHashKey(Junqi* pJunqi);
 void MakeNextMove(Junqi *pJunqi, MoveResultData *pResult);
 void UnMakeMove(Junqi *pJunqi, MoveResultData *pResult);
 void SetBestMove(Junqi *pJunqi, MoveResultData *pResult);
+void PrintBestMove(BestMove *aBestMove, int alpha, int depth);
 #endif /* SEARCH_H_ */

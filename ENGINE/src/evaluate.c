@@ -9,21 +9,35 @@
 
 void InitValuePara(Value_Parameter *p)
 {
-	p->vAllChess = 1600;
-	p->vChess[SILING] = 100;
-	p->vChess[JUNZH] = 90;
-	p->vChess[SHIZH] = 80;
-	p->vChess[LVZH] = 70;
-	p->vChess[TUANZH] = 60;
-	p->vChess[YINGZH] = 50;
-	p->vChess[LIANZH] = 40;
-	p->vChess[PAIZH] = 30;
-	p->vChess[GONGB] = 55;
-	p->vChess[DILEI] = 60;
-	p->vChess[ZHADAN] = 65;
-	p->vDarkLand =  10;
-	p->vDarkBomb =  4;
-	p->vDarkJunqi = 10;
+	p->vChess[SILING] = 210;
+	p->vChess[JUNZH] = 190;
+	p->vChess[SHIZH] = 150;
+	p->vChess[LVZH] = 100;
+	p->vChess[TUANZH] = 85;
+	p->vChess[YINGZH] = 30;
+	p->vChess[LIANZH] = 20;
+	p->vChess[PAIZH] = 15;
+	p->vChess[GONGB] = 90;
+	p->vChess[DILEI] = 100;
+	p->vChess[ZHADAN] = 140;
+	p->vDarkLand =  20;
+	p->vDarkBomb =  10;
+	p->vDarkJunqi = 20;
+
+	p->vAllChess = p->vChess[SILING]+
+	        p->vChess[JUNZH]+
+	        p->vChess[SHIZH]*2+
+	        p->vChess[LVZH]*2+
+	        p->vChess[TUANZH]*2+
+	        p->vChess[YINGZH]*2+
+	        p->vChess[LIANZH]*3+
+	        p->vChess[PAIZH]*3+
+	        p->vChess[GONGB]*3+
+	        p->vChess[DILEI]*3+
+	        p->vChess[ZHADAN]*2+
+	        p->vDarkLand*8+
+	        p->vDarkBomb*20+
+	        p->vDarkJunqi;
 }
 
 int EvalSituation(Junqi *pJunqi)

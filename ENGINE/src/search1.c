@@ -71,13 +71,13 @@ void SearchAlphaBeta(
     int val;
     int sum = 0;
     BestMove *aBestMove = pJunqi->pEngine->aBestMove;
-    static int new = 0;
     int mxPercent;
 #ifdef MOVE_HASH
     int iKey;
     int h;
 #endif
     u8 isHashVal = 0;
+
 
     if( pData->pCur==NULL )
     {
@@ -95,9 +95,11 @@ void SearchAlphaBeta(
 
     for(p=pData->pCur; pData->pCur!=NULL; p=p->pNext)
     {
+
         pJunqi->eTurn = pData->iDir;
         //模拟着法产生后的局面
         //test(pJunqi,&p->move,pHead);
+
         MakeNextMove(pJunqi,&p->move);
         assert(pJunqi->pEngine->pPos!=NULL);
 #ifdef MOVE_HASH
@@ -168,54 +170,63 @@ void SearchAlphaBeta(
             }
 
         }
+
         //产生截断
         if( val>=beta )
         {
             if( -INFINITY==pData->mxVal && aBestMove[cnt-1].mxPerFlag1 )
             {
                 UpdateBestMove(aBestMove,p,depth,cnt,isHashVal);
+                pData->pBest = &p->move;
+                if( cnt==1 )
+                 {
+                     PrintBestMove(aBestMove,val,depth);
+                 }
             }
             pData->mxVal = val;
             pData->cut = 1;
+
             break;
         }
+
         if( val>pData->mxVal )
         {
             pData->mxVal = val;
             if( aBestMove[cnt-1].mxPerFlag1 )
             {
                 UpdateBestMove(aBestMove,p,depth,cnt,isHashVal);
+                pData->pBest = &p->move;
+                if( cnt==1 )
+                {
+                    PrintBestMove(aBestMove,val,depth);
+                }
             }
             //更新alpha值
             if( val>alpha )
             {
-                pData->pBest = &p->move;
+
                 pData->alpha = val;
-                if( cnt==1 )
-                    new = 1;
+
             }
         }
         isHashVal = 0;
 
-    continue_search:
+continue_search:
 
         if( p->pNext->isHead )
         {
             break;
         }
+
         //时间结束或收到go指令结束搜索
         if( TimeOut(pJunqi) )
         {
             pData->cut = 1;
-            break;
         }
 
-        if( cnt==1 && new)
-        {
-            new = 0;
-            PrintBestMove(aBestMove,alpha,depth);
-        }
+
     }
+
 
     pData->pCur = p;
 
@@ -264,6 +275,7 @@ void SearchRailPath1(
                     //log_a("dir %d %d",p->pChess->iDir,pChess->iDir);
     //                log_a("dst %d %d %d %d",pChess->point.x,pChess->point.y,
     //                        p->pChess->point.x,p->pChess->point.y);
+
                     SearchAlphaBeta(pJunqi,pData);
                 }
                 else
@@ -281,6 +293,7 @@ void SearchRailPath1(
                 //log_a("path %d %d %d %d",pChess->point.x,pChess->point.y,
                        // p->pChess->point.x,p->pChess->point.y);
                 SearchAlphaBeta(pJunqi,pData);
+
             }
             SearchRailPath1(pJunqi, pSrc, pVertex,flag,pData);
         }
@@ -332,8 +345,8 @@ void SearchMoveList(
     if( pSrc->isRailway )
     {
         pVertex = &pJunqi->aBoard[pSrc->point.x][pSrc->point.y];
-
         SearchRailPath1(pJunqi, pVertex, pVertex, flag, pData);
+
     }
     for(i=0; i<9; i++)
     {
@@ -371,6 +384,7 @@ void SearchMoveList(
                     AddMoveToList(pJunqi, pSrc, pNbr);
     //                log_a("nbr1 %d %d %d %d",pSrc->point.x,pSrc->point.y,
     //                        pNbr->point.x,pNbr->point.y);
+
                     SearchAlphaBeta(pJunqi,pData);
                 }
                 else if( pNbr->type!=NONE )
@@ -396,6 +410,7 @@ void SearchMoveList(
 
         }
     }
+
 }
 
 int AlphaBeta1(
@@ -438,6 +453,7 @@ int AlphaBeta1(
     if( search_data.mxVal>alpha )
         search_data.alpha = search_data.mxVal;
 
+
     //遍历到最后一层时计算局面分值
     if( depth==0 )
     {
@@ -470,12 +486,13 @@ int AlphaBeta1(
         val = search_data.mxVal;
     }
 
-    if( NULL==pJunqi->pMoveList )
+    if( NULL==pJunqi->pMoveList && !search_data.cut)
     {
         pJunqi->eTurn = iDir;
         ChessTurn(pJunqi);
-
-        val = CallAlphaBeta1(pJunqi,depth-1,alpha,beta,iDir);
+        cnt--;//相当于把下一层当这一层来处理
+        val = CallAlphaBeta1(pJunqi,depth,alpha,beta,iDir);
+        cnt++;
     }
 
     cnt--;

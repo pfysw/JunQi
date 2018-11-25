@@ -26,16 +26,16 @@ Junqi *JunqiOpen(void)
 
 void InitReplyLineup(Junqi* pJunqi, u8 *data)
 {
-	int i,j;
-	u8 aRpLineup[4][30];
-
-	for(j=0; j<4; j++)
-	{
-		for(i=0; i<30; i++)
-		{
-			aRpLineup[j][i] = data[30*j+i];
-		}
-	}
+//	int i,j;
+//	u8 aRpLineup[4][30];
+//
+//	for(j=0; j<4; j++)
+//	{
+//		for(i=0; i<30; i++)
+//		{
+//			aRpLineup[j][i] = data[30*j+i];
+//		}
+//	}
 }
 
 void InitLineup(Junqi* pJunqi, u8 *data, u8 isInit)
@@ -428,21 +428,40 @@ void GetLiveTypeAll(
         sum1 += aBombNum[i];
         nBomb = (sum1<(2-aTypeNum[ZHADAN]))?sum1:(2-aTypeNum[ZHADAN]);
 		aLiveAllNum[i] = aMaxTypeNum[i]-sum+nBomb;
-
 	}
+
+    for(i=GONGB; i>SILING; i--)
+    {
+        if( aLiveAllNum[i]<aLiveAllNum[i-1] )
+        {
+            aLiveAllNum[i-1] = aLiveAllNum[i];
+        }
+    }
+
 }
 
 void GetLiveTypeSum(
 		u8 *aLiveTypeSum,
-		u8 *aLiveTpyeNum )
+		u8 *aLiveTpyeNum,
+		u8 *aLiveAllNum )
 {
 	int i;
 	int sum = 0;
+	int sub = 0;
 	for(i=SILING; i<=GONGB; i++)
 	{
 		sum += aLiveTpyeNum[i];
 		aLiveTypeSum[i] = sum;
 	}
+
+    for(i=GONGB; i>SILING; i--)
+    {
+        sub = (aLiveAllNum[i]-aLiveTypeSum[i])-(aLiveAllNum[i-1]-aLiveTypeSum[i-1]);
+        if( sub<0 )
+        {
+            aLiveTypeSum[i-1] -= sub ;
+        }
+    }
 }
 
 int GetMaxType(int mx_type, int type, u8 *aTypeNumSum)
@@ -483,21 +502,36 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 	u8 aDeadType[14] = {0};
 	enum ChessType tmp;
 
-
-//    static int jj=0;
-//    jj++;
-//    if(jj==84)
-//    log_c("test");
-//    log_c("jj %d",jj);
-
-
+	pJunqi->aInfo[iDir].nMayLand = 0;
+	pJunqi->aInfo[iDir].nMayBombLand = 0;
+	pJunqi->aInfo[iDir].nMayBomb = 0;
 	memset(aTypeNum, 0, 14);
 	for(i=0; i<30; i++)
 	{
 		pLineup = &pJunqi->Lineup[iDir][i];
-		if( pLineup->type==NONE || pLineup->type==DARK )
+		if( pLineup->type==NONE )
 		{
 			continue;
+		}
+        if( !pLineup->bDead )
+        {
+            if( !pLineup->isNotLand )
+            {
+                pJunqi->aInfo[iDir].nMayLand++;
+                if( !pLineup->isNotBomb )
+                {
+                    pJunqi->aInfo[iDir].nMayBombLand++;
+                    pJunqi->aInfo[iDir].nMayBomb++;
+                }
+            }
+            else if( !pLineup->isNotBomb )
+            {
+                pJunqi->aInfo[iDir].nMayBomb++;
+            }
+        }
+		if( pLineup->type==DARK )
+		{
+		    continue;
 		}
 		//疑似地雷的棋，不要把pLineup->type统计进去
 		if( pLineup->index>=20 && !pLineup->isNotLand )
@@ -505,6 +539,7 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 			if( pLineup->type!=DILEI )
 				continue;
 		}
+
 		if( pLineup->bDead )
 		{
 			aDeadType[pLineup->type]++;
@@ -513,8 +548,15 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		{
 			aLiveTypeNum[pLineup->type]++;
 		}
+
 		//计算该子类型的总和
 		aTypeNum[pLineup->type]++;
+
+//        if( pLineup->type==5 )
+//            log_c("%d ",pLineup->index);
+//        if( aTypeNum[SILING]==2 )
+//            log_c("ds");
+//        assert( aTypeNum[SILING]!=2 );
 		//计算该子暗打兑的数量，打兑当中有些是炸弹，需要在后续判断排除
 		if( pLineup->bBomb )
 		{
@@ -527,6 +569,7 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 	{
 		log_b("gongb zhad %d %d",aTypeNum[GONGB], aTypeNum[ZHADAN]);
 		aTypeNum[ZHADAN] += aTypeNum[GONGB]-3;
+		aTypeNum[GONGB] = 3;
 		assert( aTypeNum[ZHADAN]<=2 );
 	}
 
@@ -537,7 +580,7 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 	//如果后面再循环中算则重复了
 	GetTypeNum(aBombNum,aTypeNum,aTypeNumSum);
 	//assert(pJunqi->aInfo[1].aTypeNum[ZHADAN]==0);//test
-	GetLiveTypeSum(aLiveTypeSum,aLiveTypeNum);
+	GetLiveTypeSum(aLiveTypeSum,aLiveTypeNum,aLiveAllNum);
     //这里先计算好暗子的最大可能性
 	tmp = GetMaxType(SILING, GONGB, aTypeNumSum);
 
@@ -576,6 +619,7 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 					if( pLineup->type != DILEI)
 					{
 						pLineup->type = DILEI;
+						pLineup->pChess->type = DILEI;
 						aTypeNum[DILEI]++;
 					}
 				}
@@ -663,6 +707,8 @@ void PlayResult(
 		pJunqiChess = pJunqi->aBoard[p.x][p.y].pAdjList->pChess;
 		pJunqiChess->pLineup->type = JUNQI;
 		pJunqiChess->type = JUNQI;
+        pJunqiChess->pLineup->isNotBomb = 1;
+        pJunqiChess->pLineup->isNotLand = 1;
 		pSrc->pLineup->type = SILING;
 		pJunqi->aInfo[iDir1].bShowFlag |= 2;
 	}
@@ -673,6 +719,8 @@ void PlayResult(
 		p.y = pResult->junqi_dst[1];
 		pJunqiChess = pJunqi->aBoard[p.x][p.y].pAdjList->pChess;
 		pJunqiChess->pLineup->type = JUNQI;
+		pJunqiChess->pLineup->isNotBomb = 1;
+		pJunqiChess->pLineup->isNotLand = 1;
 		pJunqiChess->type = JUNQI;
 		pDst->pLineup->type = SILING;
 		pJunqi->aInfo[iDir2].bShowFlag |= 2;
@@ -680,18 +728,21 @@ void PlayResult(
 
 	if( pDst->isStronghold && ((pResult->extra_info&1)==0) )
 	{
-		//假旗被挖后，另外一个大本营只能是军旗
-		if( pDst->index==26 )
-		{
-			pJunqi->Lineup[pDst->iDir][28].type = JUNQI;
-			pJunqi->ChessPos[pDst->iDir][28].type = JUNQI;
-		}
-		else
-		{
-			pJunqi->Lineup[pDst->iDir][26].type = JUNQI;
-			pJunqi->ChessPos[pDst->iDir][26].type = JUNQI;
-		}
-		pJunqi->aInfo[pDst->iDir].bShowFlag |= 1;
+	    if( !pJunqi->aInfo[pDst->iDir].bDead )
+	    {
+            //假旗被挖后，另外一个大本营只能是军旗
+            if( pDst->index==26 )
+            {
+                pJunqi->Lineup[pDst->iDir][28].type = JUNQI;
+                pJunqi->ChessPos[pDst->iDir][28].type = JUNQI;
+            }
+            else
+            {
+                pJunqi->Lineup[pDst->iDir][26].type = JUNQI;
+                pJunqi->ChessPos[pDst->iDir][26].type = JUNQI;
+            }
+            pJunqi->aInfo[pDst->iDir].bShowFlag |= 1;
+	    }
 	}
 
 	if( pSrc->pLineup->index>=20 )
@@ -705,6 +756,8 @@ void PlayResult(
 		{
 			pSrc->pLineup->type = GONGB;
 			pSrc->pLineup->mx_type = GONGB;
+			pSrc->pLineup->isNotBomb = 1;
+			pSrc->pLineup->isNotLand = 1;
 		}
 	}
 
@@ -773,6 +826,8 @@ void PlayResult(
 			pDst->pLineup->type = JUNQI;
 			DestroyAllChess(pJunqi, pDst->pLineup->iDir);
 		}
+
+
 	}
 
 	if( type==EAT || type==MOVE )
@@ -842,6 +897,7 @@ void PlayResult(
 			AdjustMaxType(pJunqi, iDir2);
 		}
 	}
+
 	assert( aseertChess(pSrc) );
 	assert( aseertChess(pDst) );
 }
@@ -862,8 +918,8 @@ void InitChess(Junqi* pJunqi, u8 *data)
 		pJunqi->NineGrid[i].type = NONE;
 	}
 	memset(pJunqi->aInfo, 0, sizeof(pJunqi->aInfo));
-	AdjustMaxType(pJunqi,1);
-	AdjustMaxType(pJunqi,3);
+	AdjustMaxType(pJunqi,(ENGINE_DIR+1)%4);
+	AdjustMaxType(pJunqi,(ENGINE_DIR+3)%4);
 }
 
 void InitBoard(Junqi* pJunqi)

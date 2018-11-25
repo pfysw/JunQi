@@ -29,4 +29,12 @@ void SearchMovePath(
         Junqi* pJunqi,
         BoardChess *pSrc,
         int flag );
+u8 IsDirectRail(
+        Junqi *pJunqi,
+        BoardGraph *pSrc,
+        BoardGraph *pDst );
+void AddMoveToList(
+    Junqi *pJunqi,
+    BoardChess *pSrc,
+    BoardChess *pDst);
 #endif /* MOVEGEN_H_ */

@@ -73,61 +73,59 @@ int AddJunqiMove(
 	MoveResultData *pTemp
 	)
 {
-	int percent;
-	int percent1;
-	int percent2;
+	int percent = 0;
+	int percent1 = 0;//吃到军旗
+	int percent2 = 0;//没吃到
 
 	log_b("stronghold");
-	if( pTemp->result==EAT )
-	{
-		if( pSrc->pLineup->type==DARK )
-		{
-			percent1 = 120;
-		}
-		else
-		{
-			percent1 = 128;
-		}
 
-		percent2 = 60;
-	}
-	else
-	{
-		if( pSrc->pLineup->type==ZHADAN )
-		{
-			percent1 = 128;
-			percent2 = 128;
-		}
-		else
-		{
-			percent1 = 8;
-			percent2 = 60;
-		}
-	}
+	////////
+    if( pSrc->pLineup->type==ZHADAN )
+    {
+        assert( pTemp->result==BOMB );
+        percent1 = 128;
+        percent2 = 128;
+    }
+    else
+    {
+        if( pDst->pLineup->type==JUNQI )
+        {
+            assert( pTemp->result==EAT );
+            pTemp->extra_info |= 1;
+            percent = 256;
+            InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent);
+        }
+        else
+        {
+            if( pTemp->result==EAT )
+            {
+                percent1 = 128;
+                percent2 = 80;
+            }
+            else
+            {
+                percent1 = 0;
+                percent2 = 20;
+            }
+        }
+    }
+
 	if( !pJunqi->aInfo[pDst->pLineup->iDir].bShowFlag )
 	{
-		pTemp->extra_info |= 1;
-		InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent1);
+	    assert( pDst->pLineup->type!=JUNQI );
+	    if( percent1!=0 )
+	    {
+            pTemp->extra_info |= 1;
+            InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent1);
+	    }
 		pTemp->extra_info &= ~1;//第1个bit清0
 		InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent2);
 		percent = percent1+percent2;
 	}
-	else if( pDst->pLineup->type==JUNQI )
-	{
-		percent = percent1*2;
-		pTemp->extra_info |= 1;
-		InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent);
 
-	}
-	else
-	{
-		percent = percent2*2;
-		pTemp->extra_info &= ~1;//第1个bit清0
-		InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent);
-
-	}
 	return percent;
 }
+
 
 BoardChess *ShowBanner(Junqi *pJunqi, int iDir)
 {
@@ -199,7 +197,7 @@ int AddCommanderMove(
 {
 
 	int percent = 0;
-
+	int nBomb = 0;
 
     //不考虑自家司令阵亡记录的信息，因为这是本来就知道的事情
 	if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
@@ -207,7 +205,8 @@ int AddCommanderMove(
 		if( pSrc->pLineup->type==SILING || pSrc->pLineup->type==ZHADAN )
 		{
 			//司令没死
-			if( (pJunqi->aInfo[pDst->pLineup->iDir].bShowFlag&2)==0 )
+			//if( (pJunqi->aInfo[pDst->pLineup->iDir].bShowFlag&2)==0 )
+			if( pDst->pLineup->mx_type==SILING )//可能司令明了但还活着
 			{
 
 				if( pSrc->pLineup->type==ZHADAN )
@@ -222,7 +221,8 @@ int AddCommanderMove(
 					}
 					else
 					{
-						percent = per>>1;
+					    nBomb = 2-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[ZHADAN];
+						percent = per/(1+nBomb);
 					}
 				}
 				AddJunqiPos(pJunqi,pSrc,pDst,pTemp,4,percent);
@@ -234,7 +234,8 @@ int AddCommanderMove(
 		if( pDst->pLineup->type==SILING || pDst->pLineup->type==ZHADAN )
 		{
 			//司令没死
-			if( (pJunqi->aInfo[pSrc->pLineup->iDir].bShowFlag&2)==0 )
+			//if( (pJunqi->aInfo[pSrc->pLineup->iDir].bShowFlag&2)==0 )
+		    if( pSrc->pLineup->mx_type==SILING )//可能司令明了但还活着
 			{
 				if( pDst->pLineup->type==ZHADAN )
 				{
@@ -248,13 +249,16 @@ int AddCommanderMove(
 					}
 					else
 					{
-						percent = per>>1;
+                        nBomb = 2-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN];
+                        percent = per/(1+nBomb);
 					}
 				}
 				AddJunqiPos(pJunqi,pSrc,pDst,pTemp,2,percent);
 			}
 		}
 	}
+	memset(&pTemp->extra_info,0,5);
+
 	return percent;
 }
 
@@ -280,7 +284,7 @@ void AddCommanderKilled(
 
 int GetEatPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 {
-	int percent = 0;
+	u16 percent = 0;
 	u8 *aLiveTypeSum;
 	u8 *aLiveTypeAll;//aLiveTypeAll[x]==0  如果x<SILING
 	int src = pSrc->pLineup->type;
@@ -296,6 +300,11 @@ int GetEatPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 	int mxNum;
 	int nSrc;
 	int nDst;
+	int nMayLand;
+	int nMayBomb;
+	int nMayBombLand;
+	int tempBomb,tempLand;
+	int nTemp;
 
 
 
@@ -303,54 +312,128 @@ int GetEatPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 	{
 		aLiveTypeSum = pJunqi->aInfo[pDst->pLineup->iDir].aLiveTypeSum;
 		aLiveTypeAll = pJunqi->aInfo[pDst->pLineup->iDir].aLiveAllNum;
-		if( !pDst->pLineup->isNotBomb )
-		{
-			nBomb = 2-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[ZHADAN];
-		}
-		if( !pDst->pLineup->isNotLand )
-		{
-			nLand = 3-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[DILEI];
-		}
+		nMayLand = pJunqi->aInfo[pDst->pLineup->iDir].nMayLand;
+		nMayBomb = pJunqi->aInfo[pDst->pLineup->iDir].nMayBomb;
+		nMayBombLand = pJunqi->aInfo[pDst->pLineup->iDir].nMayBombLand;
+
+		nBomb = 2-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[ZHADAN];
+		nLand = 3-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[DILEI];
+
 		if( pSrc->pLineup->type!=GONGB)
 		{
 			if( pDst->pLineup->type==DARK )
 			{
 			    log_b("dark");
-				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb+nLand;
-				mxNum = (aLiveTypeAll[mxDstType-1]-aLiveTypeSum[mxDstType-1]);
-				nSrc = aLiveTypeAll[src]-aLiveTypeSum[src]+nBomb+nLand;
-				log_b("%d %d %d %d",aLiveTypeAll[GONGB],aLiveTypeSum[GONGB],nBomb,nLand);
-				log_b("%d %d %d",mxDstType,aLiveTypeAll[mxDstType-1],aLiveTypeSum[mxDstType-1]);
-				log_b("%d %d",aLiveTypeAll[src],aLiveTypeSum[src]);
+                num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB]);
+                mxNum = (aLiveTypeAll[mxDstType-1]-aLiveTypeSum[mxDstType-1]);
+                nSrc = aLiveTypeAll[src]-aLiveTypeSum[src];
+                log_b("%d %d %d %d",aLiveTypeAll[GONGB],aLiveTypeSum[GONGB],nBomb,nLand);
+                log_b("%d %d %d",mxDstType,aLiveTypeAll[mxDstType-1],aLiveTypeSum[mxDstType-1]);
+                log_b("%d %d",aLiveTypeAll[src],aLiveTypeSum[src]);
+                nSrc = (src>=mxDstType)?nSrc:mxNum;
+                log_b("num %d max %d",num,mxNum);
+                log_b("src %s %d",aTypeName[src],nSrc);
+			    if( pDst->pLineup->isNotBomb )
+			    {
+			        //用2^8代替百分比
+                    percent = ((num-nSrc)<<8)/(num-mxNum);
+			    }
+			    else
+			    {
+                    //原始nMayBomb中可能含有是地雷，这个不再统计范围内
+                    //可能是地雷和炸弹的棋，减去重复的，再减去地雷
+                    nMayBomb = nMayBomb+nMayLand-nMayBombLand-nLand;
+                    log_b("nMayBomb %d %d",nMayBomb,nBomb);
+			        if( pDst->pLineup->isNotLand || 0==nMayLand )
+			        {
+
+			            if( nMayBomb==0 )
+			            {
+
+			                percent = ((num-nSrc)<<8)/(num-mxNum);
+			            }
+			            else
+			            {
+
+			                tempBomb = nMayBomb-nBomb;
+			                if( tempBomb<0 ) tempBomb= 0;
+                            //percent = p(吃掉)*(1-(p(炸弹))
+                            //p(炸弹) = 1-nBomb/nMayBomb
+                            percent = ((num-nSrc)<<8)*(tempBomb)/((num-mxNum)*nMayBomb);
+			            }
+			        }
+			        else
+			        {
+			            tempLand = nMayLand-nLand;
+			            if( tempLand<0 ) tempLand = 0;
+
+			            if( nMayBomb==0 )
+			            {
+
+                            percent = ((num-nSrc)<<8)*tempLand/
+                                    ((num-mxNum)*nMayLand);
+			            }
+			            else
+			            {
+
+			                tempBomb = nMayBomb-nBomb;
+			                if( tempBomb<0 ) tempBomb = 0;
+			                log_b("n4 %d %d %d %d",tempBomb,tempLand,nMayBomb,nMayLand);
+                            //percent = p(吃掉)*(1-(p(炸弹))(1-p(地雷))
+                            //p(地雷) = 1-nLand/nMayLand
+                            percent = ((num-nSrc)<<8)*tempBomb*tempLand/
+                                    ((num-mxNum)*nMayBomb*nMayLand);
+			            }
+			        }
+			    }
 			}
 			else
 			{
 				assert( pDst->pLineup->type>SILING );
-				num = aLiveTypeAll[dst] + nLand;
+				num = aLiveTypeAll[dst];
 				mxNum = aLiveTypeAll[mxDstType-1];
-				nSrc = aLiveTypeAll[src] + nLand;
+				nSrc = aLiveTypeAll[src];
+
+                nSrc = (src>=mxDstType)?nSrc:mxNum;
+                log_b("num %d max %d mxDstType %d",num,mxNum,mxDstType);
+                log_b("src %s %d",aTypeName[src],nSrc);
+
+                if( pDst->pLineup->isNotLand || 0==nMayLand )
+                {
+                    percent = ((num-nSrc)<<8)/(num-mxNum);
+                }
+                else
+                {
+                    tempLand = nMayLand-nLand;
+                    if( tempLand<0 ) tempLand = 0;
+                    log_b("land %d %d",nMayLand,tempLand);
+                    percent = ((num-nSrc)<<8)*tempLand/((num-mxNum)*nMayLand);
+                }
 			}
-
-
-			nSrc = (nSrc>mxNum)?nSrc:mxNum;
-
-			log_b("num %d max %d",num,mxNum);
-			log_b("src %s %d",aTypeName[src],nSrc);
-			//用2^8代替百分比
-			percent = ((num-nSrc)<<8)/(num-mxNum);
 		}
 		else
 		{
+		    assert( !pDst->pLineup->isNotLand );
 			if( pDst->pLineup->type==DILEI )
 			{
 				percent = 256;
 			}
+			else if( 0!=nMayLand)
+			{
+                log_b("land %d %d",nLand,nMayLand);
+
+                if( nLand<nMayLand )
+                {
+                    percent = (nLand<<8)/nMayLand;
+                }
+                else
+                {
+                    percent = 256;
+                }
+			}
 			else
 			{
-				assert( pDst->pLineup->type==DARK );
-				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb+nLand;
-				mxNum = (aLiveTypeAll[mxDstType-1]-aLiveTypeSum[mxDstType-1]);
-				percent = (nLand<<8)/(num-mxNum);
+			    percent = 0;
 			}
 		}
 	}
@@ -359,10 +442,12 @@ int GetEatPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 
 		aLiveTypeSum = pJunqi->aInfo[pSrc->pLineup->iDir].aLiveTypeSum;
 		aLiveTypeAll = pJunqi->aInfo[pSrc->pLineup->iDir].aLiveAllNum;
-		if( !pSrc->pLineup->isNotBomb )
-		{
-			nBomb = 2-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN];
-		}
+        nMayLand = pJunqi->aInfo[pSrc->pLineup->iDir].nMayLand;
+        nMayBomb = pJunqi->aInfo[pSrc->pLineup->iDir].nMayBomb;
+        nMayBombLand = pJunqi->aInfo[pSrc->pLineup->iDir].nMayBombLand;
+
+        nBomb = 2-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN];
+        nLand = 3-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[DILEI];
 		if( pDst->pLineup->type!=DILEI)
 		{
 		    //log_c("dst %s %d %d",aTypeName[dst],pSrc->pLineup->iDir,pDst->pLineup->iDir);
@@ -370,9 +455,34 @@ int GetEatPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 			if( pSrc->pLineup->type==DARK )
 			{
 
-				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb;
+				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB]);
 				mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
 				nDst = aLiveTypeAll[dst-1]-aLiveTypeSum[dst-1];
+				nTemp = aLiveTypeAll[dst]-aLiveTypeSum[dst];
+	            log_b("num %d max1 %d",num,mxNum);
+	            log_b("dst %s %d",aTypeName[dst],nDst);
+				nDst = (nDst>num)?num:nDst;
+				nDst = (nDst>nTemp)?nTemp:nDst;
+				if( pSrc->pLineup->isNotBomb )
+				{
+				    percent = ((nDst-mxNum)<<8)/(num-mxNum);
+				}
+				else
+				{
+				    log_b("nMayBomb nMayLand nLand %d %d %d ",nMayBomb,nMayLand,nLand);
+				    nMayBomb = nMayBomb+nMayLand-nMayBombLand-nLand;
+				    if( 0==nMayBomb )
+				    {
+				        percent = ((nDst-mxNum)<<8)/(num-mxNum);
+				    }
+				    else
+				    {
+                        tempBomb = nMayBomb-nBomb;
+                        if( tempBomb<0 ) tempBomb = 0;
+                        log_b("nMayBomb nBomb %d %d ",nMayBomb,nBomb);
+                        percent = ((nDst-mxNum)<<8)*tempBomb/((num-mxNum)*nMayBomb);
+				    }
+				}
 			}
 			else
 			{
@@ -380,12 +490,12 @@ int GetEatPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 				num = aLiveTypeAll[src];
 				mxNum = aLiveTypeAll[mxSrcType-1];
 				nDst = aLiveTypeAll[dst-1];
+	            log_b("num %d max %d",num,mxNum);
+	            log_b("dst %s %d",aTypeName[dst],nDst);
+				nDst = (nDst>num)?num:nDst;
+				percent = ((nDst-mxNum)<<8)/(num-mxNum);
 			}
-			nDst = (nDst>num)?num:nDst;
-			log_b("num %d max %d",num,mxNum);
-			log_b("dst %s %d",aTypeName[dst],nDst);
-			//用2^8代替百分比
-			percent = ((nDst-mxNum)<<8)/(num-mxNum);
+
 		}
 		else
 		{
@@ -395,6 +505,8 @@ int GetEatPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 			}
 			else
 			{
+			    if( pSrc->pLineup->isNotBomb ) nBomb = 0;
+
 				nSapper = 3-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[GONGB];
 				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb;
 				mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
@@ -424,7 +536,11 @@ int GetBombPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 	int mxNum;
 	int nSrc;
 	int nDst;
-
+    int nMayLand;
+    int nMayBomb;
+    int nMayBombLand;
+    int tempBomb;
+    int tempLand;
 
     if( pDst->pLineup->type==ZHADAN || pSrc->pLineup->type==ZHADAN )
     {
@@ -435,28 +551,26 @@ int GetBombPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 	{
 		aLiveTypeSum = pJunqi->aInfo[pDst->pLineup->iDir].aLiveTypeSum;
 		aLiveTypeAll = pJunqi->aInfo[pDst->pLineup->iDir].aLiveAllNum;
-		if( !pDst->pLineup->isNotBomb )
-		{
-			nBomb = 2-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[ZHADAN];
-		}
-		if( !pDst->pLineup->isNotLand )
-		{
-			nLand = 3-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[DILEI];
-		}
+        nMayLand = pJunqi->aInfo[pDst->pLineup->iDir].nMayLand;
+        nMayBomb = pJunqi->aInfo[pDst->pLineup->iDir].nMayBomb;
+        nMayBombLand = pJunqi->aInfo[pDst->pLineup->iDir].nMayBombLand;
+
+        nBomb = 2-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[ZHADAN];
+        nLand = 3-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[DILEI];
 
 		if( pDst->pLineup->type==DARK )
 		{
-			num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb+nLand;
+			num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB]);
 			mxNum = (aLiveTypeAll[mxDstType-1]-aLiveTypeSum[mxDstType-1]);
 			if( (aLiveTypeAll[src]-aLiveTypeSum[src])<
 			        (aLiveTypeAll[src-1]-aLiveTypeSum[src-1]) )
 			{
-			    nSrc = nBomb;
+			    nSrc = 0;
 			}
 			else
 			{
                 nSrc = (aLiveTypeAll[src]-aLiveTypeSum[src])-
-                        (aLiveTypeAll[src-1]-aLiveTypeSum[src-1])+nBomb;
+                        (aLiveTypeAll[src-1]-aLiveTypeSum[src-1]);
 			}
 			//aLiveTypeSum[src]是明子，比如吃了38的39
 			//aLiveTypeAll[src-1]-aLiveTypeSum[src-1]是暗子，比如暗司令
@@ -466,47 +580,161 @@ int GetBombPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 			//6 1 1 1 0 1
 			log_b("%d %d %d %d %d %d ",src,aLiveTypeAll[src],aLiveTypeSum[src],
 			        aLiveTypeAll[src-1],aLiveTypeSum[src-1],nBomb);
+
+            log_b("bomb num %d max %d",num,mxNum);
+            log_b("bomb src %s %d",aTypeName[src],nSrc);
+
+			if( pDst->pLineup->isNotBomb )
+			{
+		        //用2^8代替百分比
+		        percent = (nSrc<<8)/(num-mxNum);
+			}
+			else
+			{
+	            //原始nMayBomb中可能含有是地雷，这个不再统计范围内
+	            //可能是地雷和炸弹的棋，减去重复的，再减去地雷
+	            nMayBomb = nMayBomb+nMayLand-nMayBombLand-nLand;
+
+			    if( pDst->pLineup->isNotLand )
+			    {
+			        if( nMayBomb==0 )
+			        {
+			            percent = (nSrc<<8)/(num-mxNum);
+			        }
+			        else
+			        {
+	                    tempBomb = nMayBomb-nBomb;
+	                    if( tempBomb<0 ) tempBomb = 0;
+	                    if( nBomb>nMayBomb ) nBomb = nMayBomb;
+
+	                    //percent = p(打兑)*(1-(p(炸弹)))+p(炸弹)
+	                    percent = ((nSrc*tempBomb+nBomb*(num-mxNum))<<8)/
+	                            (nMayBomb*(num-mxNum));
+			        }
+
+			    }
+			    else
+			    {
+
+                    tempBomb = nMayBomb-nBomb;
+                    tempLand = nMayLand-nLand;
+                    if( tempBomb<0 ) tempBomb = 0;
+                    if( tempLand<0 ) tempLand = 0;
+                    if( nBomb>nMayBomb ) nBomb = nMayBomb;
+
+                    if( nMayBomb==0 )
+                    {
+                        if( 0==nMayLand )
+                        {
+                            percent = (nSrc<<8)/(num-mxNum);
+                        }
+                        else
+                        {
+                            percent = (((nSrc+(num-mxNum))*tempLand)<<8)/
+                                    ((num-mxNum)*nMayLand);
+                        }
+                    }
+                    else
+                    {
+                        if( 0==nMayLand )
+                        {
+                            percent = ((nSrc*tempBomb+nBomb*(num-mxNum))<<8)/
+                                    (nMayBomb*(num-mxNum));
+                        }
+                        else
+                        {
+                            //percent = (p(打兑)*(1-(p(炸弹)))+p(炸弹))(1-p(地雷))
+                            percent = (((nSrc*tempBomb+nBomb*(num-mxNum))*tempLand)<<8)/
+                                    (nMayBomb*(num-mxNum)*nMayLand);
+                        }
+                    }
+			    }
+			}
 		}
 		else
 		{
-			assert( pDst->pLineup->type>SILING );
-			num = aLiveTypeAll[dst] + nLand;
+			num = aLiveTypeAll[dst];
 			mxNum = aLiveTypeAll[mxDstType-1];
 			nSrc = aLiveTypeAll[src]-aLiveTypeAll[src-1];
+            if( pDst->pLineup->isNotLand || 0==nMayLand )
+            {
+                percent = (nSrc<<8)/(num-mxNum);
+            }
+            else
+            {
+                tempLand = nMayLand-nLand;
+                if( tempLand<0 ) tempLand = 0;
+                percent = (nSrc<<8)*tempLand/((num-mxNum)*nMayLand);
+            }
 		}
-
-		log_b("bomb num %d max %d",num,mxNum);
-		log_b("bomb src %s %d",aTypeName[src],nSrc);
-		//用2^8代替百分比
-		percent = (nSrc<<8)/(num-mxNum);
 	}
 	else
 	{
 		aLiveTypeSum = pJunqi->aInfo[pSrc->pLineup->iDir].aLiveTypeSum;
 		aLiveTypeAll = pJunqi->aInfo[pSrc->pLineup->iDir].aLiveAllNum;
-		if( !pSrc->pLineup->isNotBomb )
-		{
-			nBomb = 2-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN];
-		}
+        nMayBomb = pJunqi->aInfo[pSrc->pLineup->iDir].nMayBomb;
+        nMayBombLand = pJunqi->aInfo[pSrc->pLineup->iDir].nMayBombLand;
+        nMayLand = pJunqi->aInfo[pSrc->pLineup->iDir].nMayLand;
 
-		if( pSrc->pLineup->type==DARK )
-		{
-			num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb;
-			mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
-			nDst = (aLiveTypeAll[dst]-aLiveTypeSum[dst])-
-					(aLiveTypeAll[dst-1]-aLiveTypeSum[dst-1])+nBomb;
-		}
-		else
-		{
-			num = aLiveTypeAll[src];
-			mxNum = aLiveTypeAll[mxSrcType-1];
-			nDst = aLiveTypeAll[dst]-aLiveTypeAll[dst-1];
-		}
+        nBomb = 2-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN];
+        nLand = 3-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[DILEI];
 
-		log_b("bomb num %d max %d",num,mxNum);
-		log_b("bomb dst %s %d",aTypeName[dst],nDst);
-		//用2^8代替百分比
-		percent = (nDst<<8)/(num-mxNum);
+        if( pDst->pLineup->type!=DILEI )
+        {
+            if( pSrc->pLineup->type==DARK )
+            {
+                num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB]);
+                mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
+                nDst = (aLiveTypeAll[dst]-aLiveTypeSum[dst])-
+                        (aLiveTypeAll[dst-1]-aLiveTypeSum[dst-1]);
+                if( nDst<0 ) nDst = 0;
+                log_b("bomb1 num %d max %d",num,mxNum);
+                log_b("bomb dst %s %d",aTypeName[dst],nDst);
+                if( pSrc->pLineup->isNotBomb )
+                {
+                    //用2^8代替百分比
+                    percent = (nDst<<8)/(num-mxNum);
+                }
+                else
+                {
+                    nMayBomb = nMayBomb+nMayLand-nMayBombLand-nLand;
+                    if( 0==nMayBomb )
+                    {
+                        percent = (nDst<<8)/(num-mxNum);
+                    }
+                    else
+                    {
+                        tempBomb = nMayBomb-nBomb;
+                        if( tempBomb<0 ) tempBomb = 0;
+                        if( nBomb>nMayBomb ) nBomb = nMayBomb;
+
+                        log_b("nMayBomb nBomb %d %d ",nMayBomb,nBomb);
+                        //percent = p(打兑)*(1-(p(炸弹)))+p(炸弹)
+                        percent = ((nDst*tempBomb+nBomb*(num-mxNum))<<8)/
+                                (nMayBomb*(num-mxNum));
+                        log_b("bomb percent %d ",percent);
+                    }
+                }
+            }
+            else
+            {
+                num = aLiveTypeAll[src];
+                mxNum = aLiveTypeAll[mxSrcType-1];
+                nDst = aLiveTypeAll[dst]-aLiveTypeAll[dst-1];
+                log_b("bomb num %d max %d src %d",num,mxNum,src);
+                log_b("bomb dst %s %d",aTypeName[dst],nDst);
+                //用2^8代替百分比
+                percent = (nDst<<8)/(num-mxNum);
+            }
+        }
+        else
+        {
+            assert( !pSrc->pLineup->isNotBomb );
+            num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb;
+            mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
+            log_b("dilei %d %d %d %d",nBomb,mxSrcType,num,mxNum);
+            percent = (nBomb<<8)/(num-mxNum);
+        }
 	}
 
 	return percent;
@@ -530,56 +758,166 @@ int GetKilledPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 	int mxNum;
 	int nSrc;
 	int nDst;
+    int nMayLand;
+    int nMayBomb;
+    int nMayBombLand;
+    int tempBomb;
+    int tempLand;
+    int nTemp;
 
 	if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
 	{
 		aLiveTypeSum = pJunqi->aInfo[pDst->pLineup->iDir].aLiveTypeSum;
 		aLiveTypeAll = pJunqi->aInfo[pDst->pLineup->iDir].aLiveAllNum;
-		if( !pDst->pLineup->isNotBomb )
-		{
-			nBomb = 2-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[ZHADAN];
-		}
-		if( !pDst->pLineup->isNotLand )
-		{
-			nLand = 3-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[DILEI];
-		}
+        nMayLand = pJunqi->aInfo[pDst->pLineup->iDir].nMayLand;
+        nMayBomb = pJunqi->aInfo[pDst->pLineup->iDir].nMayBomb;
+        nMayBombLand = pJunqi->aInfo[pDst->pLineup->iDir].nMayBombLand;
+
+        nBomb = 2-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[ZHADAN];
+        nLand = 3-pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[DILEI];
 
 		if( pDst->pLineup->type==DARK )
 		{
-			num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb+nLand;
+			num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB]);
 			mxNum = (aLiveTypeAll[mxDstType-1]-aLiveTypeSum[mxDstType-1]);
 			nSrc = aLiveTypeAll[src-1]-aLiveTypeSum[src-1];
+			nTemp = aLiveTypeAll[src]-aLiveTypeSum[src];
+	        log_b("kill num %d max %d",num,mxNum);
+	        log_b("kill dst %s %d",aTypeName[dst],nSrc);
+	        log_b("src-1 %d %d",aLiveTypeAll[src-1],aLiveTypeSum[src-1]);
+	        nSrc = (nSrc>num)?num:nSrc;
+	        nSrc = (nSrc>nTemp)?nTemp:nSrc;
+	        if( pDst->pLineup->isNotBomb )
+	        {
+	            percent = ((nSrc-mxNum)<<8)/(num-mxNum);
+	        }
+	        else
+	        {
+	            nMayBomb = nMayBomb+nMayLand-nMayBombLand-nLand;
+	            if( 0==nMayBomb )
+	            {
+	                if( 0==nMayLand || pDst->pLineup->isNotLand )
+	                {
+	                    percent = ((nSrc-mxNum)<<8)/(num-mxNum);
+	                }
+	                else
+	                {
+	                    tempLand = nMayLand-nLand;
+	                    if( tempLand<0 ) tempLand = 0;
 
+	                    if( pSrc->pLineup->type!=GONGB )
+	                    {
+	                        if( nLand>nMayLand ) nLand = nMayLand;
+	                        percent = ( ((nSrc-mxNum)*tempLand+
+	                                    (num-mxNum)*nLand )<<8 ) /
+	                                  ((num-mxNum)*nMayLand);
+	                    }
+	                    else
+	                    {
+	                        //percent = p(kill)(1-p(地雷))
+	                        percent = ((nSrc-mxNum)<<8)*tempLand/
+	                                ((num-mxNum)*nMayLand);
+	                    }
+	                }
+	            }
+	            else if( pDst->pLineup->isNotLand || 0==nMayLand )
+	            {
+                    tempBomb = nMayBomb-nBomb;
+                    if( tempBomb<0 ) tempBomb = 0;
+                    //percent = p(kill)*(1-(p(炸弹))
+                    //p(炸弹) = 1-nBomb/nMayBomb
+                    percent = ((nSrc-mxNum)<<8)*tempBomb/((num-mxNum)*nMayBomb);
+	            }
+	            else
+	            {
+                    tempBomb = nMayBomb-nBomb;
+                    tempLand = nMayLand-nLand;
+                    if( tempBomb<0 ) tempBomb = 0;
+                    if( tempLand<0 ) tempLand = 0;
 
+	                //percent = p(kill)*(1-(p(炸弹))(1-p(地雷)+p(地雷)
+	                if( pSrc->pLineup->type!=GONGB )
+	                {
+	                    if( nBomb>nMayBomb ) nBomb = nMayBomb;
+	                    if( nLand>nMayLand ) nLand = nMayLand;
+	                    percent = ( ((nSrc-mxNum)*tempBomb*tempLand+
+	                                (num-mxNum)*nMayBomb*nLand )<<8 ) /
+	                              ((num-mxNum)*nMayBomb*nMayLand);
+	                }
+	                else
+	                {
+	                    //percent = p(kill)*(1-(p(炸弹))(1-p(地雷)
+	                    percent = ((nSrc-mxNum)<<8)*tempBomb*tempLand/
+	                            ((num-mxNum)*nMayBomb*nMayLand);
+	                }
+	            }
+	        }
+		}
+		else if( dst==DILEI )
+		{
+		    percent = 256;
 		}
 		else
 		{
-			num = aLiveTypeAll[dst] + nLand;
+			num = aLiveTypeAll[dst];
 			mxNum = aLiveTypeAll[mxDstType-1];
 			nSrc = aLiveTypeAll[src-1];
+	        log_b("kill num %d max %d",num,mxNum);
+	        log_b("kill dst %s %d",aTypeName[dst],nSrc);
+	        nSrc = (nSrc>num)?num:nSrc;
+	        nSrc = (nSrc>mxNum)?nSrc:mxNum;
+	        if( pDst->pLineup->isNotLand || 0==nMayLand )
+	        {
+	            percent = ((nSrc-mxNum)<<8)/(num-mxNum);
+	        }
+	        else
+	        {
+                tempLand = nMayLand-nLand;
+                if( tempLand<0 ) tempLand = 0;
+	            if( nLand>nMayLand ) nLand = nMayLand;
+	            percent = ( ((nSrc-mxNum)*tempLand+nLand*(num-mxNum))<<8 )/
+	                    ((num-mxNum)*nMayLand);
+	        }
 		}
-		if( pSrc->pLineup->type!=GONGB ) nSrc += nLand;
-		log_b("kill num %d max %d",num,mxNum);
-		log_b("kill dst %s %d",aTypeName[dst],nSrc);
-		nSrc = (nSrc>num)?num:nSrc;
-		//用2^8代替百分比
-		percent = ((nSrc-mxNum)<<8)/(num-mxNum);
 	}
 	else
 	{
 		aLiveTypeSum = pJunqi->aInfo[pSrc->pLineup->iDir].aLiveTypeSum;
 		aLiveTypeAll = pJunqi->aInfo[pSrc->pLineup->iDir].aLiveAllNum;
-		if( !pSrc->pLineup->isNotBomb )
-		{
-			nBomb = 2-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN];
-		}
+        nMayLand = pJunqi->aInfo[pSrc->pLineup->iDir].nMayLand;
+        nMayBomb = pJunqi->aInfo[pSrc->pLineup->iDir].nMayBomb;
+        nMayBombLand = pJunqi->aInfo[pSrc->pLineup->iDir].nMayBombLand;
+
+        nBomb = 2-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN];
+        nLand = 3-pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[DILEI];
 		if( pDst->pLineup->type!=DILEI )
 		{
 			if( pSrc->pLineup->type==DARK )
 			{
-				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb;
+				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB]);
 				mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
-				nDst = (aLiveTypeAll[dst]-aLiveTypeSum[dst])+nBomb;
+				nDst = (aLiveTypeAll[dst]-aLiveTypeSum[dst]);
+	            log_b("kill num %d max %d",num,mxNum);
+	            log_b("kill dst %s %d mxType %d",aTypeName[dst],nDst,mxSrcType);
+	            nDst = (dst>=mxSrcType)?nDst:mxNum;
+	            if( pSrc->pLineup->isNotBomb )
+	            {
+	                percent = ((num-nDst)<<8)/(num-mxNum);
+	            }
+	            else
+	            {
+	                nMayBomb = nMayBomb+nMayLand-nMayBombLand-nLand;
+	                if( 0==nMayBomb )
+	                {
+	                    percent = ((num-nDst)<<8)/(num-mxNum);
+	                }
+	                else
+	                {
+	                    tempBomb = nMayBomb-nBomb;
+	                    if( tempBomb<0 ) tempBomb = 0;
+	                    percent = ((num-nDst)<<8)* tempBomb/((num-mxNum)*nMayBomb);
+	                }
+	            }
 			}
 			else
 			{
@@ -587,12 +925,12 @@ int GetKilledPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 				num = aLiveTypeAll[src];
 				mxNum = aLiveTypeAll[mxSrcType-1];
 				nDst = aLiveTypeAll[dst];
+	            log_b("kill num %d max %d",num,mxNum);
+	            log_b("kill dst %s %d",aTypeName[dst],nDst);
+	            nDst = (dst>=mxSrcType)?nDst:mxNum;
+	            //用2^8代替百分比
+	            percent = ((num-nDst)<<8)/(num-mxNum);
 			}
-			log_b("kill num %d max %d",num,mxNum);
-			log_b("kill dst %s %d",aTypeName[dst],nDst);
-			nDst = (nDst>mxNum)?nDst:mxNum;
-			//用2^8代替百分比
-			percent = ((num-nDst)<<8)/(num-mxNum);
 		}
 		else
 		{
@@ -600,6 +938,7 @@ int GetKilledPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 
 			if( pSrc->pLineup->type==DARK )
 			{
+			    if( pSrc->pLineup->isNotBomb ) nBomb = 0;
 
 				num = (aLiveTypeAll[GONGB]-aLiveTypeSum[GONGB])+nBomb;
 				mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
@@ -609,6 +948,7 @@ int GetKilledPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 			}
 			else
 			{
+			    //工兵和炸弹进不了这个条件
 				num = aLiveTypeAll[src];
 				mxNum = aLiveTypeAll[mxSrcType-1];
 				percent = 256;
@@ -637,9 +977,13 @@ u8 IsPossibleEat(
 			return  0;
 		}
 		if( pSrc->pLineup->type==GONGB  &&
-			(pDst->pLineup->isNotLand || pDst->pLineup->index<20) )
+			(pDst->pLineup->isNotLand && pDst->pLineup->type!=JUNQI) )
 		{
 			return  0;
+		}
+		if( pSrc->pLineup->type!=GONGB && pDst->pLineup->type==DILEI )
+		{
+		    return 0;
 		}
 		if( pSrc->pLineup->type==ZHADAN ) return  0;
 
@@ -725,10 +1069,12 @@ u8 IsPossibleBomb(
 			//双方都不可能是炸，不可能打兑
 			if( pSrc->pLineup->type>pDst->pLineup->type )
 			{
+
 				return  0;
 			}
 			if( pSrc->pLineup->type!=ZHADAN )
 			{
+
 				if( pSrc->pLineup->type<pDst->pLineup->mx_type )
 					return 0;
 			}
@@ -759,10 +1105,13 @@ u8 IsPossibleBomb(
 		}
 		//只有炸弹才能和地雷军旗打兑
 		if( ( pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN]==2 ||
-				pSrc->pLineup->isNotBomb ) &&
-			(pDst->pLineup->type==DILEI || pDst->pLineup->type==JUNQI) )
+				pSrc->pLineup->isNotBomb ) && (pDst->pLineup->type==DILEI) )
 		{
 			return  0;
+		}
+		if( pDst->pLineup->type==JUNQI )
+		{
+		    return  0;
 		}
 	}
 
@@ -809,8 +1158,19 @@ void AddMoveToList(
 	MoveResultData temp;
 	enum CompareType type;
 	int aPercent[3] = {0};
+	int bShowFlag;
 	assert( pSrc->type!=NONE );
 
+	if( pDst->type!=NONE )
+	{
+	    bShowFlag = pJunqi->aInfo[pDst->pLineup->iDir].bShowFlag;
+	}
+//    static int jj=0;
+//    jj++;
+//    if(jj==5134)
+//    log_c("test");
+//    log_c("jj %d",jj);
+//
 //    log_c("add %d %d %d %d",pSrc->point.x,pSrc->point.y,
 //            pDst->point.x,pDst->point.y);
 //	log_c("dst %d",pDst->type);
@@ -833,7 +1193,8 @@ void AddMoveToList(
             	continue;
             }
 
-        	if( pDst->isStronghold )
+        	if( pDst->isStronghold && ( pDst->type==JUNQI ||
+        	       ( !bShowFlag && pSrc->pLineup->iDir%2==ENGINE_DIR%2 ) ) )
         	{
         		aPercent[0] = AddJunqiMove(pJunqi,pSrc,pDst,&temp);
         	}
@@ -853,15 +1214,15 @@ void AddMoveToList(
             {
             	continue;
             }
-        	if( pDst->isStronghold )
+        	//if( pDst->isStronghold )
+            if( pDst->isStronghold && ( pDst->type==JUNQI ||
+                   ( !bShowFlag && pSrc->pLineup->iDir%2==ENGINE_DIR%2 ) ) )
         	{
         		aPercent[1] = AddJunqiMove(pJunqi,pSrc,pDst,&temp);
         	}
         	//暂时不考虑大本营是司令的情况
         	else
         	{
-
-
         		int percent;
         		aPercent[1] = GetBombPercent(pJunqi,pSrc,pDst);
         		if( 0==aPercent[1] ) continue;
@@ -888,8 +1249,6 @@ void AddMoveToList(
         			InsertMoveList(pJunqi,pSrc,pDst,&temp,percent);
         		}
 
-
-
         	}
 			break;
 		case KILLED:
@@ -898,7 +1257,9 @@ void AddMoveToList(
             {
             	continue;
             }
-            if( pDst->isStronghold )
+            //if( pDst->isStronghold )
+            if( pDst->isStronghold && ( pDst->type==JUNQI ||
+                   ( !bShowFlag && pSrc->pLineup->iDir%2==ENGINE_DIR%2 ) ) )
             {
             	aPercent[2] = 256-aPercent[0]-aPercent[1];
             }

@@ -21,6 +21,10 @@
 
 int free_cnt = 0;
 int malloc_cnt = 0;
+
+LARGE_INTEGER nBeginTime;
+LARGE_INTEGER nEndTime;
+
 //int tt = 0;
 void PushMoveToStack(
 	Junqi *pJunqi,
@@ -79,8 +83,12 @@ void PushMoveToStack(
 
 		pStorage->junqi_chess_type[0] = pJunqi->ChessPos[iDir][26].type;
 		pStorage->junqi_chess_type[1] = pJunqi->ChessPos[iDir][28].type;
-		pStorage->junqi_type[0] = pJunqi->Lineup[iDir][26].type;
-		pStorage->junqi_type[1] = pJunqi->Lineup[iDir][28].type;
+		if( pMove->extra_info!=0 || pDst->isStronghold )
+		{
+		    memcpy(&pStorage->xJunqiLineup[0], &pJunqi->Lineup[iDir][26], sizeof(ChessLineup));
+		    memcpy(&pStorage->xJunqiLineup[1], &pJunqi->Lineup[iDir][28], sizeof(ChessLineup));
+		}
+
 		memcpy(&pStorage->info[0], &pJunqi->aInfo[pSrc->pLineup->iDir], sizeof(PartyInfo));
 		memcpy(&pStorage->info[1], &pJunqi->aInfo[pDst->pLineup->iDir], sizeof(PartyInfo));
         for(int i=0; i<30; i++)
@@ -111,6 +119,7 @@ void PopMoveFromStack(
 
 	assert( pHead!=NULL );
 
+
 	memcpy(pSrc, &pStorage->xSrcChess, VAR_OFFSET);
 	memcpy(pDst, &pStorage->xDstChess, VAR_OFFSET);
 	memcpy(pSrc->pLineup, &pStorage->xSrcLineup, sizeof(ChessLineup));
@@ -129,8 +138,11 @@ void PopMoveFromStack(
 			iDir = pSrc->pLineup->iDir;
 		}
 
-		pJunqi->Lineup[iDir][26].type = pStorage->junqi_type[0];
-		pJunqi->Lineup[iDir][28].type = pStorage->junqi_type[1];
+        if( pMove->extra_info!=0 || pDst->isStronghold )
+        {
+            memcpy(&pJunqi->Lineup[iDir][26], &pStorage->xJunqiLineup[0], sizeof(ChessLineup));
+            memcpy(&pJunqi->Lineup[iDir][28], &pStorage->xJunqiLineup[1], sizeof(ChessLineup));
+        }
 		pJunqi->ChessPos[iDir][26].type = pStorage->junqi_chess_type[0];
 		pJunqi->ChessPos[iDir][28].type = pStorage->junqi_chess_type[1];
 
@@ -220,6 +232,7 @@ void UnMakeMove(Junqi *pJunqi, MoveResultData *pResult)
 	pDst = pJunqi->aBoard[p2.x][p2.y].pAdjList->pChess;
 
 	PopMoveFromStack(pJunqi, pSrc, pDst, pResult);
+
 }
 
 void SetBestMove(Junqi *pJunqi, MoveResultData *pResult)
@@ -666,7 +679,6 @@ int SearchBestMove(
                 SafeMemout((u8*)&aBestMove[cnt-1].pTest->move, sizeof(MoveResultData));
             }
 
-
             UnMakeMove(pJunqi,&pNode->result[i].move);
         }
         if( !pNode->result[MOVE-1].flag )
@@ -682,6 +694,7 @@ int SearchBestMove(
 
                 pPre->pNext = (BestMoveList*)malloc(sizeof(BestMoveList));
                 memset(pPre->pNext, 0, sizeof(BestMoveList));
+                assert( aBestMove[cnt].pHead!=NULL );//无棋可走时会触发该断言
                 assert(aBestMove[cnt].pHead->pNext==NULL);
                 memcpy(pPre->pNext->result,aBestMove[cnt].pHead->result,
                         sizeof(pPre->pNext->result));
@@ -699,7 +712,7 @@ int SearchBestMove(
 
         if( 1==cnt )
         {
-            PrintBestMove(aBestMove,alpha,depth);
+            PrintBestMove(aBestMove,val,depth);
             log_a("end");
         }
 
@@ -709,6 +722,7 @@ int SearchBestMove(
 
     return mxVal;
 }
+
 
 int AlphaBeta(
 		Junqi *pJunqi,
@@ -727,7 +741,6 @@ int AlphaBeta(
 	int iDir = pJunqi->eTurn;
 
 	BestMove *aBestMove = pJunqi->pEngine->aBestMove;
-	int new = 0;
 	int mxVal = -INFINITY;
 	int mxPercent;
 #ifdef MOVE_HASH
@@ -752,10 +765,13 @@ int AlphaBeta(
 	    aBestMove[0].mxPerFlag1 = 1;
 	    aBestMove[0].pNode = aBestMove[0].pHead;
 	}
+
 	//遍历到最后一层时计算局面分值
 	if( depth==0 )
 	{
+
 		val = EvalSituation(pJunqi);
+
 		pJunqi->test_num++;
 		//val = 5;
 		//EvalSituation是针对引擎评价的，所以对方的分值应取负值
@@ -764,22 +780,25 @@ int AlphaBeta(
 			val = -val;
 		}
 		cnt--;
-
 		return val;
 	}
-
+	QueryPerformanceCounter(&nBeginTime);
 //	if(depth==2)
 //	log_a("alpha %d beta %d depth %d",alpha,beta,cnt);
 	//生成着法列表
-	pHead = GenerateMoveList(pJunqi, iDir);
 
+	pHead = GenerateMoveList(pJunqi, iDir);
+    QueryPerformanceCounter(&nEndTime);
+    pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
+    pJunqi->test_time[1] += pJunqi->test_time[0];
 	//无棋可走时直接跳到下一层
 	if( NULL==pHead )
 	{
 		pJunqi->eTurn = iDir;
 		ChessTurn(pJunqi);
-
-		val = CallAlphaBeta(pJunqi,depth-1,alpha,beta,iDir);
+        cnt--;
+		val = CallAlphaBeta(pJunqi,depth,alpha,beta,iDir);
+		cnt++;
 	}
 
 	mxVal = SearchBestMove(pJunqi,aBestMove,cnt,alpha,beta,&pBest,depth,0);
@@ -795,23 +814,18 @@ int AlphaBeta(
     {
     	pJunqi->eTurn = iDir;
 
-
     	if( p->move.result==MOVE )
     	{
     	    mxPercent = 0;
     	    aBestMove[cnt].mxPerFlag1 = 1;
     	}
     	//模拟着法产生后的局面
+
     	MakeNextMove(pJunqi,&p->move);
+
 #ifdef MOVE_HASH
     	assert(pJunqi->pEngine->pPos!=NULL);
-//        LARGE_INTEGER nBeginTime;
-//        LARGE_INTEGER nEndTime;
-//        QueryPerformanceCounter(&nBeginTime);
         iKey = GetHashKey(pJunqi);
-//        QueryPerformanceCounter(&nEndTime);
-//        pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
-//        pJunqi->test_time[1] += pJunqi->test_time[0];
 #endif
 
         if ( pBest!=NULL && !memcmp(pBest, &p->move, 4) )
@@ -843,7 +857,6 @@ int AlphaBeta(
 #endif
     	else
     	{
-
     	    aBestMove[cnt-1].pTest = p;
             val = CallAlphaBeta(pJunqi,depth-1,alpha,beta,iDir);
 #ifdef MOVE_HASH
@@ -872,11 +885,12 @@ int AlphaBeta(
 //            if(cnt>1&&!memcmp(&aBeasMove[0].pTest->move,test4,4)&&
 //                    !memcmp(&aBeasMove[1].pTest->move,test3,4))
 //
-//            if( cnt==1||cnt==2 )
-//            {
-//                log_a("cnt %d val %d per %d",cnt,val,p->percent);
-//                SafeMemout((u8*)&p->move, sizeof(p->move));
-//            }
+           // if( cnt==1||cnt==2 )
+            if( cnt==1 )
+            {
+                log_a("cnt %d val %d per %d",cnt,val,p->percent);
+                SafeMemout((u8*)&p->move, sizeof(p->move));
+            }
 
 
 //            log_a("cnt %d val %d per %d",cnt,val,p->percent);
@@ -886,7 +900,6 @@ int AlphaBeta(
             assert(pJunqi->pEngine->pPos!=NULL);
             UnMakeMove(pJunqi,&p->move);
     	}
-
     	//if( p->move.result!=MOVE && !p->pNext->isHead )
     	if( p->move.result!=MOVE )
     	{
@@ -927,6 +940,11 @@ int AlphaBeta(
     	    if( -INFINITY==mxVal && aBestMove[cnt-1].mxPerFlag1 )
     	    {
     	        UpdateBestMove(aBestMove,p,depth,cnt,isHashVal);
+                if( cnt==1 )
+                {
+                    PrintBestMove(aBestMove,val,depth);
+                }
+                pBest = &p->move;
     	    }
     		alpha = val;
     		mxVal = val;
@@ -940,15 +958,19 @@ int AlphaBeta(
             {
                 //log_a("best");
                 UpdateBestMove(aBestMove,p,depth,cnt,isHashVal);
+                if( cnt==1 )
+                {
+                    PrintBestMove(aBestMove,val,depth);
+                }
+                pBest = &p->move;
             }
             if( val>alpha )
             {
-                pBest = &p->move;
+
                 alpha = val;
 //                log_a("cnt %d val %d per %d",cnt,val,p->percent);
 //                log_a("alpha: %d depth %d",alpha,cnt);
 //                SafeMemout((u8*)&p->move, sizeof(p->move));
-                new = 1;
 
             }
         }
@@ -966,11 +988,7 @@ continue_search:
     		break;
     	}
 
-    	if( cnt==1 && new)
-    	{
-    	    new = 0;
-    	    PrintBestMove(aBestMove,alpha,depth);
-    	}
+
     }
 
     cnt--;
@@ -978,6 +996,7 @@ continue_search:
     {
     	cnt = 0;
     	SetBestMove(pJunqi,pBest);
+
 #ifdef MOVE_HASH
     	ClearMoveHash(&pJunqi->paHash);
         log_a("malloc %d",malloc_cnt);

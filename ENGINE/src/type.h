@@ -11,5 +11,5 @@ typedef struct GraphPath GraphPath;
 typedef struct PositionList PositionList;
 typedef struct MoveHash MoveHash;
 typedef struct BestMove BestMove;
-
+typedef struct BoardGraph BoardGraph;
 #endif

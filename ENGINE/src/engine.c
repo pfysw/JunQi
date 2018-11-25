@@ -333,13 +333,13 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
     		pJunqi->searche_num[1] = 0;
     		ClearBestMoveFlag(pEngine);
 
-//            LARGE_INTEGER nBeginTime;
-//            LARGE_INTEGER nEndTime;
-//            QueryPerformanceCounter(&nBeginTime);
-//    		pJunqi->test_time[1] = 0;
+            LARGE_INTEGER nBeginTime;
+            LARGE_INTEGER nEndTime;
+            QueryPerformanceCounter(&nBeginTime);
+    		pJunqi->test_time[1] = 0;
 
-			//value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
-			value = AlphaBeta1(pJunqi,i,-INFINITY,INFINITY);
+			value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
+			//value = AlphaBeta1(pJunqi,i,-INFINITY,INFINITY);
     		//value = AlphaBetaTest(pJunqi,i,-INFINITY,INFINITY);
     		//value = AlphaBetaTest(pJunqi,i,4,5);
 			log_a("search1 num %d",pJunqi->test_num);
@@ -354,10 +354,10 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 			log_a("best %d %d %d %d",pBest[0]->point.x,pBest[0]->point.y,
 			        pBest[1]->point.x,pBest[1]->point.y);
 
-//		    QueryPerformanceCounter(&nEndTime);
-//		    pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
-//			log_a("gen time %d",pJunqi->test_time[1]);
-//			log_a("gen0 time %d",pJunqi->test_time[0]);
+		    QueryPerformanceCounter(&nEndTime);
+		    pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
+			log_a("gen time %d",pJunqi->test_time[1]);
+			log_a("gen0 time %d",pJunqi->test_time[0]);
 
 			if( TimeOut(pJunqi) )
 			{
