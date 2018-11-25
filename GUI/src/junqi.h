@@ -149,6 +149,7 @@ struct Junqi
 	u8 bStop;
 	u8 bAnalyse;
 	u8 bResetFlag;
+	u8 nNoEat;
 	enum ChessColor eColor;
 	enum ChessDir eTurn;
 	enum ChessDir eFirstTurn;

@@ -166,6 +166,7 @@ static void event_handle(GtkWidget *item,gpointer data)
 		pJunqi->bReplay = 0;
 		pJunqi->bStop = 0;
 		pJunqi->bAnalyse = 0;
+		pJunqi->nNoEat = 0;
 		pJunqi->eTurn = pJunqi->eFirstTurn;
 		ReSetChessBoard(pJunqi);
 		DestroyChessFlag(pJunqi);

@@ -558,7 +558,14 @@ void DestroyAllChess(Junqi *pJunqi, int iDir)
 	if( pJunqi->aInfo[(iDir+2)%4].bDead==1 )
 	{
 		if( !pJunqi->bReplay && !pJunqi->bAnalyse )
-			pJunqi->bStart = 0;
+		{
+		    if( pJunqi->bStart )
+		    {
+		        pJunqi->bStart = 0;
+                pJunqi->bStop = 1;
+                pJunqi->nNoEat = 0;
+		    }
+		}
 	}
 
 }
@@ -635,6 +642,23 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 		dstDir = pDst->pLineup->iDir;
 	}
 
+	if( type==MOVE )
+	{
+	    pJunqi->nNoEat++;
+	    if( pJunqi->nNoEat>70 )
+	    {
+	        if( !pJunqi->bReplay && !pJunqi->bAnalyse )
+	        {
+	            pJunqi->bStart = 0;
+	            pJunqi->bStop = 1;
+	            pJunqi->nNoEat = 0;
+	        }
+	    }
+	}
+	else
+	{
+	    pJunqi->nNoEat = 0;
+	}
 //	assert( aseertChess(pSrc) );
 //	assert( aseertChess(pDst) );
 //	assert( assertAllLineup(pJunqi) );
@@ -879,6 +903,10 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
 	if( pChess==NULL )
 	{
 		return;
+	}
+	if( pJunqi->bStop )
+	{
+	    return;
 	}
 	//点击左键
     if( event->button==1 )
@@ -1412,7 +1440,7 @@ void OpenReplay(GtkNativeDialog *dialog,
 			gtk_adjustment_set_upper(pJunqi->slider_adj, max_step);
 			gtk_adjustment_set_value(pJunqi->slider_adj, 0);
 			pJunqi->bStart = 1;
-			pJunqi->bStop = 1;
+			pJunqi->bStop = 0;
 			pJunqi->iRpStep = 0;
 			pJunqi->bResetFlag = 0;
 		}
