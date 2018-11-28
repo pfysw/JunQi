@@ -1,6 +1,8 @@
 #include "junqi.h"
 #include "event.h"
 
+#undef log_a
+#define log_a(format,...)
 
 u8 IsSameRail(
 		Junqi *pJunqi,

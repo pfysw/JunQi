@@ -82,9 +82,18 @@ int AddJunqiMove(
 	////////
     if( pSrc->pLineup->type==ZHADAN )
     {
-        assert( pTemp->result==BOMB );
-        percent1 = 128;
-        percent2 = 128;
+        if( pDst->pLineup->type!=JUNQI )
+        {
+            assert( pTemp->result==BOMB );
+            percent1 = 128;
+            percent2 = 128;
+        }
+        else
+        {
+            pTemp->extra_info |= 1;
+            percent = 256;
+            InsertMoveList(pJunqi,pSrc,pDst,pTemp,percent);
+        }
     }
     else
     {
@@ -688,7 +697,7 @@ int GetBombPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
                 nDst = (aLiveTypeAll[dst]-aLiveTypeSum[dst])-
                         (aLiveTypeAll[dst-1]-aLiveTypeSum[dst-1]);
                 if( nDst<0 ) nDst = 0;
-                log_b("bomb1 num %d max %d",num,mxNum);
+                log_b("bomb1 num %d max %d type %d",num,mxNum,mxSrcType);
                 log_b("bomb dst %s %d",aTypeName[dst],nDst);
                 if( pSrc->pLineup->isNotBomb )
                 {
@@ -1069,7 +1078,6 @@ u8 IsPossibleBomb(
 			//双方都不可能是炸，不可能打兑
 			if( pSrc->pLineup->type>pDst->pLineup->type )
 			{
-
 				return  0;
 			}
 			if( pSrc->pLineup->type!=ZHADAN )
@@ -1079,6 +1087,15 @@ u8 IsPossibleBomb(
 					return 0;
 			}
 		}
+		else if( pJunqi->aInfo[pDst->pLineup->iDir].aTypeNum[ZHADAN]==2 )
+		{
+            if( pSrc->pLineup->type!=ZHADAN )
+            {
+                if( pSrc->pLineup->type<pDst->pLineup->mx_type )
+                    return 0;
+            }
+		}
+
 		//只有炸弹才能和地雷军旗打兑
 		if( pSrc->pLineup->type!=ZHADAN &&
 			(pDst->pLineup->type==DILEI || pDst->pLineup->type==JUNQI) )
@@ -1090,17 +1107,27 @@ u8 IsPossibleBomb(
 	{
 		if( pDst->pLineup->type>=SILING )
 		{
-			//如果对方是暗棋，怎么都有可能打兑
 			if( pSrc->pLineup->type!=DARK )
 			{
 				//双方都不可能是炸弹
 				if( pSrc->pLineup->mx_type>pDst->pLineup->type )
 				{
+				    //log_b("d1");
 					return  0;
 				}
 				//Dst小于Src最小可能的类型
 				if( pSrc->pLineup->type<pDst->pLineup->type )
+				{
+				    //log_b("d2 %d %d",pSrc->pLineup->type,pDst->pLineup->type);
 					return 0;
+				}
+			}
+			else if( pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[ZHADAN]==2 )
+			{
+                if( pSrc->pLineup->mx_type>pDst->pLineup->type )
+                {
+                    return  0;
+                }
 			}
 		}
 		//只有炸弹才能和地雷军旗打兑
@@ -1165,9 +1192,16 @@ void AddMoveToList(
 	{
 	    bShowFlag = pJunqi->aInfo[pDst->pLineup->iDir].bShowFlag;
 	}
+	if( pSrc->type==GONGB )
+	{
+	    if( pDst->index<20 && pDst->isSapperPath )
+	    {
+	       // return;
+	    }
+	}
 //    static int jj=0;
 //    jj++;
-//    if(jj==5134)
+//    if(jj==9685)
 //    log_c("test");
 //    log_c("jj %d",jj);
 //
@@ -1230,19 +1264,7 @@ void AddMoveToList(
         		log_b("bomb %d %d %d %d",pSrc->point.x,pSrc->point.y,
         				pDst->point.x,pDst->point.y);
 
-//        		static int test = 0;
-//        		test++;
-//                u8 test3[4] = {12,6,10,4};
-//                if( pSrc->point.x==12 && pSrc->point.y==6
-//                        && pDst->point.x==10 && pDst->point.y==4 )
-//                {
-//                    if(test==16896)
-//                        log_a("debug %d",test);
-//                }
-
         		percent = aPercent[1]-AddCommanderMove(pJunqi,pSrc,pDst,&temp,aPercent[1]);
-        		//己方司令不可能碰到第一排被炸
-        		//if( !SpecialCase(pJunqi,pSrc,pDst) )
         		log_b("spe %d",percent);
         		if( percent!=0 )
         		{
@@ -1384,6 +1406,14 @@ u8 IsDirectRail(
     if( pSrcChess->eCurveRail==pDstChess->eCurveRail && pSrcChess->eCurveRail>0 )
         rc = 1;
 
+    if( !rc )
+    {
+        pDstChess->isSapperPath = 1;
+    }
+    else
+    {
+        pDstChess->isSapperPath = 0;
+    }
 
     return rc;
 }
@@ -1409,7 +1439,8 @@ void SearchRailPath(
         {
             continue;
         }
-        else if( pChess->type!=GONGB && !IsDirectRail(pJunqi, pSrc, pVertex) )
+        //顺序不能调换，IsDirectRail必须执行，记录是否是工兵特有路径
+        else if( !IsDirectRail(pJunqi, pSrc, pVertex) && pChess->type!=GONGB  )
         {
             continue;
         }
@@ -1506,6 +1537,7 @@ void SearchMovePath(
             {
                 continue;
             }
+            pNbr->isSapperPath = 0;
 
             if( pSrc->isCamp || pNbr->isCamp )
             {

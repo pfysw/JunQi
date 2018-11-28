@@ -6,6 +6,7 @@
  */
 #include "junqi.h"
 #include "path.h"
+#include "search.h"
 
 extern Junqi* gJunqi;
 
@@ -378,10 +379,13 @@ int aseertChess(BoardChess *pChess)
 	{
 		if( pChess!=pChess->pLineup->pChess )
 		{
+		    log_c("ss1");
 			rc = 0;
 		}
 		else if( pChess->pLineup->type!=pChess->type )
 		{
+		    log_c("ss2 %d %d %d %d",pChess->pLineup->type,pChess->type,
+		            pChess->point.x,pChess->point.y);
 		    rc = 0;
 		}
 	}
@@ -415,7 +419,7 @@ void GetLiveTypeAll(
 		u8 *aDeadType,
 		u8 *aLiveAllNum,
 		u8 *aBombNum,
-		u8 *aTypeNum)
+		int nBombType)
 {
 	int i;
 	int sum = 0;
@@ -426,7 +430,7 @@ void GetLiveTypeAll(
 	{
 		sum += aDeadType[i];
         sum1 += aBombNum[i];
-        nBomb = (sum1<(2-aTypeNum[ZHADAN]))?sum1:(2-aTypeNum[ZHADAN]);
+        nBomb = (sum1<(2-nBombType))?sum1:(2-nBombType);
 		aLiveAllNum[i] = aMaxTypeNum[i]-sum+nBomb;
 	}
 
@@ -488,6 +492,22 @@ int GetMaxType(int mx_type, int type, u8 *aTypeNumSum)
 	return mx_type;
 }
 
+void RecordAdjustInfo(Junqi *pJunqi, int iDir, int index, int type)
+{
+    Engine *pEngine = pJunqi->pEngine;
+    PositionList *pHead;
+    PositionData *pStorage;
+    PositionList *pTail;
+
+    pHead = pEngine->pPos;
+    pTail = pHead->pPre;
+    pStorage = &pTail->data;
+
+    pStorage->xExtraInfo.adjustFlag = 1;
+    pStorage->xExtraInfo.adjusrDir = iDir;
+    pStorage->xExtraInfo.adjusrIndex = index;
+    pStorage->xExtraInfo.saveType = type;
+}
 //待优化
 void AdjustMaxType(Junqi *pJunqi, int iDir)
 {
@@ -500,6 +520,7 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 	u8 aBombNum[14] = {0};
 	u8 aTypeNumSum[14] = {0};
 	u8 aDeadType[14] = {0};
+	int nBomb;
 	enum ChessType tmp;
 
 	pJunqi->aInfo[iDir].nMayLand = 0;
@@ -552,11 +573,6 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		//计算该子类型的总和
 		aTypeNum[pLineup->type]++;
 
-//        if( pLineup->type==5 )
-//            log_c("%d ",pLineup->index);
-//        if( aTypeNum[SILING]==2 )
-//            log_c("ds");
-//        assert( aTypeNum[SILING]!=2 );
 		//计算该子暗打兑的数量，打兑当中有些是炸弹，需要在后续判断排除
 		if( pLineup->bBomb )
 		{
@@ -564,22 +580,26 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		}
 	}
 
-	//工兵大于3，说明多余的飞了炸
-	if( aTypeNum[GONGB]>3 )
-	{
-		log_b("gongb zhad %d %d",aTypeNum[GONGB], aTypeNum[ZHADAN]);
-		aTypeNum[ZHADAN] += aTypeNum[GONGB]-3;
-		aTypeNum[GONGB] = 3;
-		assert( aTypeNum[ZHADAN]<=2 );
-	}
+	nBomb = aTypeNum[ZHADAN];
+    //工兵大于3，说明多余的飞了炸
+    if( aTypeNum[GONGB]>3 )
+    {
+        int sub;
+        log_b("gongb zhad %d %d",aTypeNum[GONGB], aTypeNum[ZHADAN]);
+        sub = aTypeNum[GONGB]-3;
+        aTypeNum[ZHADAN] += sub;
+        aTypeNum[GONGB] = 3;
+        aDeadType[GONGB] -= sub;
+        assert( aTypeNum[ZHADAN]<=2 );
+    }
 
-	//必须放在GetTypeNum前面，因为aTypeNum[ZHADAN]不能被先修改
-	GetLiveTypeAll(aDeadType,aLiveAllNum,aBombNum,aTypeNum);
+	GetLiveTypeAll(aDeadType,aLiveAllNum,aBombNum,nBomb);
+
 	//获取某个级别以上的数量总和，保存在aTypeNumSum里
 	//这里是先把aTypeNumSum都算好，因为aTypeNumSum是固定的
 	//如果后面再循环中算则重复了
 	GetTypeNum(aBombNum,aTypeNum,aTypeNumSum);
-	//assert(pJunqi->aInfo[1].aTypeNum[ZHADAN]==0);//test
+
 	GetLiveTypeSum(aLiveTypeSum,aLiveTypeNum,aLiveAllNum);
     //这里先计算好暗子的最大可能性
 	tmp = GetMaxType(SILING, GONGB, aTypeNumSum);
@@ -588,7 +608,7 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 	{
 		pLineup = &pJunqi->Lineup[iDir][i];
 		//NONE ~ SILING
-		if( pLineup->type<=SILING && pLineup->type!=DARK )
+		if( pLineup->type<SILING && pLineup->type!=DARK )
 		{
 			continue;
 		}
@@ -602,28 +622,37 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		}
 		else
 		{
-			assert( pLineup->type>SILING );
-			//这里计算吃过子的棋的最大可能
-			pLineup->mx_type = GetMaxType(pLineup->mx_type,
-					pLineup->type, aTypeNumSum);
+			assert( pLineup->type>=SILING );
+
 			//这里计算疑似地雷的棋，举个例子，对方司令已经死了
 			//此时38撞雷，我们还不能判断是地雷，也可能是39，
 			//如果又有另一个子吃了38，那么可以判断是地雷
 			//这里比当前棋级别大的数量已经为最大值
 			//后2排的pLineup->type是没有统计到aTypeNumSum里的，所以可以断定为地雷
-			if( aTypeNumSum[pLineup->type]==aMaxTypeNum[pLineup->type] )
-			{
-				//后2排疑似地雷的type不会统计到aTypeNumSum里
-				if( pLineup->index>=20 && !pLineup->isNotLand )
-				{
-					if( pLineup->type != DILEI)
-					{
-						pLineup->type = DILEI;
-						pLineup->pChess->type = DILEI;
-						aTypeNum[DILEI]++;
-					}
-				}
-			}
+
+            //后2排疑似地雷的type不会统计到aTypeNumSum里
+            if( pLineup->index>=20 && !pLineup->isNotLand )
+            {
+                pLineup->mx_type = tmp;
+                if( pLineup->type!=DILEI && pLineup->type<tmp )
+                {
+                    RecordAdjustInfo(pJunqi,iDir,pLineup->index,pLineup->type);
+                    pLineup->type = DILEI;
+                    if( !pLineup->bDead )
+                    {
+                        pLineup->pChess->type = DILEI;
+                    }
+
+                    aTypeNum[DILEI]++;
+                }
+            }
+            else
+            {
+                //这里计算吃过子的棋的最大可能
+                pLineup->mx_type = GetMaxType(pLineup->mx_type,
+                        pLineup->type, aTypeNumSum);
+            }
+
 		}
 
 	}
@@ -687,12 +716,15 @@ void PlayResult(
 	BoardChess *pJunqiChess;
 	BoardPoint p;
 	int iDir1,iDir2;
+	u8 bLandMove = 0;
 
 	assert( aseertChess(pSrc) );
 	assert( aseertChess(pDst) );
 
+	//assert( pJunqi->Lineup[0][24].type!=DILEI );//测试用
 //    log_c("play %d %d %d %d type %d",pSrc->point.x,pSrc->point.y,
 //            pDst->point.x,pDst->point.y,type);
+//    log_c("src %d dst %d",pSrc->type,pDst->type);
 	iDir1 = pSrc->pLineup->iDir;
 	if( type!=MOVE )
 	{
@@ -747,6 +779,7 @@ void PlayResult(
 
 	if( pSrc->pLineup->index>=20 )
 	{
+	    bLandMove = 1;
 		pSrc->pLineup->isNotLand = 1;
 	}
 
@@ -758,6 +791,7 @@ void PlayResult(
 			pSrc->pLineup->mx_type = GONGB;
 			pSrc->pLineup->isNotBomb = 1;
 			pSrc->pLineup->isNotLand = 1;
+			bLandMove = 1;
 		}
 	}
 
@@ -897,7 +931,12 @@ void PlayResult(
 			AdjustMaxType(pJunqi, iDir2);
 		}
 	}
+	else if( 1==bLandMove && iDir1%2!=ENGINE_DIR%2 )
+	{
+	    AdjustMaxType(pJunqi, iDir1);
+	}
 
+	//assert( pJunqi->Lineup[0][24].type!=DILEI );
 	assert( aseertChess(pSrc) );
 	assert( aseertChess(pDst) );
 }

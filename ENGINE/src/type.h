@@ -12,4 +12,6 @@ typedef struct PositionList PositionList;
 typedef struct MoveHash MoveHash;
 typedef struct BestMove BestMove;
 typedef struct BoardGraph BoardGraph;
+typedef struct PositionData PositionData;
+typedef struct ChessLineup ChessLineup;
 #endif

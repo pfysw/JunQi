@@ -150,13 +150,21 @@ void ProMoveResult(Junqi* pJunqi, u8 iDir, u8 *data)
 		if( pSrc==NULL || pDst==NULL )
 		{
 			SendHeader(pJunqi, iDir, COMM_ERROR);
-			return;
+			assert(0);
 		}
 	}
 	else
 	{
 		SendHeader(pJunqi, iDir, COMM_ERROR);
-		return;
+		assert(0);
+	}
+	if( pResult->result==MOVE )
+	{
+	    pJunqi->nNoEat++;
+	}
+	else
+	{
+	    pJunqi->nNoEat = 0;
 	}
 	//log_c("dir %d %d\n",pSrc->pLineup->iDir,iDir);
 	assert( pSrc->pLineup->iDir==iDir );
@@ -165,7 +173,12 @@ void ProMoveResult(Junqi* pJunqi, u8 iDir, u8 *data)
 	if( pJunqi->bStart )
 	{
 		ChessTurn(pJunqi);
-		//CheckMoveEvent(pJunqi->pEngine, pSrc, pDst, pResult);
+#ifdef  EVENT_TEST
+		if( pJunqi->nNoEat>8 )
+		{
+		    CheckMoveEvent(pJunqi->pEngine, pSrc, pDst, pResult);
+		}
+#endif
 	}
 
 
@@ -262,6 +275,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	int eTurn;
 	Engine *pEngine = pJunqi->pEngine;
 	int i;
+	int analyseFlag = 0;
 
 	if( memcmp(pHead->aMagic, aMagic, 4)!=0 )
 	{
@@ -278,7 +292,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 		break;
 	case COMM_MOVE:
 		preTurn = pJunqi->eTurn;
-		//log_c("turn %d %d",pHead->iDir,pJunqi->eTurn);
+		log_a("turn %d %d",pHead->iDir,pJunqi->eTurn);
 		assert( pHead->iDir==pJunqi->eTurn );
 		data = (u8*)&pHead[1];
 
@@ -286,7 +300,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
 		break;
 	case COMM_REPLAY:
-		log_b("reply %d",pHead->iDir);
+		log_a("reply %d",pHead->iDir);
 		SendHeader(pJunqi, pHead->iDir, COMM_REPLAY);
 		pJunqi->eTurn = pHead->iDir;
 		pJunqi->bStart = 1;
@@ -310,6 +324,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
     if( 0==pJunqi->nRpStep ||
     	pJunqi->iRpOfst>pJunqi->nRpStep-1 )
     {
+        analyseFlag = 1;
 		//value = EvalSituation(pJunqi);
     	eTurn = pJunqi->eTurn;
     	log_b("search1");
@@ -338,8 +353,8 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
             QueryPerformanceCounter(&nBeginTime);
     		pJunqi->test_time[1] = 0;
 
-			value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
-			//value = AlphaBeta1(pJunqi,i,-INFINITY,INFINITY);
+			//value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
+			value = AlphaBeta1(pJunqi,i,-INFINITY,INFINITY);
     		//value = AlphaBetaTest(pJunqi,i,-INFINITY,INFINITY);
     		//value = AlphaBetaTest(pJunqi,i,4,5);
 			log_a("search1 num %d",pJunqi->test_num);
@@ -350,9 +365,18 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 			pthread_mutex_unlock(&pJunqi->mutex);
 			log_a("time %d",time(NULL)-pJunqi->begin_time);
 			BoardChess **pBest = pJunqi->pEngine->pBest;
-			if(i>0)
-			log_a("best %d %d %d %d",pBest[0]->point.x,pBest[0]->point.y,
-			        pBest[1]->point.x,pBest[1]->point.y);
+            if(i>0)
+            {
+                if( *pBest!=NULL )
+                {
+                    log_a("best %d %d %d %d",pBest[0]->point.x,pBest[0]->point.y,
+                            pBest[1]->point.x,pBest[1]->point.y);
+                }
+                else
+                {
+                    log_a("no move");
+                }
+            }
 
 		    QueryPerformanceCounter(&nEndTime);
 		    pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
@@ -383,22 +407,32 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
     pJunqi->bMove = 0;
     pJunqi->iRpOfst++;
 
-	//if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
+    //if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
     if( preTurn == pJunqi->eTurn )
-	{
-		return;
-	}
-	pJunqi->bGo = 0;
+    {
+        return;
+    }
+    pJunqi->bGo = 0;
 
-	if( pJunqi->eTurn%2==ENGINE_DIR )
+	if( pJunqi->eTurn%2==ENGINE_DIR && analyseFlag )
 	{
 		if( pJunqi->aInfo[pJunqi->eTurn].bDead )
 		{
 			ChessTurn(pJunqi);
 		}
 
-		//isMove = DealEvent(pJunqi->pEngine);
+#ifndef EVENT_TEST
 		isMove = SendBestMove(pJunqi->pEngine);
+#else
+		if( pJunqi->nNoEat>8 )//&& value>-100 )
+		{
+		    isMove = DealEvent(pJunqi->pEngine);
+		}
+		else
+		{
+		    isMove = SendBestMove(pJunqi->pEngine);
+		}
+#endif
 
 		if( !isMove )
 		{

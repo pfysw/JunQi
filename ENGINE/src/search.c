@@ -67,7 +67,7 @@ void PushMoveToStack(
 
 
 	memcpy(&pStorage->xSrcLineup, pSrc->pLineup, sizeof(ChessLineup));
-
+	pStorage->xExtraInfo.adjustFlag = 0;
 	//todo 目前没有考虑投降、跳过、无棋可走的情况
 	if( pMove->result!=MOVE )
 	{
@@ -120,10 +120,23 @@ void PopMoveFromStack(
 	assert( pHead!=NULL );
 
 
+	//一定要放前面，这里可能和pDst重合，放在后面不能恢复到初始状态
+    if( pStorage->xExtraInfo.adjustFlag )
+    {
+        int iDir,index,type;
+        iDir = pStorage->xExtraInfo.adjusrDir;
+        index = pStorage->xExtraInfo.adjusrIndex;
+        type = pStorage->xExtraInfo.saveType;
+        pJunqi->Lineup[iDir][index].type = type;
+        if( !pJunqi->Lineup[iDir][index].bDead )
+        {
+            pJunqi->Lineup[iDir][index].pChess->type = type;
+        }
+    }
+
 	memcpy(pSrc, &pStorage->xSrcChess, VAR_OFFSET);
 	memcpy(pDst, &pStorage->xDstChess, VAR_OFFSET);
 	memcpy(pSrc->pLineup, &pStorage->xSrcLineup, sizeof(ChessLineup));
-
 
 	if( pMove->result!=MOVE )
 	{
@@ -480,11 +493,49 @@ void SetBestMoveNode(
     memset(pList->result,0,sizeof(pList->result));
     for(p=pMove;;p=p->pPre)
     {
-        type =  p->move.result;
-        pList->result[type-1].flag = 1;
-        //type类型从1开始，减1为了节省空间
-        memcpy(&pList->result[type-1].move,&p->move,sizeof(MoveResultData));
-        pList->result[type-1].percent = p->percent;
+        if( p->move.extra_info && !p->isHead &&
+                p->pPre->move.extra_info && p->move.result==BOMB )
+        {
+            assert( p->pPre->percent==p->percent );
+            p->pPre->percent += p->percent;
+            goto END_LOOP;
+        }
+
+        type =  p->move.result-1;//type类型从1开始，减1为了节省空间
+
+        if( !pList->result[type].flag )
+        {
+            pList->result[type].flag = 1;
+            memcpy(&pList->result[type].move,&p->move,sizeof(MoveResultData));
+            pList->result[type].percent = p->percent;
+        }
+        //炸弹炸司令，司令打兑，同一种BOMB类型出现多种情况
+        //这时借用另外2种类型的空间
+        else
+        {
+            assert( type==BOMB-1 );//2=BOMB-1
+            //这里顺序不能调换，因为是按KILLED、BOMB、EAT的顺序搜索
+            if( !pList->result[3].flag )
+            {
+                type = 3;//(BOMB-1)+1
+            }
+            else
+            {
+                //把司令打兑和被炸合并，下面还有司令吃子
+                if( !(memcmp(&p->move,&p->pPre->move,4) || p->isHead) )
+                {
+                    pList->result[type].percent += p->percent;
+                }
+                else
+                {
+                    type = 1;//(BOMB-1)-1
+                }
+            }
+            pList->result[type].flag = 1;
+            memcpy(&pList->result[type].move,&p->move,sizeof(MoveResultData));
+            pList->result[type].percent = p->percent;
+        }
+    END_LOOP:
        // SafeMemout((u8*)&p->move, sizeof(p->move));
         if( memcmp(&p->move,&p->pPre->move,4) || p->isHead )
         {
@@ -494,7 +545,7 @@ void SetBestMoveNode(
 }
 
 void UpdateBestMove(
-        BestMove *aBeasMove,
+        BestMove *aBestMove,
         MoveList *pMove,
         int depth,
         int cnt,
@@ -503,14 +554,15 @@ void UpdateBestMove(
     BestMoveList *p;
     BestMoveList *p1;
 
-    if( aBeasMove[cnt-1].pHead==NULL )
+    if( aBestMove[cnt-1].pHead==NULL )
     {
-        aBeasMove[cnt-1].pHead = (BestMoveList*)malloc(sizeof(BestMoveList));
-        memset(aBeasMove[cnt-1].pHead, 0, sizeof(BestMoveList));
+        aBestMove[cnt-1].pHead = (BestMoveList*)malloc(sizeof(BestMoveList));
+        memset(aBestMove[cnt-1].pHead, 0, sizeof(BestMoveList));
 
     }
-    p = aBeasMove[cnt-1].pHead;
-    SetBestMoveNode(aBeasMove,p,pMove,depth,cnt);
+    p = aBestMove[cnt-1].pHead;
+
+    SetBestMoveNode(aBestMove,p,pMove,depth,cnt);
 
 
 #ifdef MOVE_HASH
@@ -520,23 +572,26 @@ void UpdateBestMove(
     if( isHashVal )
     {
         i = cnt;
-        for(p1=aBeasMove[cnt].pHead; p1!=NULL; p1=p1->pNext)
+        for(p1=aBestMove[cnt].pHead; p1!=NULL; p1=p1->pNext)
         {
-            aBeasMove[i++].flag2 = 0;
+            aBestMove[i++].flag2 = 0;
         }
     }
     else
 #endif
     {
-        for(p1=aBeasMove[cnt].pHead; p1!=NULL; p1=p1->pNext)
+        if( aBestMove[cnt].flag2 )
         {
-            if(p->pNext==NULL)
+            for(p1=aBestMove[cnt].pHead; p1!=NULL; p1=p1->pNext)
             {
-                p->pNext = (BestMoveList*)malloc(sizeof(BestMoveList));
-                memset(p->pNext, 0, sizeof(BestMoveList));
+                if(p->pNext==NULL)
+                {
+                    p->pNext = (BestMoveList*)malloc(sizeof(BestMoveList));
+                    memset(p->pNext, 0, sizeof(BestMoveList));
+                }
+                memcpy(p->pNext->result,p1->result,sizeof(p1->result));
+                p = p->pNext;
             }
-            memcpy(p->pNext->result,p1->result,sizeof(p1->result));
-            p = p->pNext;
         }
     }
 
@@ -618,7 +673,9 @@ int SearchBestMove(
     BestMoveList *pNode = aBestMove[0].pNode;
     BestMoveList *pPre;
 
-    if( aBestMove[cnt-1].flag2 && aBestMove[cnt-1].mxPerFlag && !aBestMove[cnt-1].flag1 )
+    //第cnt层更新了alpha值，由于有3种可能的碰撞，递归到上一层并不一定更新
+    //if( aBestMove[cnt-1].flag2 && aBestMove[cnt-1].mxPerFlag && !aBestMove[cnt-1].flag1 )
+    if( pNode!=NULL && aBestMove[cnt-1].mxPerFlag && !aBestMove[cnt-1].flag1 )
     {
         mxPerMove = GetMaxPerMove(pNode->result);
         for(int i=0; i<4; i++)
@@ -688,17 +745,26 @@ int SearchBestMove(
         if( val>mxVal )
         {
             mxVal = val;
+
             if( aBestMove[0].pNode==NULL )
             {
                 log_a("NULL");
 
-                pPre->pNext = (BestMoveList*)malloc(sizeof(BestMoveList));
-                memset(pPre->pNext, 0, sizeof(BestMoveList));
-                assert( aBestMove[cnt].pHead!=NULL );//无棋可走时会触发该断言
-                assert(aBestMove[cnt].pHead->pNext==NULL);
-                memcpy(pPre->pNext->result,aBestMove[cnt].pHead->result,
-                        sizeof(pPre->pNext->result));
-                aBestMove[0].pNode = pPre->pNext;
+                //aBestMove[0].pHead的末尾添加新结点
+                //假设搜索4层，aBestMove只有2层，在第3层搜索过后，aBestMove[3-1].pHead不为空
+                //在搜索第4层时，第3层为空着但满足第一个条件，第2个条件保证不会进去
+                if( aBestMove[cnt].pHead!=NULL && aBestMove[cnt].flag2 )
+                {
+                    pPre->pNext = (BestMoveList*)malloc(sizeof(BestMoveList));
+                    memset(pPre->pNext, 0, sizeof(BestMoveList));
+                    //assert( aBestMove[cnt].pHead!=NULL );//无棋可走时会触发该断言
+                    assert(aBestMove[cnt].pHead->pNext==NULL);//递归返回时会出现该断言
+                    memcpy(pPre->pNext->result,aBestMove[cnt].pHead->result,
+                            sizeof(pPre->pNext->result));
+                }
+                aBestMove[0].pNode = pPre;
+
+
             }
 
             if( val>alpha )
@@ -783,10 +849,10 @@ int AlphaBeta(
 		return val;
 	}
 	QueryPerformanceCounter(&nBeginTime);
-//	if(depth==2)
-//	log_a("alpha %d beta %d depth %d",alpha,beta,cnt);
-	//生成着法列表
 
+	mxVal = SearchBestMove(pJunqi,aBestMove,cnt,alpha,beta,&pBest,depth,0);
+
+	//生成着法列表
 	pHead = GenerateMoveList(pJunqi, iDir);
     QueryPerformanceCounter(&nEndTime);
     pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
@@ -796,12 +862,9 @@ int AlphaBeta(
 	{
 		pJunqi->eTurn = iDir;
 		ChessTurn(pJunqi);
-        cnt--;
-		val = CallAlphaBeta(pJunqi,depth,alpha,beta,iDir);
-		cnt++;
+		mxVal = CallAlphaBeta(pJunqi,depth-1,alpha,beta,iDir);
+		aBestMove[cnt-1].flag2 = 0;
 	}
-
-	mxVal = SearchBestMove(pJunqi,aBestMove,cnt,alpha,beta,&pBest,depth,0);
 
 	if( mxVal>alpha ) alpha = mxVal;
 
@@ -862,25 +925,7 @@ int AlphaBeta(
 #ifdef MOVE_HASH
             RecordMoveHash(&pJunqi->paHash,iKey,pJunqi->eTurn,depth,val);
 #endif
-           // RecordMoveHash(&pJunqi->paHash,iKey,pJunqi->eTurn,depth,val);
-//            if( p->move.result==MOVE )
-//            {
-//                RecordMoveHash(&pJunqi->paHash,iKey,pJunqi->eTurn,depth,val);
-//            }
 
-//            if(cnt==3&&!memcmp(aBeasMove[0].pTest,test4,4)&&
-//                    !memcmp(aBeasMove[1].pTest,test3,4) &&
-//                    !memcmp(aBeasMove[2].pTest,test1,4) )
-//            {
-//                for(int i=0;i<3;i++)
-//                {
-//                log_a("cnt %d val %d per %d",i,val,aBeasMove[i].pTest->percent);
-//                SafeMemout((u8*)&aBeasMove[i].pTest->move, sizeof(p->move));
-//                }
-//            }
-//
-//            if(cnt==3)
-//                log_c("ds");
 
 //            if(cnt>1&&!memcmp(&aBeasMove[0].pTest->move,test4,4)&&
 //                    !memcmp(&aBeasMove[1].pTest->move,test3,4))
@@ -909,7 +954,7 @@ int AlphaBeta(
             //下一个着法
     		if( memcmp(&p->move, pData, 4) || p->pNext->isHead  )
     		{
-    		    aBestMove[cnt].mxPerFlag = 1;
+    		    aBestMove[cnt].mxPerFlag1 = 1;
     			val = sum>>8;
     			sum = 0;
     		}

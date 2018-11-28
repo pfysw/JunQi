@@ -86,7 +86,14 @@ void SearchAlphaBeta(
     }
     else
     {
-        pData->pCur = pData->pCur->pNext;
+        if( !pData->pCur->pNext->isHead )
+        {
+            pData->pCur = pData->pCur->pNext;
+        }
+        else
+        {
+            return;
+        }
     }
 
     aBestMove[cnt].mxPerFlag1 = 1;
@@ -260,7 +267,8 @@ void SearchRailPath1(
         {
             continue;
         }
-        else if( pChess->type!=GONGB && !IsDirectRail(pJunqi, pSrc, pVertex) )
+        //IsDirectRail必须要执行，所以放在前面
+        else if( !IsDirectRail(pJunqi, pSrc, pVertex) && pChess->type!=GONGB )
         {
             continue;
         }
@@ -375,7 +383,7 @@ void SearchMoveList(
             {
                 continue;
             }
-
+            pNbr->isSapperPath = 0;
             if( pSrc->isCamp || pNbr->isCamp )
             {
                 if( !flag )
@@ -486,13 +494,12 @@ int AlphaBeta1(
         val = search_data.mxVal;
     }
 
-    if( NULL==pJunqi->pMoveList && !search_data.cut)
+    if( NULL==pJunqi->pMoveList )
     {
         pJunqi->eTurn = iDir;
         ChessTurn(pJunqi);
-        cnt--;//相当于把下一层当这一层来处理
-        val = CallAlphaBeta1(pJunqi,depth,alpha,beta,iDir);
-        cnt++;
+        val = CallAlphaBeta1(pJunqi,depth-1,alpha,beta,iDir);
+        aBestMove[cnt-1].flag2 = 0;
     }
 
     cnt--;

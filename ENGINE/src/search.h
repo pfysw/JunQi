@@ -8,7 +8,17 @@
 #ifndef SEARCH_H_
 #define SEARCH_H_
 
-#include "junqi.h"
+//#include "junqi.h"
+#include "type.h"
+
+typedef struct ExtraAdjustInfo
+{
+    u8 adjustFlag;
+    u8 adjusrDir;
+    u8 adjusrIndex;
+    u8 saveType;
+
+}ExtraAdjustInfo;
 
 typedef struct PositionData PositionData;
 struct PositionData
@@ -23,6 +33,7 @@ struct PositionData
 	u8 junqi_chess_type[2];
 	u8 isSrcdead;
 	u8 isDstDead;
+	ExtraAdjustInfo xExtraInfo;
 };
 
 typedef struct MoveHash MoveHash;
@@ -36,7 +47,6 @@ struct MoveHash
 };
 
 
-typedef struct PositionList PositionList;
 struct PositionList
 {
 	PositionData data;

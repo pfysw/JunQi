@@ -57,7 +57,8 @@ struct BoardChess
 {
 	enum ChessType type;
 	ChessLineup *pLineup;
-	int pathCnt;
+	u8  isSapperPath;
+	u8  pathCnt;
 	u8  pathFlag;
 	u8  sameFlag;
 	////下面为固定属性，不能改变///////////
@@ -116,6 +117,7 @@ struct Junqi
 	u8 bSearch;
 	u8 bMove;
 	u8 findMoveFlag;
+	u8 nNoEat;
 	enum ChessDir eTurn;
 	ChessLineup Lineup[4][30];
 	BoardChess ChessPos[4][30];

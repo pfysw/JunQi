@@ -319,12 +319,12 @@ void CheckEatEvent(Engine *pEngine)
 			}
 		}
 	}
-#ifdef  TEST
-	assert( pEngine->pEat[0] );
-	log_a("eat %s %s",aTypeName[pEngine->pEat[0]->type],
-			aTypeName[pEngine->pEat[1]->type]);
-
-#endif
+//#ifdef  TEST
+//	assert( pEngine->pEat[0] );
+//	log_a("eat %s %s",aTypeName[pEngine->pEat[0]->type],
+//			aTypeName[pEngine->pEat[1]->type]);
+//
+//#endif
 
 }
 

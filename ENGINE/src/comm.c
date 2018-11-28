@@ -119,6 +119,7 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		SendHeader(pJunqi, pHead->iDir, COMM_OK);
 		pJunqi->eTurn = pHead->iDir;
 		pJunqi->bStart = 1;
+		pJunqi->nNoEat = 0;
 		mq_send(pJunqi->qid, (char*)data, len, 0);
 		log_a("start");
 		SafeMemout(data, len);
@@ -164,8 +165,9 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		break;
 	case COMM_MOVE:
 	case COMM_EVNET:
-		pJunqi->bMove = 1;
-		log_a("move");
+        if( pJunqi->eTurn==pHead->iDir )
+            pJunqi->bMove = 1;
+		log_a("move %d %d",pJunqi->eTurn,pHead->iDir);
 		mq_send(pJunqi->qid, (char*)data, len, 0);
 		break;
 	default:

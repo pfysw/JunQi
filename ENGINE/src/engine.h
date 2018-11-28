@@ -32,6 +32,8 @@ enum MoveEvent{
 #define ENGINE_DIR   1
 #endif
 
+//#define EVENT_TEST
+
 #define INFINITY 10000
 extern u8 aEventBit[100];
 
@@ -55,7 +57,7 @@ struct BestMove
     BestMoveList *pNode;
     MoveList *pTest;
     u8 flag1; //判断是否已经搜索过
-    u8 flag2; //move是否不为空
+    u8 flag2; //标记这一层搜索无棋可走
     u8 mxPerFlag;
     u8 mxPerFlag1;
 };
