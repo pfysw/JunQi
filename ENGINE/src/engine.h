@@ -24,7 +24,7 @@ enum MoveEvent{
 	BOMB_EVENT
 };
 
-//#define TEST
+#define TEST
 
 #ifdef  TEST
 #define ENGINE_DIR   0
@@ -32,9 +32,12 @@ enum MoveEvent{
 #define ENGINE_DIR   1
 #endif
 
-//#define EVENT_TEST
+#define EVENT_TEST
 
 #define INFINITY 10000
+#define RESULT_NUM 6
+#define BEST_LIST_NUM 20
+
 extern u8 aEventBit[100];
 
 typedef struct MoveResult
@@ -47,7 +50,7 @@ typedef struct MoveResult
 typedef struct  BestMoveList  BestMoveList;
 struct  BestMoveList
 {
-    MoveResult result[4];
+    MoveResult result[RESULT_NUM];
     BestMoveList *pNext;
 };
 
@@ -75,7 +78,7 @@ typedef struct ENGINE
 	u16 eventId;
     u8  eventFlag;
     //--------------------------
-    BestMove aBestMove[30];
+    BestMove aBestMove[BEST_LIST_NUM];
     BoardChess *pBest[2];
     PositionList *pPos;
     Value_Parameter valPara;

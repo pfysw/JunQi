@@ -257,7 +257,7 @@ void SendRandMove(Junqi* pJunqi)
 
 void ClearBestMoveFlag(Engine *pEngine)
 {
-    for(int i=0; i<30; i++)
+    for(int i=0; i<BEST_LIST_NUM; i++)
     {
         pEngine->aBestMove[i].flag1 = 0;
         pEngine->aBestMove[i].mxPerFlag = 0;

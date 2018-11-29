@@ -479,7 +479,7 @@ int GetHashKey(Junqi* pJunqi)
 
 
 void SetBestMoveNode(
-        BestMove *aBeasMove,
+        BestMove *aBestMove,
         BestMoveList *pList,
         MoveList *pMove,
         int depth,
@@ -488,54 +488,28 @@ void SetBestMoveNode(
 
     MoveList *p;
     int type;
+    int i;
 
-    aBeasMove[cnt-1].flag2 = 1;
+    aBestMove[cnt-1].flag2 = 1;
     memset(pList->result,0,sizeof(pList->result));
     for(p=pMove;;p=p->pPre)
     {
-        if( p->move.extra_info && !p->isHead &&
-                p->pPre->move.extra_info && p->move.result==BOMB )
-        {
-            assert( p->pPre->percent==p->percent );
-            p->pPre->percent += p->percent;
-            goto END_LOOP;
-        }
-
         type =  p->move.result-1;//type类型从1开始，减1为了节省空间
 
-        if( !pList->result[type].flag )
+        if( pList->result[type].flag )
         {
-            pList->result[type].flag = 1;
-            memcpy(&pList->result[type].move,&p->move,sizeof(MoveResultData));
-            pList->result[type].percent = p->percent;
-        }
-        //炸弹炸司令，司令打兑，同一种BOMB类型出现多种情况
-        //这时借用另外2种类型的空间
-        else
-        {
-            assert( type==BOMB-1 );//2=BOMB-1
-            //这里顺序不能调换，因为是按KILLED、BOMB、EAT的顺序搜索
-            if( !pList->result[3].flag )
+            for(i=RESULT_NUM-1; i>0; i--)
             {
-                type = 3;//(BOMB-1)+1
-            }
-            else
-            {
-                //把司令打兑和被炸合并，下面还有司令吃子
-                if( !(memcmp(&p->move,&p->pPre->move,4) || p->isHead) )
+                if( !pList->result[i].flag )
                 {
-                    pList->result[type].percent += p->percent;
-                }
-                else
-                {
-                    type = 1;//(BOMB-1)-1
+                    type = i;
                 }
             }
-            pList->result[type].flag = 1;
-            memcpy(&pList->result[type].move,&p->move,sizeof(MoveResultData));
-            pList->result[type].percent = p->percent;
         }
-    END_LOOP:
+
+        pList->result[type].flag = 1;
+        memcpy(&pList->result[type].move,&p->move,sizeof(MoveResultData));
+        pList->result[type].percent = p->percent;
        // SafeMemout((u8*)&p->move, sizeof(p->move));
         if( memcmp(&p->move,&p->pPre->move,4) || p->isHead )
         {
@@ -623,7 +597,7 @@ int GetMaxPerMove(MoveResult *result)
     if( result[0].move.result!=MOVE )
     {
         mxPerCent = result[0].percent;
-        for(int i=0; i<4; i++)
+        for(int i=0; i<RESULT_NUM; i++)
         {
             if( result[i].percent>mxPerCent )
             {
@@ -642,7 +616,7 @@ void PrintBestMove(BestMove *aBestMove, int alpha, int depth)
     for(p=aBestMove[0].pHead; p!=NULL; p=p->pNext)
     {
         i++;
-        for(int j=0;j<4;j++)
+        for(int j=0;j<RESULT_NUM;j++)
         {
             if( !p->result[j].flag ) continue;
             log_a("depth %d val %d per %d",i,alpha,p->result[j].percent);
@@ -678,7 +652,7 @@ int SearchBestMove(
     if( pNode!=NULL && aBestMove[cnt-1].mxPerFlag && !aBestMove[cnt-1].flag1 )
     {
         mxPerMove = GetMaxPerMove(pNode->result);
-        for(int i=0; i<4; i++)
+        for(int i=0; i<RESULT_NUM; i++)
         {
             pJunqi->eTurn = iDir;
             if( !pNode->result[i].flag ) continue;
