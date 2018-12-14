@@ -24,7 +24,7 @@ enum MoveEvent{
 	BOMB_EVENT
 };
 
-#define TEST
+//#define TEST
 
 #ifdef  TEST
 #define ENGINE_DIR   0
@@ -32,7 +32,7 @@ enum MoveEvent{
 #define ENGINE_DIR   1
 #endif
 
-#define EVENT_TEST
+//#define EVENT_TEST
 
 #define INFINITY 10000
 #define RESULT_NUM 6

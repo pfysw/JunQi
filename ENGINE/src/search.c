@@ -266,6 +266,11 @@ void SetBestMove(Junqi *pJunqi, MoveResultData *pResult)
 		pEngine->pBest[0] = pSrc;
 		pEngine->pBest[1] = pDst;
 	}
+	else
+	{
+	    pEngine->pBest[0] = NULL;
+	    pEngine->pBest[1] = NULL;
+	}
 
 }
 

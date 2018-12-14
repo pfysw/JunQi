@@ -388,7 +388,6 @@ void SearchMoveList(
             {
                 if( !flag )
                 {
-
                     AddMoveToList(pJunqi, pSrc, pNbr);
     //                log_a("nbr1 %d %d %d %d",pSrc->point.x,pSrc->point.y,
     //                        pNbr->point.x,pNbr->point.y);

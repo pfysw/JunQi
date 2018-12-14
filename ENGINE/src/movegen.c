@@ -121,7 +121,8 @@ int AddJunqiMove(
 
 	if( !pJunqi->aInfo[pDst->pLineup->iDir].bShowFlag )
 	{
-	    assert( pDst->pLineup->type!=JUNQI );
+	    if( pDst->pLineup->iDir%2!=ENGINE_DIR )
+	        assert( pDst->pLineup->type!=JUNQI );
 	    if( percent1!=0 )
 	    {
             pTemp->extra_info |= 1;
@@ -907,7 +908,7 @@ int GetKilledPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 				mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
 				nDst = (aLiveTypeAll[dst]-aLiveTypeSum[dst]);
 	            log_b("kill num %d max %d",num,mxNum);
-	            log_b("kill dst %s %d mxType %d",aTypeName[dst],nDst,mxSrcType);
+	            log_b("kill1 dst %s %d mxType %d",aTypeName[dst],nDst,mxSrcType);
 	            nDst = (dst>=mxSrcType)?nDst:mxNum;
 	            if( pSrc->pLineup->isNotBomb )
 	            {
@@ -915,7 +916,9 @@ int GetKilledPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 	            }
 	            else
 	            {
+	                log_b("nMayBomb %d %d %d %d",nMayBomb,nMayBombLand,nMayLand,nLand);
 	                nMayBomb = nMayBomb+nMayLand-nMayBombLand-nLand;
+	                log_b("nMayBomb nBomb %d %d %d %d",nMayBomb,nBomb,nMayLand,nLand);
 	                if( 0==nMayBomb )
 	                {
 	                    percent = ((num-nDst)<<8)/(num-mxNum);
@@ -935,7 +938,7 @@ int GetKilledPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 				mxNum = aLiveTypeAll[mxSrcType-1];
 				nDst = aLiveTypeAll[dst];
 	            log_b("kill num %d max %d",num,mxNum);
-	            log_b("kill dst %s %d",aTypeName[dst],nDst);
+	            log_b("kill2 dst %s %d",aTypeName[dst],nDst);
 	            nDst = (dst>=mxSrcType)?nDst:mxNum;
 	            //用2^8代替百分比
 	            percent = ((num-nDst)<<8)/(num-mxNum);
@@ -1231,11 +1234,13 @@ void AddMoveToList(
         	       ( !bShowFlag && pSrc->pLineup->iDir%2==ENGINE_DIR%2 ) ) )
         	{
         		aPercent[0] = AddJunqiMove(pJunqi,pSrc,pDst,&temp);
+        		if( 0==aPercent[0] ) continue;
         	}
         	else
         	{
         		log_b("per eat");
         		aPercent[0] = GetEatPercent(pJunqi,pSrc,pDst);
+        		if( 0==aPercent[0] ) continue;
         		log_b("per %d",aPercent[0]);
         		log_b("eat %d %d %d %d",pSrc->point.x,pSrc->point.y,
         				pDst->point.x,pDst->point.y);
@@ -1253,6 +1258,7 @@ void AddMoveToList(
                    ( !bShowFlag && pSrc->pLineup->iDir%2==ENGINE_DIR%2 ) ) )
         	{
         		aPercent[1] = AddJunqiMove(pJunqi,pSrc,pDst,&temp);
+        		if( 0==aPercent[1] ) continue;
         	}
         	//暂时不考虑大本营是司令的情况
         	else
@@ -1284,10 +1290,12 @@ void AddMoveToList(
                    ( !bShowFlag && pSrc->pLineup->iDir%2==ENGINE_DIR%2 ) ) )
             {
             	aPercent[2] = 256-aPercent[0]-aPercent[1];
+            	if( 0==aPercent[2] ) continue;
             }
             else
             {
 				aPercent[2] = GetKilledPercent(pJunqi,pSrc,pDst);
+				if( 0==aPercent[2] ) continue;
 				log_b("per %d",aPercent[2]);
 				log_b("Killed %d %d %d %d",pSrc->point.x,pSrc->point.y,
 						pDst->point.x,pDst->point.y);

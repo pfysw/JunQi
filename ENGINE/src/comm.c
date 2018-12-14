@@ -110,6 +110,7 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		log_c("stop");
 		break;
 	case COMM_ERROR:
+	    sleep(1);
 		assert(0);
 		break;
 	case COMM_START:

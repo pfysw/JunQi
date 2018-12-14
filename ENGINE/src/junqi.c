@@ -590,6 +590,7 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
         aTypeNum[ZHADAN] += sub;
         aTypeNum[GONGB] = 3;
         aDeadType[GONGB] -= sub;
+        aBombNum[GONGB] -= sub;
         assert( aTypeNum[ZHADAN]<=2 );
     }
 
