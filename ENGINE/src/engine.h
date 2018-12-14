@@ -15,7 +15,6 @@
 #include "movegen.h"
 
 enum MoveEvent{
-	CAMP_EVENT,
 	MOVE_EVENT,
 	GONGB_EVENT,
 	DARK_EVENT,
@@ -24,7 +23,7 @@ enum MoveEvent{
 	BOMB_EVENT
 };
 
-//#define TEST
+#define TEST
 
 #ifdef  TEST
 #define ENGINE_DIR   0
@@ -59,25 +58,32 @@ struct BestMove
     BestMoveList *pHead;
     BestMoveList *pNode;
     MoveList *pTest;
+    int pathValue;
     u8 flag1; //判断是否已经搜索过
-    u8 flag2; //标记这一层搜索无棋可走
+    u8 flag2; //标记这一层搜索不是无棋可走
     u8 mxPerFlag;
     u8 mxPerFlag1;
 };
+
+typedef struct MoveValue
+{
+    u8 src[2];
+    u8 dst[2];
+    int value;
+}MoveValue;
 
 typedef struct ENGINE
 {
 	Junqi *pJunqi;
 	//++++++++++++++
 	//早期的代码，现在不用
-	BoardChess *pCamp[2];
-	BoardChess *pBomb[2];
-	BoardChess *pEat[2];
 	BoardChess *pMove[2];
 	GraphPath *pPath[2];//pPath[0] 暂时不用
 	u16 eventId;
     u8  eventFlag;
     //--------------------------
+    MoveValue aMoveArray[100];
+    JunqiPath *pJunqiPath[2];
     BestMove aBestMove[BEST_LIST_NUM];
     BoardChess *pBest[2];
     PositionList *pPos;

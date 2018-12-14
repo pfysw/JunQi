@@ -42,6 +42,7 @@ void PushMoveToStack(
 	p = (PositionList *)malloc(sizeof(PositionList));
 	memset(p, 0, sizeof(PositionList));//初始化
 	pHead = pEngine->pPos;
+	assert(p!=pHead);
 	pStorage = &p->data;
 
 	if( pHead==NULL )
@@ -266,11 +267,12 @@ void SetBestMove(Junqi *pJunqi, MoveResultData *pResult)
 		pEngine->pBest[0] = pSrc;
 		pEngine->pBest[1] = pDst;
 	}
-	else
-	{
-	    pEngine->pBest[0] = NULL;
-	    pEngine->pBest[1] = NULL;
-	}
+    else
+    {
+        pEngine->pBest[0] = NULL;
+        pEngine->pBest[1] = NULL;
+    }
+
 
 }
 
@@ -284,7 +286,7 @@ int TimeOut(Junqi *pJunqi)
 		rc = 1;
 	}
 
-	//rc = 0;//测试设断点用，否则停下来就超时了
+	rc = 0;//测试设断点用，否则停下来就超时了
 	return rc;
 }
 
@@ -293,18 +295,25 @@ int CallAlphaBeta(
         int depth,
         int alpha,
         int beta,
-        int iDir )
+        int iDir,
+        u8 isMove)
 {
     int val;
 
     if( iDir%2==pJunqi->eTurn%2 )
     {
         //下家阵亡轮到对家走
-        val = AlphaBeta(pJunqi,depth,alpha,beta);
+        if( isMove )
+            val = AlphaBeta(pJunqi,depth,alpha,beta);
+        else
+            val = AlphaBeta(pJunqi,depth,alpha,INFINITY);
     }
     else
     {
-        val = -AlphaBeta(pJunqi,depth,-beta,-alpha);
+        if( isMove )
+            val = -AlphaBeta(pJunqi,depth,-beta,-alpha);
+        else
+            val = -AlphaBeta(pJunqi,depth,-beta,INFINITY);
     }
 
     return val;
@@ -523,6 +532,26 @@ void SetBestMoveNode(
     }
 }
 
+void UpdateBestList(BestMove *aBestMove, int cnt)
+{
+    BestMoveList *p;
+    BestMoveList *p1;
+
+    p = aBestMove[cnt-1].pHead;
+    assert(p!=NULL);
+
+    for(p1=aBestMove[cnt].pHead; p1!=NULL; p1=p1->pNext)
+    {
+        if(p->pNext==NULL)
+        {
+            p->pNext = (BestMoveList*)malloc(sizeof(BestMoveList));
+            memset(p->pNext, 0, sizeof(BestMoveList));
+        }
+        memcpy(p->pNext->result,p1->result,sizeof(p1->result));
+        p = p->pNext;
+    }
+}
+
 void UpdateBestMove(
         BestMove *aBestMove,
         MoveList *pMove,
@@ -531,7 +560,6 @@ void UpdateBestMove(
         u8 isHashVal)
 {
     BestMoveList *p;
-    BestMoveList *p1;
 
     if( aBestMove[cnt-1].pHead==NULL )
     {
@@ -559,18 +587,9 @@ void UpdateBestMove(
     else
 #endif
     {
-        if( aBestMove[cnt].flag2 )
+        if( aBestMove[cnt].flag2 )//下一层不是无棋可走
         {
-            for(p1=aBestMove[cnt].pHead; p1!=NULL; p1=p1->pNext)
-            {
-                if(p->pNext==NULL)
-                {
-                    p->pNext = (BestMoveList*)malloc(sizeof(BestMoveList));
-                    memset(p->pNext, 0, sizeof(BestMoveList));
-                }
-                memcpy(p->pNext->result,p1->result,sizeof(p1->result));
-                p = p->pNext;
-            }
+            UpdateBestList(aBestMove, cnt);
         }
     }
 
@@ -630,6 +649,29 @@ void PrintBestMove(BestMove *aBestMove, int alpha, int depth)
     }
 }
 
+void UpdatePathValue(
+        Junqi *pJunqi,
+        BestMove *aBestMove,
+        int iDir,
+        int cnt )
+{
+    //永远保存正分，用的时候再根据方位还原
+    if( aBestMove[cnt].flag2 )
+    {
+        aBestMove[cnt-1].pathValue = aBestMove[cnt].pathValue;
+    }
+    else
+    {
+        aBestMove[cnt-1].pathValue = GetJunqiPathValue(pJunqi,iDir);
+    }
+
+//    if( iDir%2!=ENGINE_DIR%2 )
+//    {
+//        aBestMove[cnt-1].pathValue = -aBestMove[cnt-1].pathValue;
+//    }
+    //log_a("updata %d",aBestMove[cnt-1].pathValue);
+}
+
 int SearchBestMove(
         Junqi *pJunqi,
         BestMove *aBestMove,
@@ -652,10 +694,10 @@ int SearchBestMove(
     BestMoveList *pNode = aBestMove[0].pNode;
     BestMoveList *pPre;
 
-    //第cnt层更新了alpha值，由于有3种可能的碰撞，递归到上一层并不一定更新
-    //if( aBestMove[cnt-1].flag2 && aBestMove[cnt-1].mxPerFlag && !aBestMove[cnt-1].flag1 )
+    //是否是最后一层，上一层是否概率最大，这一层是否被搜索过
     if( pNode!=NULL && aBestMove[cnt-1].mxPerFlag && !aBestMove[cnt-1].flag1 )
     {
+
         mxPerMove = GetMaxPerMove(pNode->result);
         for(int i=0; i<RESULT_NUM; i++)
         {
@@ -671,10 +713,12 @@ int SearchBestMove(
             *ppBest = &pNode->result[i].move;
             if( i==mxPerMove )
             {
+                //assert(pNode==aBestMove[0].pNode);
                 aBestMove[cnt].mxPerFlag = 1;
                 aBestMove[cnt].mxPerFlag1 = 1;
                 pPre = aBestMove[0].pNode;
                 aBestMove[0].pNode = aBestMove[0].pNode->pNext;
+
 
             }
             else
@@ -694,10 +738,22 @@ int SearchBestMove(
             int iKey;
             iKey = GetHashKey(pJunqi);
 #endif
-            if( !flag )
-                val = CallAlphaBeta(pJunqi,depth-1,alpha,beta,iDir);
+            if( pNode->result[i].move.result==MOVE )
+            {
+                if( !flag )
+                    val = CallAlphaBeta(pJunqi,depth-1,alpha,beta,iDir,1);
+                else
+                    val = CallAlphaBeta1(pJunqi,depth-1,alpha,beta,iDir,1);
+            }
             else
-                val = CallAlphaBeta1(pJunqi,depth-1,alpha,beta,iDir);
+            {
+                //碰撞中有3种情况，不能截断
+                if( !flag )
+                    val = CallAlphaBeta(pJunqi,depth-1,alpha,INFINITY,iDir,0);
+                else
+                    val = CallAlphaBeta1(pJunqi,depth-1,alpha,INFINITY,iDir,0);
+            }
+
 
             if( i>0 )
                 sum += val*pNode->result[i].percent;
@@ -725,45 +781,28 @@ int SearchBestMove(
         {
             mxVal = val;
 
-            if( aBestMove[0].pNode==NULL )
-            {
-                log_a("NULL");
-
-                //aBestMove[0].pHead的末尾添加新结点
-                //假设搜索4层，aBestMove只有2层，在第3层搜索过后，aBestMove[3-1].pHead不为空
-                //在搜索第4层时，第3层为空着但满足第一个条件，第2个条件保证不会进去
-                if( aBestMove[cnt].pHead!=NULL && aBestMove[cnt].flag2 )
-                {
-                    pPre->pNext = (BestMoveList*)malloc(sizeof(BestMoveList));
-                    memset(pPre->pNext, 0, sizeof(BestMoveList));
-                    //assert( aBestMove[cnt].pHead!=NULL );//无棋可走时会触发该断言
-                    assert(aBestMove[cnt].pHead->pNext==NULL);//递归返回时会出现该断言
-                    memcpy(pPre->pNext->result,aBestMove[cnt].pHead->result,
-                            sizeof(pPre->pNext->result));
-                }
-                aBestMove[0].pNode = pPre;
-
-
-            }
-
             if( val>alpha )
             {
+                assert( alpha==-INFINITY );
+                assert(depth!=1);
                 alpha = val;
-
+                memcpy(aBestMove[cnt-1].pHead->result,pPre->result,sizeof(pPre->result));
+                UpdateBestList(aBestMove,cnt);
+                UpdatePathValue(pJunqi,aBestMove,iDir,cnt);
                 log_a("alpha1: %d depth %d",alpha,cnt);
             }
         }
 
-
         if( 1==cnt )
         {
+//            if(depth==3)
+//            UpdateBestList(aBestMove,cnt);
             PrintBestMove(aBestMove,val,depth);
             log_a("end");
         }
-
+        aBestMove[cnt-1].flag1 = 1;
     }
 
-    aBestMove[cnt-1].flag1 = 1;
 
     return mxVal;
 }
@@ -780,6 +819,7 @@ int AlphaBeta(
 
 	MoveResultData *pData;
 	MoveResultData *pBest = NULL;
+	MoveResultData xInitBest;
 	int val;
 	int sum = 0;
 	static int cnt = 0;
@@ -829,8 +869,6 @@ int AlphaBeta(
 	}
 	QueryPerformanceCounter(&nBeginTime);
 
-	mxVal = SearchBestMove(pJunqi,aBestMove,cnt,alpha,beta,&pBest,depth,0);
-
 	//生成着法列表
 	pHead = GenerateMoveList(pJunqi, iDir);
     QueryPerformanceCounter(&nEndTime);
@@ -841,8 +879,29 @@ int AlphaBeta(
 	{
 		pJunqi->eTurn = iDir;
 		ChessTurn(pJunqi);
-		mxVal = CallAlphaBeta(pJunqi,depth-1,alpha,beta,iDir);
+		mxVal = CallAlphaBeta(pJunqi,depth-1,alpha,beta,iDir,1);
 		aBestMove[cnt-1].flag2 = 0;
+        //不要再搜下一层了
+        //例如3层搜索时，刚开始是最好着法是3步棋
+        //后来搜到2步棋的最好着法，第3步无棋可走
+        //由于代码原因，在链表里的第3步仍然还在
+        //第4层搜索时不能把这一步搜进去
+        //*********************************
+        //在SearchBestMove里，一层可能有多种碰撞结果
+        //不是概率最大的一种，不要修改pNode
+        //因为best的搜索只在概率最大的分支下面
+        if( aBestMove[cnt-1].mxPerFlag )
+        {
+            aBestMove[0].pNode = NULL;
+        }
+	}
+	else
+	{
+	    mxVal = SearchBestMove(pJunqi,aBestMove,cnt,alpha,beta,&pBest,depth,0);
+	    if( pBest!=NULL )
+	    {
+	        memcpy(&xInitBest, pBest, sizeof(MoveResultData) );
+	    }
 	}
 
 	if( mxVal>alpha ) alpha = mxVal;
@@ -870,7 +929,7 @@ int AlphaBeta(
         iKey = GetHashKey(pJunqi);
 #endif
 
-        if ( pBest!=NULL && !memcmp(pBest, &p->move, 4) )
+        if ( pBest!=NULL && !memcmp(&xInitBest, &p->move, 4) )
         {
             UnMakeMove(pJunqi,&p->move);
             goto continue_search;
@@ -900,7 +959,15 @@ int AlphaBeta(
     	else
     	{
     	    aBestMove[cnt-1].pTest = p;
-            val = CallAlphaBeta(pJunqi,depth-1,alpha,beta,iDir);
+            if( p->move.result==MOVE )
+            {
+                val = CallAlphaBeta(pJunqi,depth-1,alpha,beta,iDir,1);
+            }
+            else
+            {
+                //碰撞中有3种情况，不能截断
+                val = CallAlphaBeta(pJunqi,depth-1,alpha,beta,iDir,0);
+            }
 #ifdef MOVE_HASH
             RecordMoveHash(&pJunqi->paHash,iKey,pJunqi->eTurn,depth,val);
 #endif
@@ -910,11 +977,11 @@ int AlphaBeta(
 //                    !memcmp(&aBeasMove[1].pTest->move,test3,4))
 //
            // if( cnt==1||cnt==2 )
-            if( cnt==1 )
-            {
-                log_a("cnt %d val %d per %d",cnt,val,p->percent);
-                SafeMemout((u8*)&p->move, sizeof(p->move));
-            }
+//            if( cnt==1 )
+//            {
+//                log_a("cnt %d val %d per %d",cnt,val,p->percent);
+//                SafeMemout((u8*)&p->move, sizeof(p->move));
+//            }
 
 
 //            log_a("cnt %d val %d per %d",cnt,val,p->percent);

@@ -23,17 +23,6 @@ void InsertMoveList(
 	MoveList *pMove;
 	MoveList *pHead = pJunqi->pMoveList;
 
-
-//    static int index = 0;
-//    if( pHead==NULL )
-//    {
-//        index = 0;
-//    }
-//    else
-//    {
-//        index++;
-//        if(index>20) return;
-//    }
 	pJunqi->test_gen_num++;
 	pMove = (MoveList *)malloc(sizeof(MoveList));
 	memset(pMove, 0, sizeof(MoveList));
@@ -221,7 +210,14 @@ int AddCommanderMove(
 
 				if( pSrc->pLineup->type==ZHADAN )
 				{
-					percent = per>>3;// per/8
+				    if(pDst->pLineup->type!=SILING)
+				    {
+				        percent = per>>3;// per/8
+				    }
+				    else
+				    {
+				        percent = per;
+				    }
 				}
 				else
 				{
@@ -249,7 +245,14 @@ int AddCommanderMove(
 			{
 				if( pDst->pLineup->type==ZHADAN )
 				{
-					percent = per>>3;// per/8
+                    if(pSrc->pLineup->type!=SILING)
+                    {
+                        percent = per>>3;// per/8
+                    }
+                    else
+                    {
+                        percent = per;
+                    }
 				}
 				else
 				{
@@ -598,6 +601,10 @@ int GetBombPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 			{
 		        //用2^8代替百分比
 		        percent = (nSrc<<8)/(num-mxNum);
+                if( pDst->isStronghold )
+                {
+                    percent = percent*(nMayLand-nLand)/nMayLand;
+                }
 			}
 			else
 			{
@@ -908,7 +915,7 @@ int GetKilledPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 				mxNum = (aLiveTypeAll[mxSrcType-1]-aLiveTypeSum[mxSrcType-1]);
 				nDst = (aLiveTypeAll[dst]-aLiveTypeSum[dst]);
 	            log_b("kill num %d max %d",num,mxNum);
-	            log_b("kill1 dst %s %d mxType %d",aTypeName[dst],nDst,mxSrcType);
+	            log_b("kill dst %s %d mxType %d",aTypeName[dst],nDst,mxSrcType);
 	            nDst = (dst>=mxSrcType)?nDst:mxNum;
 	            if( pSrc->pLineup->isNotBomb )
 	            {
@@ -916,9 +923,7 @@ int GetKilledPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 	            }
 	            else
 	            {
-	                log_b("nMayBomb %d %d %d %d",nMayBomb,nMayBombLand,nMayLand,nLand);
 	                nMayBomb = nMayBomb+nMayLand-nMayBombLand-nLand;
-	                log_b("nMayBomb nBomb %d %d %d %d",nMayBomb,nBomb,nMayLand,nLand);
 	                if( 0==nMayBomb )
 	                {
 	                    percent = ((num-nDst)<<8)/(num-mxNum);
@@ -938,7 +943,7 @@ int GetKilledPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 				mxNum = aLiveTypeAll[mxSrcType-1];
 				nDst = aLiveTypeAll[dst];
 	            log_b("kill num %d max %d",num,mxNum);
-	            log_b("kill2 dst %s %d",aTypeName[dst],nDst);
+	            log_b("kill dst %s %d",aTypeName[dst],nDst);
 	            nDst = (dst>=mxSrcType)?nDst:mxNum;
 	            //用2^8代替百分比
 	            percent = ((num-nDst)<<8)/(num-mxNum);
@@ -1178,7 +1183,42 @@ u8 IsPossibleBomb(
 //	return rc;
 //}
 
+void AdjustMovePercent(
+        Junqi *pJunqi,
+        BoardChess *pSrc,
+        BoardChess *pDst )
+{
+    int iDir = pSrc->pLineup->iDir;
+    MoveList *p;
+    int sum;
 
+
+    assert( pJunqi->pMoveList!=NULL );
+    if( pDst->type==NONE )
+    {
+        return;
+    }
+    if( (pSrc->pLineup->iDir&1)!=(ENGINE_DIR&1) )
+    {
+        if( pDst->pLineup->nEat>1 &&
+            !pSrc->pLineup->isNotBomb &&
+            pJunqi->aInfo[iDir].aTypeNum[ZHADAN]<2 )
+        {
+            p = pJunqi->pMoveList->pPre;
+            if( p->move.result==KILLED &&
+                p->pPre->move.result==BOMB )
+            {
+                sum = p->pPre->percent + p->percent;
+                p->percent = sum>>2;
+                p->pPre->percent = sum-p->percent;
+//                p->pPre->pNext = pJunqi->pMoveList;
+//                p->pNext->pPre = p->pPre;
+//                free(p);
+            }
+
+        }
+    }
+}
 void AddMoveToList(
 	Junqi *pJunqi,
 	BoardChess *pSrc,
@@ -1199,12 +1239,32 @@ void AddMoveToList(
 	{
 	    if( pDst->index<20 && pDst->isSapperPath )
 	    {
-	       // return;
+	        return;
+	    }
+	}
+	else if( pSrc->type!=DARK )
+	{
+	    if( (pSrc->pLineup->iDir%2)!=(ENGINE_DIR%2) )
+	    {
+	        if(pDst->type!=NONE && !pDst->pLineup->isNotLand)
+	        {
+	            return;
+	        }
+	    }
+	    else
+	    {
+            if(  pDst->type!=NONE &&
+                 !pDst->pLineup->isNotLand &&
+                 pSrc->pLineup->type<LVZH &&
+                 pSrc->pLineup->type != ZHADAN )
+            {
+                return;
+            }
 	    }
 	}
 //    static int jj=0;
 //    jj++;
-//    if(jj==9685)
+//    if(jj==5)
 //    log_c("test");
 //    log_c("jj %d",jj);
 //
@@ -1314,6 +1374,9 @@ void AddMoveToList(
 			break;
 		}
 	}
+
+	AdjustMovePercent(pJunqi,pSrc,pDst);
+
 	if( pDst->type!=NONE )
 	{
 	    assert( (pSrc->pLineup->iDir&1)!=(pDst->pLineup->iDir&1) );
@@ -1337,6 +1400,7 @@ void AddMoveToList(
 			assert(sum>250&&sum<=256);
 		}
 	}
+
 }
 
 BoardChess * GetValideMove(Junqi* pJunqi, BoardChess *pSrc, int j)

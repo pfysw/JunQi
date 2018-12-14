@@ -14,15 +14,11 @@
 #include "movegen.h"
 #include "search.h"
 #include "windows.h"
+#include <omp.h>
 
 int preTurn = 1000;
 
 EventHandle eventArr[] = {
-	{ ComeInCamp, CAMP_EVENT },
-	{ ProBombEvent, BOMB_EVENT },
-	{ ProEatEvent, EAT_EVENT },
-	{ ProEatEvent, GONGB_EVENT },
-	{ ProEatEvent, DARK_EVENT },
 	{ ProJunqiEvent, MOVE_EVENT },
 	{ ProJunqiEvent, JUNQI_EVENT }
 };
@@ -57,6 +53,11 @@ void ProMoveEvent(Junqi* pJunqi, u8 iDir, u8 event)
 	}
 	else if( event==SURRENDER_EVENT )
 	{
+	    if( GenerateMoveList(pJunqi, iDir)==NULL )
+	    {
+	        //复盘无棋可走并没有记录在棋谱中
+	        pJunqi->iRpOfst--;
+	    }
 		DestroyAllChess(pJunqi, iDir);
 		if( iDir==pJunqi->eTurn )
 		{
@@ -84,22 +85,8 @@ void CloseEngine(Engine *pEngine)
 	}
 }
 
-void CheckMoveEvent(
-	Engine *pEngine,
-	BoardChess *pSrc,
-	BoardChess *pDst,
-	MoveResultData* pResult)
+void CheckMoveEvent(Engine *pEngine)
 {
-	int type = pResult->result;
-	if( type==MOVE || type==EAT  )
-	{
-		if( pDst->pLineup->iDir%2!=ENGINE_DIR%2 )
-		{
-			CheckCampEvent(pEngine,pDst);
-		}
-	}
-	CheckBombEvent(pEngine);
-	CheckEatEvent(pEngine);
 	CheckJunqiEvent(pEngine);
 }
 
@@ -176,7 +163,7 @@ void ProMoveResult(Junqi* pJunqi, u8 iDir, u8 *data)
 #ifdef  EVENT_TEST
 		if( pJunqi->nNoEat>8 )
 		{
-		    CheckMoveEvent(pJunqi->pEngine, pSrc, pDst, pResult);
+		    CheckMoveEvent(pJunqi->pEngine);
 		}
 #endif
 	}
@@ -265,6 +252,129 @@ void ClearBestMoveFlag(Engine *pEngine)
     }
 }
 
+
+void *search_thread(void *arg)
+{
+    Junqi* pJunqiBase = (Junqi*)arg;
+    Junqi* pJunqi;
+    Engine* pEngineObj;
+    Engine* pEngine;
+    int eTurn;
+    int value;
+    int i;
+
+    while(1)
+    {
+        while( !pJunqiBase->test_flag );
+
+
+        pJunqi = (Junqi*)malloc(sizeof(Junqi));
+        memcpy(pJunqi,pJunqiBase,sizeof(Junqi));
+        pEngineObj = (Engine*)malloc(sizeof(Engine));
+        memcpy(pEngineObj,pJunqiBase->pEngine,sizeof(Engine));
+        pJunqi->pEngine = pEngineObj;
+        pEngine = pJunqi->pEngine;
+        ChessBoardCopy(pJunqi);
+        pJunqiBase->test_flag = 0;
+
+        eTurn = pJunqi->eTurn;
+        log_b("search1");
+
+        pJunqi->bGo = 0;
+        pJunqi->bMove = 0;
+        pJunqi->begin_time = (unsigned int)time(NULL);
+
+        memset(pEngine->aBestMove,0,sizeof(pEngine->aBestMove));
+
+        for(i=0; i<5; i++)
+        {
+            pJunqi->eTurn = eTurn;
+            pthread_mutex_lock(&pJunqi->mutex);
+            pJunqi->bSearch = 1;
+            pJunqi->test_num = 0;
+            pJunqi->test_gen_num = 0;
+            pJunqi->searche_num[0] = 0;
+            pJunqi->searche_num[1] = 0;
+            ClearBestMoveFlag(pEngine);
+
+            LARGE_INTEGER nBeginTime;
+            LARGE_INTEGER nEndTime;
+            QueryPerformanceCounter(&nBeginTime);
+            pJunqi->test_time[1] = 0;
+
+            //value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
+            value = AlphaBeta1(pJunqi,i,-INFINITY,INFINITY);
+            //value = AlphaBetaTest(pJunqi,i,-INFINITY,INFINITY);
+            //value = AlphaBetaTest(pJunqi,i,4,5);
+            log_a("search1 num %d",pJunqi->test_num);
+            log_a("gen num %d",pJunqi->test_gen_num);
+            log_a("key num %d %d",pJunqi->searche_num[0],
+                    pJunqi->searche_num[1]);
+            pJunqi->bSearch = 0;
+            pthread_mutex_unlock(&pJunqi->mutex);
+            log_a("time %d",time(NULL)-pJunqi->begin_time);
+            BoardChess **pBest = pJunqi->pEngine->pBest;
+            if(i>0)
+            {
+                if( *pBest!=NULL )
+                {
+                    log_a("best1 %d %d %d %d",pBest[0]->point.x,pBest[0]->point.y,
+                            pBest[1]->point.x,pBest[1]->point.y);
+                }
+                else
+                {
+                    log_a("no move");
+                }
+            }
+
+            QueryPerformanceCounter(&nEndTime);
+            pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
+            log_a("gen time %d",pJunqi->test_time[1]);
+            log_a("gen0 time %d",pJunqi->test_time[0]);
+
+            if( TimeOut(pJunqi) )
+            {
+                log_a("break");
+                break;
+            }
+            if( eTurn%2!=ENGINE_DIR%2 )
+            {
+                value = -value;
+            }
+
+            log_a("depth1 %d value %d",i,value);
+        }
+        while(!pJunqiBase->test_end_flag);
+
+//        BoardPoint *pSrcPoint;
+//        BoardPoint *pDstPoint;
+//        pSrcPoint = &pEngine->pBest[0]->point;
+//        pDstPoint = &pJunqiBase->pEngine->pBest[0]->point;
+//        assert(!memcmp(pSrcPoint, pDstPoint, sizeof(BoardPoint)));
+//        pSrcPoint = &pEngine->pBest[1]->point;
+//        pDstPoint = &pJunqiBase->pEngine->pBest[1]->point;
+//        assert(!memcmp(pSrcPoint, pDstPoint, sizeof(BoardPoint)));
+
+        FreeBestMoveList(pEngine->aBestMove,i);
+
+        free(pEngine);
+        free(pJunqi);
+        log_a("**************************");
+    }
+
+    pthread_detach(pthread_self());
+
+    return NULL;
+}
+
+pthread_t CreatSearchThread(Junqi* pJunqi)
+{
+    pthread_t tidp;
+
+    pthread_create(&tidp,NULL,(void*)search_thread,pJunqi);
+    return tidp;
+}
+
 void ProRecMsg(Junqi* pJunqi, u8 *data)
 {
 	CommHeader *pHead;
@@ -324,6 +434,11 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
     if( 0==pJunqi->nRpStep ||
     	pJunqi->iRpOfst>pJunqi->nRpStep-1 )
     {
+
+//        pJunqi->test_end_flag = 0;
+//        pJunqi->test_flag = 1;
+//        while(!pJunqi->test_flag);
+
         analyseFlag = 1;
 		//value = EvalSituation(pJunqi);
     	eTurn = pJunqi->eTurn;
@@ -381,7 +496,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 		    QueryPerformanceCounter(&nEndTime);
 		    pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
 			log_a("gen time %d",pJunqi->test_time[1]);
-			log_a("gen0 time %d",pJunqi->test_time[0]);
+			log_a("gen1 time %d",pJunqi->test_time[0]);
 
 			if( TimeOut(pJunqi) )
 			{
@@ -392,20 +507,21 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 			{
 				value = -value;
 			}
-
 			log_a("depth %d value %d",i,value);
     	}
-
+    	pJunqi->test_end_flag = 1;
     	FreeBestMoveList(pEngine->aBestMove,i);
     	//GenerateMoveList1(pJunqi,eTurn);
 //    	SafeMemout(pJunqi->aInfo[3].aLiveTypeSum,14);
 //    	SafeMemout(pJunqi->aInfo[3].aLiveAllNum,14);
 
     	pJunqi->eTurn = eTurn;
+    	//ChecAttackEvent(pEngine);
 
     }
     pJunqi->bMove = 0;
     pJunqi->iRpOfst++;
+    log_a("iRpOfst %d",pJunqi->iRpOfst);
 
     //if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
     if( preTurn == pJunqi->eTurn )
@@ -424,7 +540,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 #ifndef EVENT_TEST
 		isMove = SendBestMove(pJunqi->pEngine);
 #else
-		if( pJunqi->nNoEat>8 )//&& value>-100 )
+		if( pJunqi->nNoEat>8 && value>-100 )
 		{
 		    isMove = DealEvent(pJunqi->pEngine);
 		}

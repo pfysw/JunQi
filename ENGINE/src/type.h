@@ -14,4 +14,6 @@ typedef struct BestMove BestMove;
 typedef struct BoardGraph BoardGraph;
 typedef struct PositionData PositionData;
 typedef struct ChessLineup ChessLineup;
+typedef struct JunqiPath JunqiPath;
+
 #endif

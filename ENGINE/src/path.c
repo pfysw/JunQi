@@ -1,5 +1,6 @@
 #include "junqi.h"
 #include "event.h"
+#include "path.h"
 
 #undef log_a
 #define log_a(format,...)
@@ -414,4 +415,416 @@ u8 CanMovetoJunqi(Engine *pEngine, BoardChess *pSrc)
 	}
 	pSrc->pathFlag = 0;
 	return rc;
+}
+
+
+void SetNewNodeIndex(
+        Junqi *pJunqi,
+        JunqiPathList *pSrcData,
+        int index,
+        int isLeft,
+        int pathIndex)
+{
+    JunqiPathList *p;
+    p = (JunqiPathList *)malloc(sizeof(JunqiPathList));
+    memset(p,0,sizeof(JunqiPathList));
+    p->index = index;
+    p->iDir = pSrcData->iDir;
+    pSrcData->pNext[pathIndex] = p;
+    GenJunqiPath(pJunqi, p, isLeft);
+}
+
+void GenJunqiPath(
+        Junqi *pJunqi,
+        JunqiPathList *pSrcData,
+        int isLeft)
+{
+    int iDir = pSrcData->iDir;
+    int index = pSrcData->index;
+    BoardChess *pSrc;
+
+    pSrc = &pJunqi->ChessPos[iDir][index];
+    if( index<20 )
+    {
+        if( pSrc->isRailway )
+        {
+            SetNewNodeIndex(pJunqi,pSrcData,index+5,isLeft,0);
+            if( index==10 )
+            {
+                SetNewNodeIndex(pJunqi,pSrcData,16,isLeft,1);
+            }
+            else if( index==14 )
+            {
+                SetNewNodeIndex(pJunqi,pSrcData,18,isLeft,1);
+            }
+        }
+        else
+        {
+            if( isLeft )
+            {
+                SetNewNodeIndex(pJunqi,pSrcData,23,isLeft,0);
+            }
+            else
+            {
+                SetNewNodeIndex(pJunqi,pSrcData,21,isLeft,0);
+            }
+            SetNewNodeIndex(pJunqi,pSrcData,22,isLeft,1);
+        }
+    }
+    else if( pSrc->isRailway )
+    {
+        if( isLeft )
+        {
+            if( index>20 )
+            {
+                SetNewNodeIndex(pJunqi,pSrcData,index+5,isLeft,1);
+                SetNewNodeIndex(pJunqi,pSrcData,index-1,isLeft,0);
+            }
+        }
+        else
+        {
+            if( index<24 )
+            {
+                SetNewNodeIndex(pJunqi,pSrcData,index+5,isLeft,1);
+                SetNewNodeIndex(pJunqi,pSrcData,index+1,isLeft,0);
+            }
+        }
+    }
+    else
+    {
+        if( index==25 )
+        {
+            SetNewNodeIndex(pJunqi,pSrcData,26,isLeft,0);
+        }
+        else if( index==29 )
+        {
+            SetNewNodeIndex(pJunqi,pSrcData,28,isLeft,0);
+        }
+        else if( index==27 )
+        {
+            SetNewNodeIndex(pJunqi,pSrcData,26,isLeft,0);
+            SetNewNodeIndex(pJunqi,pSrcData,28,isLeft,1);
+        }
+    }
+
+}
+
+void InitJunqiPath(Junqi *pJunqi)
+{
+    int i;
+    JunqiPathList *p;
+    for(i=0; i<4; i++)
+    {
+        assert(pJunqi->paPath[i][0]==NULL);
+        assert(pJunqi->paPath[i][1]==NULL);
+        p = (JunqiPathList*)malloc(sizeof(JunqiPathList));
+        memset(p,0,sizeof(JunqiPathList));
+        pJunqi->paPath[i][0] = p;
+        p->index = 0;
+        p->iDir = i;
+        GenJunqiPath(pJunqi, p, 0);
+        p = (JunqiPathList*)malloc(sizeof(JunqiPathList));
+        memset(p,0,sizeof(JunqiPathList));
+        pJunqi->paPath[i][1] = p;
+        p->index = 4;
+        p->iDir = i;
+        GenJunqiPath(pJunqi, p, 1);
+    }
+}
+
+void AddToJunqiPath(
+        Engine *pEngine,
+        u8 index,
+        u8 iPath )
+{
+    JunqiPath *p;
+    JunqiPath *pHead;
+
+    pHead = pEngine->pJunqiPath[iPath];
+    p = (JunqiPath *)malloc(sizeof(JunqiPath));
+    memset(p, 0, sizeof(JunqiPath));
+
+    p->index = index;
+//    p->nChess = pSrcData->nChess;
+//    p->nMayLand = pSrcData->nMayLand;
+
+
+    if( pHead==NULL )
+    {
+        p->isHead = 1;
+        p->pNext = p;
+        p->pPre = p;
+        pEngine->pJunqiPath[iPath] = p;
+    }
+    else
+    {
+        //插入尾部
+        p->pNext = pHead;
+        p->pPre = pHead->pPre;
+        pHead->pPre = p;
+        p->pPre->pNext = p;
+    }
+
+
+}
+
+void ClearJunqiPath(Engine *pEngine, int iPath)
+{
+    JunqiPath *p;
+    JunqiPath *pTmp;
+
+    if( pEngine->pJunqiPath[iPath]==NULL )
+    {
+        return;
+    }
+    assert( pEngine->pJunqiPath[iPath]->isHead );
+
+    p = pEngine->pJunqiPath[iPath]->pNext;
+    while(1)
+    {
+        if(p->isHead)
+        {
+            free(p);
+            break;
+        }
+        else
+        {
+            pTmp = p;
+            p = p->pNext;
+            free(pTmp);
+        }
+    }
+
+    pEngine->pJunqiPath[iPath] = NULL;
+}
+
+void RemoveJunqiPath(Engine *pEngine, int iPath)
+{
+    JunqiPath *pTail;
+    JunqiPath *pHead;
+
+    pHead = pEngine->pJunqiPath[iPath];
+    if( pHead==NULL)
+    {
+        return;
+    }
+    pTail = pHead->pPre;
+
+    if( !pTail->isHead )
+    {
+        pTail->pPre->pNext = pHead;
+        pHead->pPre = pTail->pPre;
+        free(pTail);
+    }
+    else
+    {
+        free(pTail);
+        pEngine->pJunqiPath[iPath] = NULL;
+    }
+
+}
+
+void UpdateJunqiPath(Engine *pEngine,int iPath1, int iPath2)
+{
+    JunqiPath *p;
+
+    assert( pEngine->pJunqiPath[iPath1]==NULL );
+    assert( pEngine->pJunqiPath[iPath2]!=NULL );
+
+    p = pEngine->pJunqiPath[iPath2];
+    assert( p->isHead );
+
+    do
+    {
+        AddToJunqiPath(pEngine, p->index, iPath1);
+
+        if( p->pNext->isHead )
+        {
+            break;
+        }
+
+        p = p->pNext;
+    }while(1);
+}
+
+void SetPathData(Engine *pEngine,JunqiPath *pNode,int iDir)
+{
+    ClearJunqiPath(pEngine, 0);
+    UpdateJunqiPath(pEngine, 0, 1);
+    pEngine->pJunqiPath[0]->nChess = pNode->nChess;
+    pEngine->pJunqiPath[0]->nMayLand = pNode->nMayLand;
+    pEngine->pJunqiPath[0]->iDir = iDir;
+}
+
+void UpdatePathData(
+        Engine *pEngine,
+        JunqiPath *pNode,
+        JunqiPath *pHead,
+        int iDir)
+{
+    if( NULL==pHead )
+    {
+        SetPathData(pEngine,pNode,iDir);
+    }
+    else
+    {
+        if( pNode->nMayLand<pHead->nMayLand )
+        {
+            SetPathData(pEngine,pNode,iDir);
+        }
+        else if( pNode->nMayLand==pHead->nMayLand )
+        {
+            if( pNode->nChess<pHead->nChess )
+            {
+                SetPathData(pEngine,pNode,iDir);
+            }
+        }
+    }
+}
+
+void GetJunqiPath(
+        Engine *pEngine,
+        JunqiPathList *pSrcData )
+{
+    Junqi *pJunqi = pEngine->pJunqi;
+    JunqiPath *pHead = pEngine->pJunqiPath[0];
+    JunqiPath *pNode;
+    JunqiPath *pPre;
+    JunqiPathList *pNext;
+    BoardChess *pSrc;
+    int iDir = pSrcData->iDir;
+    int index = pSrcData->index;
+    int i;
+
+    assert( pSrcData!=NULL );
+    pSrc = &pJunqi->ChessPos[iDir][index];
+
+    //有棋子在营里，此路不通
+    if( pSrc->isCamp && pSrc->type!=NONE &&
+            (pSrc->pLineup->iDir&1)==(pSrc->iDir&1) )
+    {
+        return;
+    }
+
+    AddToJunqiPath(pEngine, pSrcData->index, 1);
+
+    pNode = pEngine->pJunqiPath[1]->pPre;
+    pPre = pNode->pPre;
+    pNode->nChess = pPre->nChess;
+    pNode->nMayLand = pPre->nMayLand;
+
+    if( !pSrc->isStronghold )
+    {
+        if( pSrc->type!=NONE )
+        {
+
+            if( pSrc->pLineup->isNotLand )
+            {
+                pNode->nChess++;
+            }
+            else
+            {
+                pNode->nMayLand++;
+            }
+            if( (pSrc->pLineup->iDir&1)!=(pSrc->iDir&1) )
+            {
+                pNode->nChess = 0;
+                pNode->nMayLand = 0;
+            }
+        }
+
+        for(i=0; i<2; i++)
+        {
+            pNext = pSrcData->pNext[i];
+            if( NULL==pNext ) continue;
+            pNext->nChess = pSrcData->nChess;
+            pNext->nMayLand = pSrcData->nMayLand;
+            GetJunqiPath(pEngine, pNext);
+        }
+    }
+    else
+    {
+        if( pJunqi->aInfo[iDir].bShowFlag )
+        {
+            if( pSrc->type==JUNQI )
+            {
+                UpdatePathData(pEngine,pNode,pHead,iDir);
+            }
+        }
+        else
+        {
+            UpdatePathData(pEngine,pNode,pHead,iDir);
+        }
+    }
+    RemoveJunqiPath(pEngine,1);
+}
+
+int CalJunqiPathValue(Junqi *pJunqi, int iDir)
+{
+    int value = 0;
+    Engine *pEngine = pJunqi->pEngine;
+    JunqiPath *pPath;
+    Value_Parameter *pVal;
+    u16 val1,val2;
+
+    pVal= &pEngine->valPara;
+
+    ClearJunqiPath(pEngine, 0);
+
+    GetJunqiPath(pEngine,pJunqi->paPath[iDir][0]);
+    pPath = pEngine->pJunqiPath[0];
+    val1 = pPath->nChess*pVal->vPathChess+
+            pPath->nMayLand*pVal->vPathLand;
+
+    log_a("nChess %d nLand %d",pPath->nChess,pPath->nMayLand);
+    ClearJunqiPath(pEngine, 0);
+    GetJunqiPath(pEngine,pJunqi->paPath[iDir][1]);
+    pPath = pEngine->pJunqiPath[0];
+    val2 = pPath->nChess*pVal->vPathChess+
+            pPath->nMayLand*pVal->vPathLand;
+    log_a("nChess %d nLand %d",pPath->nChess,pPath->nMayLand);
+
+    if( pJunqi->aInfo[iDir].bShowFlag )
+    {
+        if( pJunqi->Lineup[iDir][26].type==JUNQI )
+        {
+            val1 = val1<<1;
+            val2 = val2>>1;
+        }
+        else
+        {
+            val1 = val1>>1;
+            val2 = val2<<1;
+        }
+    }
+    value = val1+val2;
+
+    log_a("dir %d val %d",iDir,value);
+
+
+    return value;
+}
+
+int GetJunqiPathValue(Junqi *pJunqi, int iDir)
+{
+    int value = 0;
+    int i;
+
+    for(i=0; i<4; i++)
+    {
+        if( !pJunqi->aInfo[i].bDead )
+        {
+            if( i%2==ENGINE_DIR%2 )
+            {
+                value += CalJunqiPathValue(pJunqi,i);
+            }
+            else
+            {
+                value -= CalJunqiPathValue(pJunqi,i);
+            }
+        }
+    }
+
+
+    return value;
 }

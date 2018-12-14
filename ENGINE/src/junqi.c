@@ -135,6 +135,7 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 		pJunqi->Lineup[dir][i].pChess = &pJunqi->ChessPos[dir][i];
 		pJunqi->Lineup[dir][i].bDead = 0;
 		pJunqi->Lineup[dir][i].index = i;
+		pJunqi->Lineup[dir][i].nEat = 0;
 		pJunqi->Lineup[dir][i].mx_type= SILING;
 		if( i<5 )   pJunqi->Lineup[dir][i].isNotBomb = 1;
 		if( i<20 )  pJunqi->Lineup[dir][i].isNotLand = 1;
@@ -142,6 +143,7 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 		SetBoardRailway(pJunqi, dir, i);
 	}
 }
+
 
 void CreatGraphVertex(Junqi *pJunqi, BoardChess *pChess)
 {
@@ -166,6 +168,7 @@ void InitNineGrid(Junqi *pJunqi)
 		pJunqi->NineGrid[i].point.y = 6+(i/3)*2;
 		pJunqi->NineGrid[i].isRailway = 1;
 		pJunqi->NineGrid[i].isNineGrid = 1;
+		pJunqi->NineGrid[i].index = i;
 		CreatGraphVertex(pJunqi,&pJunqi->NineGrid[i]);
 
 	}
@@ -521,6 +524,7 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 	u8 aTypeNumSum[14] = {0};
 	u8 aDeadType[14] = {0};
 	int nBomb;
+	int nExchange = 0;
 	enum ChessType tmp;
 
 	pJunqi->aInfo[iDir].nMayLand = 0;
@@ -577,6 +581,7 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		if( pLineup->bBomb )
 		{
 			aBombNum[pLineup->type]++;
+			nExchange++;
 		}
 	}
 
@@ -602,6 +607,12 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 	GetTypeNum(aBombNum,aTypeNum,aTypeNumSum);
 
 	GetLiveTypeSum(aLiveTypeSum,aLiveTypeNum,aLiveAllNum);
+
+    if( nExchange>3 && aTypeNum[ZHADAN]<2 )
+    {
+        aTypeNum[ZHADAN]++;
+    }
+
     //这里先计算好暗子的最大可能性
 	tmp = GetMaxType(SILING, GONGB, aTypeNumSum);
 
@@ -819,6 +830,7 @@ void PlayResult(
 		}
 		else
 		{
+		    pSrc->pLineup->nEat++;
 			if( pSrc->pLineup->index>=5 )
 			{
 				pSrc->pLineup->isNotBomb = 1;
@@ -875,7 +887,7 @@ void PlayResult(
 	if( type==KILLED )
 	{
 		pSrc->pLineup->bDead = 1;
-
+		pDst->pLineup->nEat++;
 		if( pSrc->type==GONGB && pDst->pLineup->index>=20 )
 		{
 			pDst->pLineup->isNotLand = 1;
@@ -962,6 +974,75 @@ void InitChess(Junqi* pJunqi, u8 *data)
 	AdjustMaxType(pJunqi,(ENGINE_DIR+3)%4);
 }
 
+void ReInitAdjNode(Junqi *pJunqi)
+{
+    int i,j;
+    BoardChess *pChess;
+    int index;
+    int dir;
+
+    for(i=0; i<17; i++)
+    {
+        for(j=0; j<17; j++)
+        {
+            if( pJunqi->aBoard[i][j].pAdjList )
+            {
+                pChess = pJunqi->aBoard[i][j].pAdjList->pChess;
+                assert( pChess );
+                index = pChess->index;
+                dir = pChess->iDir;
+                pChess = &pJunqi->ChessPos[dir][index];
+                pJunqi->aBoard[i][j].pAdjList=NULL;
+            }
+        }
+    }
+}
+
+void ChessBoardCopy(Junqi *pJunqi)
+{
+    int index;
+    int dir;
+    int i,j;
+    BoardChess *pChess;
+    ReInitAdjNode(pJunqi);
+    for(i=0; i<4; i++)
+    {
+        for(j=0; j<30; j++)
+        {
+            assert( pJunqi->ChessPos[i][j].pLineup!=NULL );
+            assert( pJunqi->Lineup[i][j].pChess!=NULL );
+            index = pJunqi->ChessPos[i][j].pLineup->index;
+            dir = pJunqi->ChessPos[i][j].pLineup->iDir;
+            pJunqi->ChessPos[i][j].pLineup = &pJunqi->Lineup[dir][index];
+            if( pJunqi->Lineup[i][j].pChess->isNineGrid )
+            {
+                index = pJunqi->Lineup[i][j].pChess->index;
+                pJunqi->Lineup[i][j].pChess = &pJunqi->NineGrid[index];
+            }
+            else
+            {
+                index = pJunqi->Lineup[i][j].pChess->index;
+                dir = pJunqi->Lineup[i][j].pChess->iDir;
+                pJunqi->Lineup[i][j].pChess = &pJunqi->ChessPos[dir][index];
+            }
+            pChess = &pJunqi->ChessPos[i][j];
+            CreatGraphVertex(pJunqi,pChess);
+        }
+    }
+    for(i=0; i<9; i++)
+    {
+        if( pJunqi->NineGrid[i].pLineup!=NULL )
+        {
+            index = pJunqi->NineGrid[i].pLineup->index;
+            dir = pJunqi->NineGrid[i].pLineup->iDir;
+            pJunqi->NineGrid[i].pLineup = &pJunqi->Lineup[dir][index];
+        }
+        pChess = &pJunqi->NineGrid[i];
+        CreatGraphVertex(pJunqi,pChess);
+    }
+    InitBoardGraph(pJunqi);
+}
+
 void InitBoard(Junqi* pJunqi)
 {
 	for(int i=0; i<4; i++)
@@ -974,4 +1055,5 @@ void InitBoard(Junqi* pJunqi)
 	InitNineGrid(pJunqi);
 	InitBoardGraph(pJunqi);
 	InitCurveRail(pJunqi);
+	InitJunqiPath(pJunqi);
 }

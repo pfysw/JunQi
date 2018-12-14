@@ -16,6 +16,10 @@ typedef struct Value_Parameter_t
 	u8  vDarkLand;
 	u8  vDarkBomb;
 	u8  vDarkJunqi;
+	u8  vPathLand;
+	u8  vPathChess;
+	u8  vDanger;
+
 }Value_Parameter;
 
 void InitValuePara(Value_Parameter *p);

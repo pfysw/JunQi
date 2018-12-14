@@ -31,6 +31,10 @@ enum CompareType {MOVE=1,EAT,BOMB,KILLED,SELECT,SHOW_FLAG,DEAD,BEGIN,TIMER};
 
 #define MOVE_OFFSET (8+30*4)//4字节起始标志+4字节总步数+4家布阵
 
+
+extern int free_cnt;
+extern int malloc_cnt;
+
 typedef struct BoardChess BoardChess;
 typedef struct ChessLineup
 {
@@ -44,6 +48,7 @@ typedef struct ChessLineup
 	u8 index;
 	u8 isNotLand;
 	u8 isNotBomb;
+	u8 nEat;
 }ChessLineup;
 
 typedef struct BoardPoint
@@ -98,6 +103,7 @@ struct GraphPath
 
 typedef struct PartyInfo
 {
+    int deadValue;
 	u8 bDead;
 	u8 cntJump;
 	u8 bShowFlag;
@@ -108,6 +114,36 @@ typedef struct PartyInfo
 	u8 nMayLand;
 	u8 nMayBombLand;
 }PartyInfo;
+
+typedef struct JunqiPathList JunqiPathList;
+struct JunqiPathList
+{
+    //第一次初始化后就不会修改
+    u8 index;
+    u8 nChess;//暂时不用
+    u8 nMayLand;//暂时不用
+    u8 iDir;
+    JunqiPathList *pNext[2];
+};
+
+typedef struct JunqiPath JunqiPath;
+struct JunqiPath
+{
+    u8 index;
+    u8 nChess;
+    u8 nMayLand;
+    u8 iDir;
+    u8 isHead;
+    JunqiPath *pNext;
+    JunqiPath *pPre;
+};
+
+//typedef struct JunqiPathData
+//{
+//    u8 nChess;
+//    u8 nMayLand;
+//    JunqiPathList *pHead;
+//}JunqiPathData;
 
 struct Junqi
 {
@@ -128,6 +164,7 @@ struct Junqi
 	PartyInfo aInfo[4];
 	Engine *pEngine;
 	MoveList *pMoveList;
+	JunqiPathList *paPath[4][2];//0：从index0开始，1:从index4开始
 
 	int nRpStep;
 	int iRpOfst;
@@ -137,7 +174,8 @@ struct Junqi
 	int test_num;
 	int searche_num[2];
 	int iKey;
-	int test_flag;
+	u8 test_flag;
+	u8 test_end_flag;
 	MoveHash **paHash;
 
 
@@ -161,5 +199,6 @@ void PlayResult(
 		);
 void InitBoard(Junqi* pJunqi);
 void InitLineup(Junqi* pJunqi, u8 *data, u8 isInit);
+void ChessBoardCopy(Junqi *pJunqi);
 
 #endif /* JUNQI_H_ */

@@ -24,5 +24,5 @@ u8 ProEatEvent(Engine *pEngine);
 void CheckEatEvent(Engine *pEngine);
 u8 ProJunqiEvent(Engine *pEngine);
 void CheckJunqiEvent(Engine *pEngine);
-
+void ChecAttackEvent(Engine *pEngine);
 #endif /* EVENT_H_ */

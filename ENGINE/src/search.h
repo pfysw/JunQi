@@ -107,7 +107,8 @@ int CallAlphaBeta1(
         int depth,
         int alpha,
         int beta,
-        int iDir );
+        int iDir,
+        u8 isMove);
 void RecordMoveHash(
         MoveHash ***paHash,
         int iKey,
@@ -127,4 +128,9 @@ void MakeNextMove(Junqi *pJunqi, MoveResultData *pResult);
 void UnMakeMove(Junqi *pJunqi, MoveResultData *pResult);
 void SetBestMove(Junqi *pJunqi, MoveResultData *pResult);
 void PrintBestMove(BestMove *aBestMove, int alpha, int depth);
+void UpdatePathValue(
+        Junqi *pJunqi,
+        BestMove *aBestMove,
+        int iDir,
+        int cnt );
 #endif /* SEARCH_H_ */
