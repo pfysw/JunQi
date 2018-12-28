@@ -99,6 +99,7 @@ int AlphaBeta1(
         int beta);
 
 void FreeBestMoveList(
+        Junqi *pJunqi,
         BestMove *aBeasMove,
         int depth);
 
@@ -117,20 +118,46 @@ void RecordMoveHash(
         int val);
 
 void UpdateBestMove(
+        Junqi *pJunqi,
         BestMove *aBeasMove,
         MoveList *pMove,
         int depth,
         int cnt,
         u8 isHashVal);
+void UpdateBestList(
+        Junqi *pJunqi,
+        BestMoveList *pDst,
+        BestMoveList *pSrc,
+        u8 isShare);
 int CheckMoveHash(MoveHash ***paHash, int iKey, int depth, int iDir);
 int GetHashKey(Junqi* pJunqi);
 void MakeNextMove(Junqi *pJunqi, MoveResultData *pResult);
 void UnMakeMove(Junqi *pJunqi, MoveResultData *pResult);
 void SetBestMove(Junqi *pJunqi, MoveResultData *pResult);
-void PrintBestMove(BestMove *aBestMove, int alpha, int depth);
+void PrintBestMove(BestMove *aBestMove, int alpha);
 void UpdatePathValue(
         Junqi *pJunqi,
         BestMove *aBestMove,
         int iDir,
         int cnt );
+void ClearMoveSortList(Junqi *pJunqi);
+void FreeSortMoveNode(Junqi *pJunqi, BestMoveList *pNode);
+void AddMoveSortList(
+        Junqi *pJunqi,
+        BestMove *aBestMove,
+        void *pSrc,
+        int value,
+        u8 flag);
+void PrintMoveSortList(Junqi *pJunqi);
+int SelectSortMove(Junqi *pJunqi);
+int GetMaxPerMove(MoveResult *result);
+int ProSearch(Junqi* pJunqi,int depth);
+void SetBestMoveNode(
+        BestMove *aBestMove,
+        BestMoveList *pList,
+        MoveList *pMove,
+        int cnt );
+void SetPathValue(Junqi *pJunqi);
+void FindBestPathMove(Junqi *pJunqi);
+
 #endif /* SEARCH_H_ */

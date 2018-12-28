@@ -42,6 +42,7 @@ extern u8 aEventBit[100];
 typedef struct MoveResult
 {
     MoveResultData move;
+    int value;
     int percent;
     u8 flag;//标记是移动还是碰撞
 }MoveResult;
@@ -51,6 +52,7 @@ struct  BestMoveList
 {
     MoveResult result[RESULT_NUM];
     BestMoveList *pNext;
+    u8 index;
 };
 
 struct BestMove
@@ -72,6 +74,23 @@ typedef struct MoveValue
     int value;
 }MoveValue;
 
+typedef struct MoveSort MoveSort;
+struct MoveSort
+{
+    BestMoveList *pHead;
+    MoveSort *pNext;
+    MoveSort *pPre;
+    int aValue[10];
+    u8 isHead;
+    u8 nNode;
+};
+
+typedef struct SearchMsg SearchMsg;
+struct SearchMsg
+{
+    SearchType type;
+};
+
 typedef struct ENGINE
 {
 	Junqi *pJunqi;
@@ -83,9 +102,11 @@ typedef struct ENGINE
     u8  eventFlag;
     //--------------------------
     MoveValue aMoveArray[100];
+    MoveSort **ppMoveSort;
     JunqiPath *pJunqiPath[2];
     BestMove aBestMove[BEST_LIST_NUM];
     BoardChess *pBest[2];
+    u8 aSendBest[4];
     PositionList *pPos;
     Value_Parameter valPara;
 }Engine;

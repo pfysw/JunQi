@@ -14,7 +14,7 @@
 #include "movegen.h"
 #include "search.h"
 #include "windows.h"
-#include <omp.h>
+#include <mqueue.h>
 
 int preTurn = 1000;
 
@@ -71,6 +71,8 @@ Engine *OpneEnigne(Junqi *pJunqi)
 	Engine *pEngine = (Engine *)malloc(sizeof(Engine));
 	memset(pEngine, 0, sizeof(Engine));
 	memset(aEventBit, 0, sizeof(aEventBit));
+	pEngine->ppMoveSort = (MoveSort **)malloc(sizeof(MoveSort *));
+	memset(pEngine->ppMoveSort,0,sizeof(MoveSort *));
 	pEngine->pJunqi = pJunqi;
 	InitValuePara(&pEngine->valPara);
 	return pEngine;
@@ -247,6 +249,7 @@ void ClearBestMoveFlag(Engine *pEngine)
     for(int i=0; i<BEST_LIST_NUM; i++)
     {
         pEngine->aBestMove[i].flag1 = 0;
+        //pEngine->aBestMove[i].flag2不能清，代表上一轮搜到的标记
         pEngine->aBestMove[i].mxPerFlag = 0;
         pEngine->aBestMove[i].mxPerFlag1 = 0;
     }
@@ -254,6 +257,7 @@ void ClearBestMoveFlag(Engine *pEngine)
 
 
 void *search_thread(void *arg)
+//DWORD WINAPI search_thread(LPVOID arg)
 {
     Junqi* pJunqiBase = (Junqi*)arg;
     Junqi* pJunqi;
@@ -262,20 +266,35 @@ void *search_thread(void *arg)
     int eTurn;
     int value;
     int i;
+    int len;
+    u8 aBuf[REC_LEN];
+    SearchMsg *pMsg;
 
+   //while(!pJunqiBase->test_flag);
     while(1)
     {
-        while( !pJunqiBase->test_flag );
 
+        len = mq_receive(pJunqiBase->search_qid, (char *)aBuf, REC_LEN, NULL);
+        (void)len;//不用
+        pMsg = (SearchMsg*)aBuf;
 
         pJunqi = (Junqi*)malloc(sizeof(Junqi));
         memcpy(pJunqi,pJunqiBase,sizeof(Junqi));
+        pJunqi->pJunqiBase = pJunqiBase;
+        //IntiMoveMem(pJunqi);
+
+        memsys5Init(pJunqi,30000,16);
+
         pEngineObj = (Engine*)malloc(sizeof(Engine));
         memcpy(pEngineObj,pJunqiBase->pEngine,sizeof(Engine));
         pJunqi->pEngine = pEngineObj;
         pEngine = pJunqi->pEngine;
+
         ChessBoardCopy(pJunqi);
-        pJunqiBase->test_flag = 0;
+        pthread_mutex_lock(&pJunqi->search_mutex);
+        pJunqiBase->cntSearch++;
+        pthread_mutex_unlock(&pJunqi->search_mutex);
+
 
         eTurn = pJunqi->eTurn;
         log_b("search1");
@@ -286,32 +305,44 @@ void *search_thread(void *arg)
 
         memset(pEngine->aBestMove,0,sizeof(pEngine->aBestMove));
 
+        LARGE_INTEGER nBeginTime;
+        LARGE_INTEGER nEndTime;
+        QueryPerformanceCounter(&nBeginTime);
+        pJunqi->test_time[1] = 0;
+
+
+        pJunqi->eSearchType = pMsg->type;
+
+        //不执行AlphaBeta，并且一直死循环时
+        //该线程的cpu是满负荷运行的
+        //当执行AlphaBeta后就不是了
+        //而当ProRecMsg执行完后while(1)时，又变回满负荷了
+        //似乎哪里产生资源互斥卡了一下，不能发挥多核效果
+        //*****************************
+        //初步得出结论是InsertMoveList的malloc影响，malloc不可重入，内部会上锁
         for(i=0; i<5; i++)
+        //while(1)
         {
+           // i = 1;
             pJunqi->eTurn = eTurn;
-            pthread_mutex_lock(&pJunqi->mutex);
             pJunqi->bSearch = 1;
             pJunqi->test_num = 0;
             pJunqi->test_gen_num = 0;
             pJunqi->searche_num[0] = 0;
             pJunqi->searche_num[1] = 0;
             ClearBestMoveFlag(pEngine);
+            pJunqi->cnt = 0;
+            //ClearMoveSortList(pJunqi,0);
 
-            LARGE_INTEGER nBeginTime;
-            LARGE_INTEGER nEndTime;
-            QueryPerformanceCounter(&nBeginTime);
-            pJunqi->test_time[1] = 0;
-
-            //value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
+           // value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
             value = AlphaBeta1(pJunqi,i,-INFINITY,INFINITY);
-            //value = AlphaBetaTest(pJunqi,i,-INFINITY,INFINITY);
+           // value = AlphaBeta1(pJunqi,i,-INFINITY,INFINITY);
             //value = AlphaBetaTest(pJunqi,i,4,5);
             log_a("search1 num %d",pJunqi->test_num);
             log_a("gen num %d",pJunqi->test_gen_num);
             log_a("key num %d %d",pJunqi->searche_num[0],
                     pJunqi->searche_num[1]);
             pJunqi->bSearch = 0;
-            pthread_mutex_unlock(&pJunqi->mutex);
             log_a("time %d",time(NULL)-pJunqi->begin_time);
             BoardChess **pBest = pJunqi->pEngine->pBest;
             if(i>0)
@@ -327,11 +358,6 @@ void *search_thread(void *arg)
                 }
             }
 
-            QueryPerformanceCounter(&nEndTime);
-            pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
-            log_a("gen time %d",pJunqi->test_time[1]);
-            log_a("gen0 time %d",pJunqi->test_time[0]);
-
             if( TimeOut(pJunqi) )
             {
                 log_a("break");
@@ -344,7 +370,9 @@ void *search_thread(void *arg)
 
             log_a("depth1 %d value %d",i,value);
         }
-        while(!pJunqiBase->test_end_flag);
+
+
+        //while(!pJunqiBase->test_end_flag);
 
 //        BoardPoint *pSrcPoint;
 //        BoardPoint *pDstPoint;
@@ -355,16 +383,29 @@ void *search_thread(void *arg)
 //        pDstPoint = &pJunqiBase->pEngine->pBest[1]->point;
 //        assert(!memcmp(pSrcPoint, pDstPoint, sizeof(BoardPoint)));
 
-        FreeBestMoveList(pEngine->aBestMove,i);
+        FreeBestMoveList(pJunqi,pEngine->aBestMove,i);
 
+        log_a("malloc d %d",pJunqi->malloc_cnt);
+        log_a("free d %d",pJunqi->free_cnt);
+        //free(pJunqi->mem_pool.pStart);
+        free(pJunqi->pThreadMem);
+        ClearAdjNode(pJunqi);
         free(pEngine);
         free(pJunqi);
         log_a("**************************");
+        QueryPerformanceCounter(&nEndTime);
+        pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
+        log_a("gen time %d",pJunqi->test_time[1]);
+        log_a("gen0 time %d",pJunqi->test_time[0]);
+        while(!pJunqiBase->begin_flag);
+        pJunqiBase->cntSearch--;
+
+
     }
 
     pthread_detach(pthread_self());
 
-    return NULL;
+    return 0;
 }
 
 pthread_t CreatSearchThread(Junqi* pJunqi)
@@ -375,18 +416,129 @@ pthread_t CreatSearchThread(Junqi* pJunqi)
     return tidp;
 }
 
+//void CreatSearchThread(Junqi* pJunqi)
+//{
+//    HANDLE handle1;
+//    handle1 = CreateThread(NULL,0,search_thread,pJunqi,0,NULL);
+//    //SetThreadAffinityMask(handle1,16);
+//}
+
+int ProSearch(Junqi* pJunqi,int depth)
+{
+    int value;
+    int eTurn;
+    int i;
+    Engine *pEngine = pJunqi->pEngine;
+
+    eTurn = pJunqi->eTurn;
+    pJunqi->bGo = 0;
+    pJunqi->bMove = 0;
+    pJunqi->begin_time = (unsigned int)time(NULL);
+
+    memset(pEngine->aBestMove,0,sizeof(pEngine->aBestMove));
+
+
+    for(i=0; i<depth+1; i++)
+    {
+
+        //ClearMoveSortList(pJunqi,0);
+
+        pJunqi->eTurn = eTurn;
+
+
+        pJunqi->test_num = 0;
+        pJunqi->test_gen_num = 0;
+        pJunqi->searche_num[0] = 0;
+        pJunqi->searche_num[1] = 0;
+        ClearBestMoveFlag(pEngine);
+
+        //value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
+        value = AlphaBeta1(pJunqi,i,-INFINITY,INFINITY);
+        //value = AlphaBetaTest(pJunqi,i,-INFINITY,INFINITY);
+        //value = AlphaBetaTest(pJunqi,i,4,5);
+
+
+
+
+        //if( !pJunqi->isDeepSearch )
+        {
+            log_a("search2 num %d",pJunqi->test_num);
+            log_a("gen num %d",pJunqi->test_gen_num);
+            log_a("key num %d %d",pJunqi->searche_num[0],
+                    pJunqi->searche_num[1]);
+
+            log_a("time %d",time(NULL)-pJunqi->begin_time);
+            BoardChess **pBest = pJunqi->pEngine->pBest;
+            if(i>0)
+            {
+                if( *pBest!=NULL )
+                {
+                    log_a("best %d %d %d %d",pBest[0]->point.x,pBest[0]->point.y,
+                            pBest[1]->point.x,pBest[1]->point.y);
+                }
+                else
+                {
+                    log_a("no move");
+                }
+            }
+
+
+        }
+        if( TimeOut(pJunqi) )
+        {
+            log_a("break");
+            break;
+        }
+        if( eTurn%2!=ENGINE_DIR%2 )
+        {
+            value = -value;
+        }
+        log_a("depth %d value %d",i,value);
+
+
+
+    }
+
+    pJunqi->eTurn = eTurn;
+    FreeBestMoveList(pJunqi,pEngine->aBestMove,i);
+
+    return value;
+}
+
+u8 IsOnlyTwoDir(Junqi* pJunqi)
+{
+    u8 rc = 0;
+    u8 num = 0;
+
+    for(int i=0; i<4; i++)
+    {
+        if( pJunqi->aInfo[i].bDead )
+        {
+            num++;
+        }
+    }
+
+    if(num>=2)
+    {
+        rc = 1;
+    }
+
+    return rc;
+}
+
 void ProRecMsg(Junqi* pJunqi, u8 *data)
 {
 	CommHeader *pHead;
 	pHead = (CommHeader *)data;
 	u8 event;
 	u8 isMove = 0;
-	int value;
-	int eTurn;
-	Engine *pEngine = pJunqi->pEngine;
-	int i;
-	int analyseFlag = 0;
+	char aBuf[REC_LEN] = {0};
+	SearchMsg *pMsg;
+	u8 nTread = 0;
+	int iDir;
 
+
+	pJunqi->bAnalyse = 0;
 	if( memcmp(pHead->aMagic, aMagic, 4)!=0 )
 	{
 		return;
@@ -431,106 +583,109 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	{
 		return;
 	}
+
     if( 0==pJunqi->nRpStep ||
     	pJunqi->iRpOfst>pJunqi->nRpStep-1 )
     {
 
-//        pJunqi->test_end_flag = 0;
-//        pJunqi->test_flag = 1;
-//        while(!pJunqi->test_flag);
+        pthread_mutex_lock(&pJunqi->mutex);
+        pJunqi->bSearch = 1;
+        pJunqi->bAnalyse = 1;
 
-        analyseFlag = 1;
-		//value = EvalSituation(pJunqi);
-    	eTurn = pJunqi->eTurn;
-    	log_b("search1");
-//		pJunqi->eTurn = eTurn;
-//		value = AlphaBeta(pJunqi,4,-INFINITY,INFINITY);
-//		log_b("depth %d value %d",4,value);
-    	pJunqi->bGo = 0;
-    	pJunqi->bMove = 0;
-    	pJunqi->begin_time = (unsigned int)time(NULL);
+//        if( pJunqi->eTurn%2!=ENGINE_DIR )
+//        {
+//            goto search_end;
+//        }
 
-    	memset(pEngine->aBestMove,0,sizeof(pEngine->aBestMove));
+        pMsg = (SearchMsg*)aBuf;
 
-    	for(i=0; i<5; i++)
-    	{
-    		pJunqi->eTurn = eTurn;
-    		pthread_mutex_lock(&pJunqi->mutex);
-    		pJunqi->bSearch = 1;
-    		pJunqi->test_num = 0;
-    		pJunqi->test_gen_num = 0;
-    		pJunqi->searche_num[0] = 0;
-    		pJunqi->searche_num[1] = 0;
-    		ClearBestMoveFlag(pEngine);
+        pJunqi->malloc_cnt = 0;
+        pJunqi->free_cnt = 0;
 
-            LARGE_INTEGER nBeginTime;
-            LARGE_INTEGER nEndTime;
-            QueryPerformanceCounter(&nBeginTime);
-    		pJunqi->test_time[1] = 0;
-
-			//value = AlphaBeta(pJunqi,i,-INFINITY,INFINITY);
-			value = AlphaBeta1(pJunqi,i,-INFINITY,INFINITY);
-    		//value = AlphaBetaTest(pJunqi,i,-INFINITY,INFINITY);
-    		//value = AlphaBetaTest(pJunqi,i,4,5);
-			log_a("search1 num %d",pJunqi->test_num);
-			log_a("gen num %d",pJunqi->test_gen_num);
-			log_a("key num %d %d",pJunqi->searche_num[0],
-			        pJunqi->searche_num[1]);
-			pJunqi->bSearch = 0;
-			pthread_mutex_unlock(&pJunqi->mutex);
-			log_a("time %d",time(NULL)-pJunqi->begin_time);
-			BoardChess **pBest = pJunqi->pEngine->pBest;
-            if(i>0)
+#if 1
+        pJunqi->begin_flag = 0;
+        pJunqi->bGo = 0;
+        pJunqi->bMove = 0;
+        iDir = pJunqi->eTurn;
+        if( !IsOnlyTwoDir(pJunqi) )
+        {
+            if( !pJunqi->aInfo[(iDir+1)%4].bDead )
             {
-                if( *pBest!=NULL )
-                {
-                    log_a("best %d %d %d %d",pBest[0]->point.x,pBest[0]->point.y,
-                            pBest[1]->point.x,pBest[1]->point.y);
-                }
-                else
-                {
-                    log_a("no move");
-                }
+                pMsg->type = SEARCH_RIGHT;
+                mq_send(pJunqi->search_qid, aBuf, sizeof(SearchMsg), 0);
+                nTread++;
             }
+            if( !pJunqi->aInfo[(iDir+3)%4].bDead )
+            {
+                pMsg->type = SEARCH_LEFT;
+                mq_send(pJunqi->search_qid, aBuf, sizeof(SearchMsg), 0);
+                nTread++;
+            }
+        }
+        while( pJunqi->cntSearch<nTread );//等待所有线程都初始化完毕
+        pJunqi->begin_flag = 1;
+#endif
 
-		    QueryPerformanceCounter(&nEndTime);
-		    pJunqi->test_time[0] = nEndTime.QuadPart-nBeginTime.QuadPart;
-			log_a("gen time %d",pJunqi->test_time[1]);
-			log_a("gen1 time %d",pJunqi->test_time[0]);
+        LARGE_INTEGER nBeginTimet;
+        LARGE_INTEGER nEndTimet;
+        QueryPerformanceCounter(&nBeginTimet);
+        pJunqi->test_time[1] = 0;
 
-			if( TimeOut(pJunqi) )
-			{
-				log_a("break");
-				break;
-			}
-			if( eTurn%2!=ENGINE_DIR%2 )
-			{
-				value = -value;
-			}
-			log_a("depth %d value %d",i,value);
-    	}
-    	pJunqi->test_end_flag = 1;
-    	FreeBestMoveList(pEngine->aBestMove,i);
-    	//GenerateMoveList1(pJunqi,eTurn);
-//    	SafeMemout(pJunqi->aInfo[3].aLiveTypeSum,14);
-//    	SafeMemout(pJunqi->aInfo[3].aLiveAllNum,14);
 
-    	pJunqi->eTurn = eTurn;
+        pJunqi->eSearchType = SEARCH_DEFAULT;
+        ProSearch(pJunqi,4);
+        pJunqi->eSearchType = SEARCH_SINGLE;
+        ProSearch(pJunqi,3);
+
+        //pJunqi->eSearchType = SEARCH_LEFT;
+//        pJunqi->eSearchType = SEARCH_RIGHT;
+//        ProSearch(pJunqi,4);
+
+        QueryPerformanceCounter(&nEndTimet);
+        pJunqi->test_time[0] = nEndTimet.QuadPart-nBeginTimet.QuadPart;
+        log_a("gen time %d",pJunqi->test_time[1]);
+        log_a("gen1 time %d",pJunqi->test_time[0]);
+
+
+        while(pJunqi->cntSearch);//等所有线程搜索完毕
+
+    	//SelectSortMove(pJunqi);
+        SetPathValue(pJunqi);
+    	//PrintMoveSortList(pJunqi);
+    	FindBestPathMove(pJunqi);
+    	ClearMoveSortList(pJunqi);
+        log_a("malloc %d",pJunqi->malloc_cnt);
+        log_a("free %d",pJunqi->free_cnt);
+
+        //assert( pJunqi->malloc_cnt==pJunqi->free_cnt );
+
+//    	memset(pJunqi->pEngine,0,sizeof(Engine));
+//    	memset(pJunqi,0,sizeof(Junqi));
+//
+//     	while(1);
     	//ChecAttackEvent(pEngine);
+search_end:
+        pJunqi->bSearch = 0;
+        pthread_mutex_unlock(&pJunqi->mutex);
 
     }
     pJunqi->bMove = 0;
     pJunqi->iRpOfst++;
-    log_a("iRpOfst %d",pJunqi->iRpOfst);
+    log_a("iRpOfst %d %d",pJunqi->iRpOfst,pJunqi->nRpStep);
 
     //if( !pJunqi->bGo || preTurn == pJunqi->eTurn )
-    if( preTurn == pJunqi->eTurn )
+    if( preTurn == pJunqi->eTurn )//go指令发了很多条，此时play结果还没发出来时
     {
         return;
     }
     pJunqi->bGo = 0;
 
-	if( pJunqi->eTurn%2==ENGINE_DIR && analyseFlag )
+    if(  preTurn<4 && preTurn%2==ENGINE_DIR )
+    {
+        PrognosisChess(pJunqi,preTurn);
+    }
+
+	if( pJunqi->eTurn%2==ENGINE_DIR && pJunqi->bAnalyse )
 	{
 		if( pJunqi->aInfo[pJunqi->eTurn].bDead )
 		{
@@ -577,13 +732,14 @@ void *engine_thread(void *arg)
     }
 
 	pthread_detach(pthread_self());
-	return NULL;
+	return 0;
 }
 
 pthread_t CreatEngineThread(Junqi* pJunqi)
 {
     pthread_t tidp;
     mqd_t qid;
+    //mq_receive不能小于REC_LEN
     struct mq_attr attr = {0,15,REC_LEN};
 
   //  struct mq_attr attr1 = {0,20,REC_LEN};
@@ -602,6 +758,20 @@ pthread_t CreatEngineThread(Junqi* pJunqi)
 //    }
 
     pJunqi->qid = qid;
+
+    mq_unlink("search_msg");
+    qid = mq_open("search_msg", O_CREAT | O_RDWR, 644, &attr);
+    if (qid == -1)
+    {
+        perror("mq_open");
+        exit(EXIT_FAILURE);
+    }
+
+    pJunqi->search_qid = qid;
+
+//    HANDLE handle1;
+//    handle1 = CreateThread(NULL,0,engine_thread,pJunqi,0,NULL);
+//    SetThreadAffinityMask(handle1,1);
 
     pthread_create(&tidp,NULL,(void*)engine_thread,pJunqi);
     return tidp;

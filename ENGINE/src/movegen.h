@@ -23,7 +23,7 @@ struct MoveList
 
 };
 
-void ClearMoveList(MoveList *pHead);
+void ClearMoveList(Junqi *pJunqi, MoveList *pHead);
 MoveList *GenerateMoveList(Junqi* pJunqi, int iDir);
 void SearchMovePath(
         Junqi* pJunqi,

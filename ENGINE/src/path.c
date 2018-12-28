@@ -753,52 +753,102 @@ void GetJunqiPath(
         }
         else
         {
-            UpdatePathData(pEngine,pNode,pHead,iDir);
+            if( pSrc->iDir%2!=ENGINE_DIR || pSrc->type==JUNQI )
+            {
+                UpdatePathData(pEngine,pNode,pHead,iDir);
+            }
         }
     }
     RemoveJunqiPath(pEngine,1);
 }
 
+int EvaluatePathValue(Junqi *pJunqi, u8 nChess, u8 nMayLand)
+{
+    int val = 0;
+    Engine *pEngine = pJunqi->pEngine;
+    Value_Parameter *pVal;
+
+    pVal= &pEngine->valPara;
+    if( nMayLand==0 )
+    {
+        switch(nChess)
+        {
+        case 0:
+            val = 0;
+            break;
+        case 1:
+            val = pVal->vPathChess<<1;
+            break;
+        default:
+            val = (pVal->vPathChess<<1)+pVal->vPathChess;
+            break;
+        }
+    }
+    else if( nMayLand==1 )
+    {
+        switch(nChess)
+        {
+        case 0:
+            val = pVal->vPathLand<<1;
+            break;
+        case 1:
+            val = (pVal->vPathLand<<1)+pVal->vPathChess;
+            break;
+        default:
+            val = (pVal->vPathChess<<1)+(pVal->vPathLand<<1);
+            break;
+        }
+    }
+    else
+    {
+        switch(nChess)
+        {
+        case 0:
+            val = pVal->vPathLand<<2;
+            break;
+        default:
+            val = (pVal->vPathLand<<2)+pVal->vPathChess;
+            break;
+        }
+    }
+
+    return val;
+}
 int CalJunqiPathValue(Junqi *pJunqi, int iDir)
 {
     int value = 0;
     Engine *pEngine = pJunqi->pEngine;
     JunqiPath *pPath;
-    Value_Parameter *pVal;
     u16 val1,val2;
-
-    pVal= &pEngine->valPara;
 
     ClearJunqiPath(pEngine, 0);
 
     GetJunqiPath(pEngine,pJunqi->paPath[iDir][0]);
     pPath = pEngine->pJunqiPath[0];
-    val1 = pPath->nChess*pVal->vPathChess+
-            pPath->nMayLand*pVal->vPathLand;
+    val1 = EvaluatePathValue(pJunqi,pPath->nChess,pPath->nMayLand);
 
     log_a("nChess %d nLand %d",pPath->nChess,pPath->nMayLand);
     ClearJunqiPath(pEngine, 0);
     GetJunqiPath(pEngine,pJunqi->paPath[iDir][1]);
     pPath = pEngine->pJunqiPath[0];
-    val2 = pPath->nChess*pVal->vPathChess+
-            pPath->nMayLand*pVal->vPathLand;
+    val2 = EvaluatePathValue(pJunqi,pPath->nChess,pPath->nMayLand);
     log_a("nChess %d nLand %d",pPath->nChess,pPath->nMayLand);
 
-    if( pJunqi->aInfo[iDir].bShowFlag )
-    {
-        if( pJunqi->Lineup[iDir][26].type==JUNQI )
-        {
-            val1 = val1<<1;
-            val2 = val2>>1;
-        }
-        else
-        {
-            val1 = val1>>1;
-            val2 = val2<<1;
-        }
-    }
+//    if( pJunqi->aInfo[iDir].bShowFlag )
+//    {
+//        if( pJunqi->Lineup[iDir][26].type==JUNQI )
+//        {
+//            val1 = val1<<1;
+//            val2 = val2>>1;
+//        }
+//        else
+//        {
+//            val1 = val1>>1;
+//            val2 = val2<<1;
+//        }
+//    }
     value = val1+val2;
-
+    log_a("val1 %d val2 %d",val1,val2);
     log_a("dir %d val %d",iDir,value);
 
 
@@ -814,7 +864,7 @@ int GetJunqiPathValue(Junqi *pJunqi, int iDir)
     {
         if( !pJunqi->aInfo[i].bDead )
         {
-            if( i%2==ENGINE_DIR%2 )
+            if( i%2==ENGINE_DIR )
             {
                 value += CalJunqiPathValue(pJunqi,i);
             }
@@ -825,6 +875,13 @@ int GetJunqiPathValue(Junqi *pJunqi, int iDir)
         }
     }
 
+    if( iDir%2!=ENGINE_DIR )
+    {
+        value = -value;
+    }
+
 
     return value;
 }
+
+

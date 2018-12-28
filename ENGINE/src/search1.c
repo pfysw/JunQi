@@ -16,8 +16,6 @@
 //与AlphaBeta不同的是每一次搜索不用先生成全部着法
 //每生成一步立刻进行递归，出现剪枝时后面的着法也就不用生成了
 //这样节省了大量InsertMove的调用
-//后来测试发现GenerateMoveList占用的时间很少
-//主要时间耗在了CheckMoveHash里，所以性能提升有限
 
 typedef struct AlphaBetaData
 {
@@ -63,6 +61,627 @@ int CallAlphaBeta1(
     }
 
     return val;
+}
+
+void UpdateBestToSort(
+        Junqi *pJunqi,
+        BestMove *aBestMove,
+        BestMoveList *p,
+        void *pSrc,
+        u8 flag )
+{
+    BestMoveList *pRslt;
+    MoveList *pMove;
+
+    if( !flag )
+    {
+        pMove = (MoveList *)pSrc;
+    }
+    else
+    {
+        pRslt = (BestMoveList *)pSrc;
+    }
+
+    if(!flag)
+    {
+        SetBestMoveNode(aBestMove,p,pMove,1);
+    }
+    else
+    {
+
+        memcpy(p->result,pRslt->result,sizeof(p->result));
+        p->index = pRslt->index;
+//        u8 tet[4] = {0};
+//        if( !memcmp(&p->result[p->index].move,tet,4) )
+//        {
+//            log_a("ds");
+//        }
+    }
+
+
+    if( aBestMove[1].flag2 )
+    {
+        UpdateBestList(pJunqi, p, aBestMove[1].pHead,1);
+    }
+}
+
+MoveSort *FindMoveSortList(
+        MoveSort *pHead,
+        void *pSrc,
+        u8 flag
+        )
+
+{
+    MoveSort *pNode = NULL;
+    MoveResultData *pInput;
+    MoveResultData *pData;
+    BestMoveList *pRslt;
+    MoveList *pMove;
+    MoveSort *p;
+    u8 index;
+
+    if( !flag )
+    {
+        pMove = (MoveList *)pSrc;
+        pInput = &pMove->move;
+    }
+    else
+    {
+        pRslt = (BestMoveList *)pSrc;
+        pInput = &pRslt->result[pRslt->index].move;
+    }
+
+    assert(pHead!=NULL);
+    for(p=pHead; ; p=p->pNext)
+    {
+        index = p->pHead->index;
+        pData = &p->pHead->result[index].move;
+        if( !memcmp(pData,pInput,4) )
+        {
+            pNode = p;
+            break;
+        }
+        if( p->pNext->isHead )
+        {
+            break;
+        }
+    }
+
+    return pNode;
+}
+
+
+void AddMoveSortList(
+        Junqi *pJunqi,
+        BestMove *aBestMove,
+        void *pSrc,
+        int value,
+        u8 flag)
+{
+
+    Engine *pEngine = pJunqi->pEngine;
+    MoveSort **ppHead = pEngine->ppMoveSort;
+    MoveSort *pNode;
+    //MoveSort *pMin;
+    BestMoveList *p;
+    int type = pJunqi->eSearchType;
+
+
+    if( pJunqi->eSearchType==SEARCH_DEEP )
+    {
+        return;
+    }
+
+    pthread_mutex_lock(&pJunqi->search_mutex);
+
+    if( *ppHead==NULL )
+    {
+        *ppHead = (MoveSort *)malloc(sizeof(MoveSort));
+        //*ppHead = (MoveSort *)memsys5Malloc(pJunqi,sizeof(MoveSort));
+        memset((*ppHead),0,sizeof(MoveSort));
+        (*ppHead)->aValue[type] = value;
+        (*ppHead)->isHead = 1;
+        (*ppHead)->nNode = 1;
+        (*ppHead)->pNext = *ppHead;
+        (*ppHead)->pPre = *ppHead;
+        *(pEngine->ppMoveSort) = *ppHead;
+
+        p = (BestMoveList *)malloc(sizeof(BestMoveList));
+        //p = (BestMoveList *)memsys5Malloc(pJunqi,sizeof(BestMoveList));
+
+        memset(p,0,sizeof(BestMoveList));
+        (*ppHead)->pHead = p;
+
+        UpdateBestToSort(pJunqi,aBestMove,p,pSrc,flag);
+
+    }
+    else
+    {
+        pNode = FindMoveSortList(*ppHead,pSrc,flag);
+        if( pNode==NULL )
+        {
+            pNode = (MoveSort *)malloc(sizeof(MoveSort));
+            //pNode = (MoveSort *)memsys5Malloc(pJunqi,sizeof(MoveSort));
+            memset(pNode,0,sizeof(MoveSort));
+            pNode->aValue[type] = value;
+            pNode->pNext = *ppHead;
+            pNode->pPre = (*ppHead)->pPre;
+            (*ppHead)->pPre->pNext = pNode;
+            (*ppHead)->pPre = pNode;
+            (*ppHead)->nNode++;
+
+            p = (BestMoveList *)malloc(sizeof(BestMoveList));
+            //p = (BestMoveList *)memsys5Malloc(pJunqi,sizeof(BestMoveList));
+
+            memset(p,0,sizeof(BestMoveList));
+            pNode->pHead = p;
+
+            UpdateBestToSort(pJunqi,aBestMove,p,pSrc,flag);
+
+        }
+        else
+        {
+            pNode->aValue[type] = value;
+            if( type==SEARCH_DEFAULT )
+            {
+                assert( pNode->pHead!=NULL  );
+
+                FreeSortMoveNode(pJunqi,pNode->pHead);
+
+                p = (BestMoveList *)malloc(sizeof(BestMoveList));
+               // p = (BestMoveList *)memsys5Malloc(pJunqi,sizeof(BestMoveList));
+                memset(p,0,sizeof(BestMoveList));
+                pNode->pHead = p;
+
+                UpdateBestToSort(pJunqi,aBestMove,p,pSrc,flag);
+            }
+#if 0//查找最小分数节点
+            pMin = pHead;
+            for(pNode=pHead->pNext; !pNode->isHead; pNode=pNode->pNext)
+            {
+                if(pMin->value>pNode->value)
+                {
+                    pMin = pNode;
+                }
+            }
+            if( value>pMin->value )
+            {
+                p = pMin->pHead;
+                UpdateBestToSort(pJunqi,aBestMove,p,pSrc,flag);
+
+                pMin->value = value;
+            }
+#endif
+        }
+    }
+
+    pthread_mutex_unlock(&pJunqi->search_mutex);
+
+}
+
+//void ClearMoveSortList1(Junqi *pJunqi)
+//{
+//    Engine *pEngine = pJunqi->pEngine;
+//    MoveSort *pHead = *(pEngine->ppMoveSort);
+//    MoveSort *pNode;
+//    MoveSort *pTemp;
+//
+//    pthread_mutex_lock(&pJunqi->search_mutex);
+//
+//    if(pHead==NULL)
+//    {
+//        return;
+//    }
+//
+//    pNode=pHead->pNext;
+//    while(1)
+//    {
+//        if( pNode->isHead )
+//        {
+//           // log_a("now free %d",pJunqi->free_cnt);
+//            FreeSortMoveNode(pJunqi,pNode->pHead);
+//            free(pNode);
+//            break;
+//        }
+//        else
+//        {
+//         //   log_a("now free %d",pJunqi->free_cnt);
+//            FreeSortMoveNode(pJunqi,pNode->pHead);
+//            pTemp = pNode;
+//            pNode = pNode->pNext;
+//            free(pTemp);
+//        }
+//    }
+//    *(pEngine->ppMoveSort) = NULL;
+//
+//    pthread_mutex_unlock(&pJunqi->search_mutex);
+//}
+
+void ClearMoveSortList(Junqi *pJunqi)
+{
+    Engine *pEngine = pJunqi->pEngine;
+    MoveSort *pHead = *(pEngine->ppMoveSort);
+    MoveSort *pNode;
+    MoveSort *pTemp;
+
+    if(pHead==NULL)
+    {
+        return;
+    }
+
+    pthread_mutex_lock(&pJunqi->search_mutex);
+
+    log_a("head %d",pHead->isHead);
+    if( pHead->isHead )
+    {
+        pHead->isHead = 0;
+        pHead->pPre->pNext = NULL;//变为单向链表
+    }
+    pNode=pHead;
+    while( pNode!=NULL )
+    {
+        FreeSortMoveNode(pJunqi,pNode->pHead);
+        pTemp = pNode;
+        pNode = pNode->pNext;
+        free(pTemp);
+    }
+    *(pEngine->ppMoveSort) = NULL;
+
+    pthread_mutex_unlock(&pJunqi->search_mutex);
+}
+
+int GetSearchTypeValue(Junqi *pJunqi, int type, int iDir)
+{
+    int val;
+    switch(type)
+    {
+    case SEARCH_DEEP:
+        val = ProSearch(pJunqi,4);
+        break;
+    case SEARCH_PATH:
+        val = GetJunqiPathValue(pJunqi,iDir);
+        break;
+    default:
+        break;
+    }
+
+    return val;
+}
+
+int DeepSearch(Junqi *pJunqi, BestMoveList *pNode, int type, int depth)
+{
+    int sum = 0;
+    int val;
+
+    int mxPerMove;
+    int iDir = pJunqi->eTurn;
+
+    if( pNode==NULL || depth==0 )
+    {
+        val = GetSearchTypeValue(pJunqi,type,iDir);
+        return val;
+    }
+
+    mxPerMove = GetMaxPerMove(pNode->result);
+    for(int i=0; i<RESULT_NUM; i++)
+    {
+        pJunqi->eTurn = iDir;
+        if( !pNode->result[i].flag ) continue;
+
+        if( i==mxPerMove )
+        {
+            MakeNextMove(pJunqi,&pNode->result[i].move);
+            if( iDir%2==pJunqi->eTurn%2 )
+            {
+                val = DeepSearch(pJunqi,pNode->pNext,type,depth-1);
+            }
+            else
+            {
+                val = -DeepSearch(pJunqi,pNode->pNext,type,depth-1);
+            }
+            UnMakeMove(pJunqi,&pNode->result[i].move);
+
+        }
+        else
+        {
+            val = pNode->result[i].value;
+        }
+
+        if( i>0 )
+        {
+            sum += val*pNode->result[i].percent;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    if( !pNode->result[MOVE-1].flag )
+    {
+        val = sum>>8;
+    }
+    pJunqi->eTurn = iDir;
+
+    return val;
+}
+
+int SelectSortMove(Junqi *pJunqi)
+{
+    int mxVal = -INFINITY;
+    Engine *pEngine = pJunqi->pEngine;
+    MoveSort *pHead = *(pEngine->ppMoveSort);
+    MoveSort *pNode;
+    MoveSort *pBest;
+    int val;
+
+    log_a("\n****deep search*********");
+    if(pHead==NULL)
+    {
+        return mxVal;
+    }
+
+    for(pNode=pHead; ;)
+    {
+        val = DeepSearch(pJunqi,pNode->pHead,SEARCH_DEEP,4);
+
+        log_a("deep value %d",val);
+        if( val>mxVal )
+        {
+            mxVal = val;
+            pBest = pNode;
+        }
+        pNode=pNode->pNext;
+
+       // break;
+        if( pNode->isHead )
+        {
+            break;
+        }
+    }
+    for(int i=0; i<RESULT_NUM; i++)
+    {
+        if( pBest->pHead->result[i].flag )
+        {
+            log_a("deep best %d",mxVal);
+            SafeMemout((u8*)&pBest->pHead->result[i].move, sizeof(MoveResultData));
+            SetBestMove(pJunqi,&pBest->pHead->result[i].move);
+            break;
+        }
+    }
+
+    return mxVal;
+}
+
+
+void SetPathValue(Junqi *pJunqi)
+{
+    Engine *pEngine = pJunqi->pEngine;
+    MoveSort *pHead = *(pEngine->ppMoveSort);
+    MoveSort *pNode;
+    int val;
+
+    if(pHead==NULL)
+    {
+        return;
+    }
+
+    for(pNode=pHead; ;)
+    {
+        val = DeepSearch(pJunqi,pNode->pHead,SEARCH_PATH,1);
+        pNode->aValue[SEARCH_PATH] = val;
+
+        pNode=pNode->pNext;
+
+       // break;
+        if( pNode->isHead )
+        {
+            break;
+        }
+    }
+}
+
+
+void PrintMoveSortList(Junqi *pJunqi)
+{
+    Engine *pEngine = pJunqi->pEngine;
+    MoveSort *pHead = *(pEngine->ppMoveSort);
+    MoveSort *pNode;
+    u8 index;
+
+
+    if(pHead==NULL)
+    {
+        return;
+    }
+    pHead->isHead = 0;
+    pHead->pPre->pNext = NULL;//变为单向链表
+    pHead = SortMoveValueList(pHead,SEARCH_PATH);
+    *(pEngine->ppMoveSort) = pHead;
+
+    log_a("move sort:****************");
+    for(pNode=pHead; ;)
+    {
+        index = pNode->pHead->index;
+       // PrintBestMove(pNode->pHead,pNode->aValue[type]);
+        SafeMemout((u8*)&pNode->pHead->result[index].move, 4);
+        log_a("default %d",pNode->aValue[SEARCH_DEFAULT]);
+//        log_a("left %d",pNode->aValue[SEARCH_LEFT]);
+//        log_a("right %d",pNode->aValue[SEARCH_RIGHT]);
+        log_a("single %d",pNode->aValue[SEARCH_SINGLE]);
+        log_a("path %d",pNode->aValue[SEARCH_PATH]);
+        pNode=pNode->pNext;
+        if( pNode==NULL )
+        {
+            break;
+        }
+    }
+}
+
+MoveSort *GetSortListEnd(MoveSort *pHead)
+{
+    MoveSort *p;
+
+    if( pHead==NULL ) return NULL;
+    for(p=pHead; p->pNext!=NULL; p=p->pNext);
+    return p;
+}
+
+MoveSort *GetSortSameNodeEnd(MoveSort *pHead, int type)
+{
+    MoveSort *p;
+
+    if( pHead==NULL ) return NULL;
+
+    for(p=pHead; p->pNext!=NULL; p=p->pNext)
+    {
+        //if(p->pNext->aValue[type]+10<p->aValue[type] )
+        if(p->pNext->aValue[type]!=p->aValue[type] )
+        {
+            break;
+        }
+    }
+    return p;
+}
+
+void AdjustSortMoveValue(MoveSort *pHead, int type)
+{
+    MoveSort *p;
+
+    if( pHead==NULL ) return;
+
+
+    for(p=pHead; p!=NULL; p=p->pNext)
+    {
+        if(p->pHead->index==1)
+        {
+            p->aValue[type] += 50;
+        }
+    }
+}
+
+void CalSortSumValue(MoveSort *pHead, int type)
+{
+    MoveSort *p;
+    int i;
+
+    if( pHead==NULL ) return;
+
+
+    for(p=pHead; p!=NULL; p=p->pNext)
+    {
+        for(i=0;i<type;i++)
+        {
+            if( i!=SEARCH_PATH )
+            {
+                p->aValue[type] += p->aValue[i];
+            }
+            else
+            {
+                p->aValue[type] += p->aValue[i]>>2;
+            }
+        }
+    }
+}
+
+MoveSort *ResortMoveList(MoveSort *pHead, int depth)
+{
+    SearchType type;
+    MoveSort *pTmep;
+    MoveSort *pEnd;
+
+    switch(depth)
+    {
+    case 0:
+        type = SEARCH_DEFAULT;
+        break;
+    case 1:
+        type = SEARCH_LEFT;
+        break;
+    case 2:
+        type = SEARCH_RIGHT;
+        break;
+    case 3:
+        type = SEARCH_SINGLE;
+        break;
+    case 4:
+        type = SEARCH_PATH;
+        break;
+    default:
+        return pHead;
+    }
+    pHead = SortMoveValueList(pHead,type);
+    pEnd = GetSortSameNodeEnd(pHead,type);
+    pTmep = pEnd->pNext;
+    pEnd->pNext = NULL;
+    pHead = ResortMoveList(pHead,depth+1);
+    pEnd = GetSortListEnd(pHead);
+    pEnd->pNext = pTmep;
+
+    return pHead;
+}
+
+void FindBestPathMove(Junqi *pJunqi)
+{
+    Engine *pEngine = pJunqi->pEngine;
+    MoveSort *pHead = *(pEngine->ppMoveSort);
+    MoveSort *pNode;
+    u8 index;
+
+
+    if(pHead==NULL)
+    {
+        return;
+    }
+    pHead->isHead = 0;
+    pHead->pPre->pNext = NULL;//变为单向链表
+
+    if( pJunqi->nNoEat>10  )
+    {
+        AdjustSortMoveValue(pHead,SEARCH_DEFAULT);
+    }
+
+    CalSortSumValue(pHead,SEARCH_SUM);
+
+    pHead = SortMoveValueList(pHead,SEARCH_SUM);
+
+    //pHead = ResortMoveList(pHead,0);
+
+//    pHead = SortMoveValueList(pHead,SEARCH_DEFAULT);
+//    pEnd = GetSortSameNodeEnd(pHead,SEARCH_DEFAULT);
+//    pTmep = pEnd->pNext;
+//    pEnd->pNext = NULL;
+//    pHead = SortMoveValueList(pHead,SEARCH_SINGLE);
+//    pEnd = GetSortListEnd(pHead);
+//    pEnd->pNext = pTmep;
+//    pEnd = GetSortSameNodeEnd(pHead,SEARCH_SINGLE);
+//    pTmep = pEnd->pNext;
+//    pEnd->pNext = NULL;
+//    pHead = SortMoveValueList(pHead,SEARCH_PATH);
+//    pEnd = GetSortListEnd(pHead);
+//    pEnd->pNext = pTmep;
+    *(pEngine->ppMoveSort) = pHead;
+
+    log_a("move sort:****************");
+    for(pNode=pHead; ;)
+    {
+        index = pNode->pHead->index;
+       // PrintBestMove(pNode->pHead,pNode->aValue[type]);
+        SafeMemout((u8*)&pNode->pHead->result[index].move, 4);
+        log_a("sum %d",pNode->aValue[SEARCH_SUM]);
+        log_a("default %d",pNode->aValue[SEARCH_DEFAULT]);
+        log_a("left %d",pNode->aValue[SEARCH_LEFT]);
+        log_a("right %d",pNode->aValue[SEARCH_RIGHT]);
+        log_a("single %d",pNode->aValue[SEARCH_SINGLE]);
+        log_a("path %d",pNode->aValue[SEARCH_PATH]);
+        pNode=pNode->pNext;
+        if( pNode==NULL )
+        {
+            break;
+        }
+    }
+    index = pHead->pHead->index;
+    SetBestMove(pJunqi,&pHead->pHead->result[index].move);
 }
 
 void SearchAlphaBeta(
@@ -121,7 +740,10 @@ void SearchAlphaBeta(
         }
 
         if( pData->mxVal>alpha )
+        {
             pData->alpha = pData->mxVal;
+            alpha = pData->mxVal;
+        }
     }
 
     aBestMove[cnt].mxPerFlag1 = 1;
@@ -134,6 +756,7 @@ void SearchAlphaBeta(
         //由于进不去循环，所以在这里还原
         pJunqi->pMoveList = NULL;
     }
+
     for(p=pData->pCur; pData->pCur!=NULL; p=p->pNext)
     {
 
@@ -165,20 +788,32 @@ void SearchAlphaBeta(
 #endif
         else
         {
-            if( p->move.result==MOVE )
+            //val = CallAlphaBeta1(pJunqi,depth-1,alpha,beta,pData->iDir,1);
+            if( p->move.result==MOVE && cnt!=1 )
             {
-                val = CallAlphaBeta1(pJunqi,depth-1,alpha,beta,pData->iDir,1);
+                if( cnt==2 && pJunqi->aInfo[((pData->iDir-1)&3)].bDead )
+                {
+                    val = CallAlphaBeta1(pJunqi,depth-1,alpha,beta,pData->iDir,0);
+                }
+                else
+                {
+                    val = CallAlphaBeta1(pJunqi,depth-1,alpha,beta,pData->iDir,1);
+                }
+
+
             }
             else
             {
                 //碰撞中有3种情况，不能截断
+                //第一层不截断，否则无法获取准确分数
                 val = CallAlphaBeta1(pJunqi,depth-1,alpha,beta,pData->iDir,0);
             }
+            p->value = val;
 #ifdef MOVE_HASH
             RecordMoveHash(&pJunqi->paHash,iKey,pJunqi->eTurn,depth,val);
 #endif
-
-//            if(cnt<2)
+//            u8 test1[4] = {0x08,0x0B,0x07,0x0C};
+//            if(cnt<2 )
 //            {
 //                log_a("cnt %d val %d per %d",cnt,val,p->percent);
 //                SafeMemout((u8*)&p->move, sizeof(p->move));
@@ -224,17 +859,22 @@ void SearchAlphaBeta(
 
         }
 
+        if( cnt==1 )
+        {
+            AddMoveSortList(pJunqi,aBestMove,p,val,0);
+        }
+
         //产生截断
-        if( val>=beta )
+        if( val>=beta )//todo 被剪枝的最后可能分数不准确
         {
             if( -INFINITY==pData->mxVal && aBestMove[cnt-1].mxPerFlag1 )
             {
-                UpdateBestMove(aBestMove,p,depth,cnt,isHashVal);
-                UpdatePathValue(pJunqi,aBestMove,pData->iDir,cnt);
+                UpdateBestMove(pJunqi,aBestMove,p,depth,cnt,isHashVal);
+
                 pData->pBest = &p->move;
                 if( cnt==1 )
                 {
-                    PrintBestMove(aBestMove,val,depth);
+                    PrintBestMove(aBestMove,val);
                 }
             }
             pData->mxVal = val;
@@ -287,11 +927,11 @@ void SearchAlphaBeta(
             pData->mxVal = val;
             if( aBestMove[cnt-1].mxPerFlag1 )
             {
-                UpdateBestMove(aBestMove,p,depth,cnt,isHashVal);
+                UpdateBestMove(pJunqi,aBestMove,p,depth,cnt,isHashVal);
                 pData->pBest = &p->move;
                 if( cnt==1 )
                 {
-                    PrintBestMove(aBestMove,val,depth);
+                    PrintBestMove(aBestMove,val);
                 }
             }
             //更新alpha值
@@ -508,6 +1148,36 @@ void SearchMoveList(
 
 }
 
+u8 SelectSearchType(Junqi *pJunqi, int myTurn, int iDir)
+{
+    u8 rc = 0;
+    switch(pJunqi->eSearchType )
+    {
+    case SEARCH_RIGHT:
+        if( iDir!=myTurn && iDir!=((myTurn+1)&3) )
+        {
+            rc = 1;
+        }
+        break;
+    case SEARCH_LEFT:
+        if( iDir!=myTurn && iDir!=((myTurn+3)&3) )
+        {
+            rc = 1;
+        }
+        break;
+    case SEARCH_SINGLE:
+        if( iDir!=myTurn )
+        {
+            rc = 1;
+        }
+        break;
+    default:
+        break;
+    }
+
+    return rc;
+}
+
 int AlphaBeta1(
         Junqi *pJunqi,
         int depth,
@@ -519,19 +1189,21 @@ int AlphaBeta1(
     ChessLineup *pLineup;
 
     int val;
-    static int cnt = 0;
+
+    static int myTurn;
     int iDir = pJunqi->eTurn;
     AlphaBetaData search_data;
     BestMove *aBestMove = pJunqi->pEngine->aBestMove;
 
-    if( !cnt )
+    if( !pJunqi->cnt )
     {
         pJunqi->paHash = NULL;
         aBestMove[0].mxPerFlag = 1;
         aBestMove[0].mxPerFlag1 = 1;
         aBestMove[0].pNode = aBestMove[0].pHead;
+        myTurn = iDir;
     }
-    cnt++;
+    pJunqi->cnt++;
 
     search_data.depth = depth;
     search_data.alpha = alpha;
@@ -542,7 +1214,7 @@ int AlphaBeta1(
     search_data.pCur = NULL;
     search_data.pHead = NULL;
     search_data.mxVal = -INFINITY;
-    search_data.cnt = cnt;
+    search_data.cnt = pJunqi->cnt;
     search_data.bestFlag = 0;
 
 
@@ -557,27 +1229,27 @@ int AlphaBeta1(
         {
             val = -val;
         }
-        cnt--;
+        pJunqi->cnt--;
         //log_a("test num %d", pJunqi->test_num);
         return val;
     }
 
     //2方单独测试
-//    if( iDir==0||iDir==1)
-//    {
-//        ChessTurn(pJunqi);
-//        cnt--;
-//        val = CallAlphaBeta1(pJunqi,depth,alpha,beta,iDir,1);
-//
-//        if( 0==cnt )
-//        {
-//            cnt = 0;
-//            SetBestMove(pJunqi,search_data.pBest);
-//        }
-//        ClearMoveList(search_data.pHead);
-//
-//        return val;
-//    }
+    if( SelectSearchType(pJunqi,myTurn,iDir) )
+    {
+        ChessTurn(pJunqi);
+        pJunqi->cnt--;
+        val = CallAlphaBeta1(pJunqi,depth,alpha,beta,iDir,1);
+
+        if( 0==pJunqi->cnt )
+        {
+            pJunqi->cnt = 0;
+            SetBestMove(pJunqi,search_data.pBest);
+        }
+        ClearMoveList(pJunqi,search_data.pHead);
+
+        return val;
+    }
 
 
     pJunqi->pMoveList = NULL;
@@ -600,7 +1272,7 @@ int AlphaBeta1(
         pJunqi->eTurn = iDir;
         ChessTurn(pJunqi);
         val = CallAlphaBeta1(pJunqi,depth-1,alpha,beta,iDir,1);
-        aBestMove[cnt-1].flag2 = 0;
+
         //不要再搜下一层了
         //例如3层搜索时，刚开始是最好着法是3步棋
         //后来搜到2步棋的最好着法，第3步无棋可走
@@ -610,23 +1282,24 @@ int AlphaBeta1(
         //在SearchBestMove里，一层可能有多种碰撞结果
         //不是概率最大的一种，不要修改pNode
         //因为best的搜索只在概率最大的分支下面
-        if( aBestMove[cnt-1].mxPerFlag )
+        if( aBestMove[pJunqi->cnt-1].mxPerFlag )
         {
+            aBestMove[pJunqi->cnt-1].flag2 = 0;
             aBestMove[0].pNode = NULL;
         }
     }
 
-    cnt--;
-    if( 0==cnt )
+    pJunqi->cnt--;
+    if( 0==pJunqi->cnt )
     {
-        cnt = 0;
+        pJunqi->cnt = 0;
         //log_a("get best");
         SetBestMove(pJunqi,search_data.pBest);
 #ifdef MOVE_HASH
         ClearMoveHash(&pJunqi->paHash);
 #endif
     }
-    ClearMoveList(search_data.pHead);
+    ClearMoveList(pJunqi,search_data.pHead);
 
     return val;
 }

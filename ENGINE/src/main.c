@@ -22,10 +22,10 @@ int main(int argc, char *argv[])
 	CreatEngineThread(pJunqi);
 	CreatPrintThread(pJunqi);
 
-	//Ö»ÄÜÔÚÖ÷Ïß³ÌÖĞ´´½¨Ïß³Ì²ÅÄÜ¶àºË
-	//ÔÚÆäËûÏß³ÌÖĞ´´½¨µÄĞÂÏß³Ì¶¼Óë¸ÃÏß³ÌÊ¹ÓÃÍ¬Ò»¸öcpu
-	//CreatSearchThread(pJunqi);
-	//CreatSearchThread(pJunqi);
+	//åªèƒ½åœ¨ä¸»çº¿ç¨‹ä¸­åˆ›å»ºçº¿ç¨‹æ‰èƒ½å¤šæ ¸
+	//åœ¨å…¶ä»–çº¿ç¨‹ä¸­åˆ›å»ºçš„æ–°çº¿ç¨‹éƒ½ä¸è¯¥çº¿ç¨‹ä½¿ç”¨åŒä¸€ä¸ªcpu
+	CreatSearchThread(pJunqi);
+	CreatSearchThread(pJunqi);
 
 	pthread_join(t1,NULL);
 

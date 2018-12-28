@@ -24,7 +24,6 @@ enum SpcRail {RAIL1=1,RAIL2,RAIL3,RAIL4};
 enum RailType {GONGB_RAIL,HORIZONTAL_RAIL,VERTICAL_RAIL,CURVE_RAIL};
 enum CompareType {MOVE=1,EAT,BOMB,KILLED,SELECT,SHOW_FLAG,DEAD,BEGIN,TIMER};
 
-
 #define PLAY_EVENT 0xF5
 #define JUMP_EVENT 0x00
 #define SURRENDER_EVENT 0x01
@@ -49,6 +48,7 @@ typedef struct ChessLineup
 	u8 isNotLand;
 	u8 isNotBomb;
 	u8 nEat;
+	u8 nBigEat;
 }ChessLineup;
 
 typedef struct BoardPoint
@@ -145,6 +145,22 @@ struct JunqiPath
 //    JunqiPathList *pHead;
 //}JunqiPathData;
 
+
+typedef struct MoveNodeSlot MoveNodeSlot;
+struct MoveNodeSlot
+{
+    MoveNodeSlot *pNext;
+    MoveList node;
+};
+
+typedef struct MoveNodeMem
+{
+    MoveNodeSlot *pStart;
+    MoveNodeSlot *pFree;
+}MoveNodeMem;
+
+
+
 struct Junqi
 {
 	u8 bStart;
@@ -154,6 +170,7 @@ struct Junqi
 	u8 bMove;
 	u8 findMoveFlag;
 	u8 nNoEat;
+	u8 bAnalyse;
 	enum ChessDir eTurn;
 	ChessLineup Lineup[4][30];
 	BoardChess ChessPos[4][30];
@@ -163,8 +180,11 @@ struct Junqi
 
 	PartyInfo aInfo[4];
 	Engine *pEngine;
+	Junqi *pJunqiBase;
 	MoveList *pMoveList;
 	JunqiPathList *paPath[4][2];//0：从index0开始，1:从index4开始
+	void *pThreadMem;
+	MoveNodeMem mem_pool;
 
 	int nRpStep;
 	int iRpOfst;
@@ -174,16 +194,22 @@ struct Junqi
 	int test_num;
 	int searche_num[2];
 	int iKey;
-	u8 test_flag;
-	u8 test_end_flag;
+	SearchType eSearchType;
+	u8 begin_flag;
+	u8 cntSearch;
+	u8 cnt;
+	int malloc_cnt;
+	int free_cnt;
 	MoveHash **paHash;
 
 
 	struct sockaddr_in addr;
 	int socket_fd;
 	mqd_t qid;
+	mqd_t search_qid;
 	mqd_t print_qid;
 	pthread_mutex_t mutex;
+	pthread_mutex_t search_mutex;
 };
 
 Junqi *JunqiOpen(void);
@@ -200,5 +226,10 @@ void PlayResult(
 void InitBoard(Junqi* pJunqi);
 void InitLineup(Junqi* pJunqi, u8 *data, u8 isInit);
 void ChessBoardCopy(Junqi *pJunqi);
+void ClearAdjNode(Junqi *pJunqi);
+
+void PrognosisChess(
+        Junqi *pJunqi,
+        int iDir);
 
 #endif /* JUNQI_H_ */

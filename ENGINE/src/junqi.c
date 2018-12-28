@@ -16,12 +16,58 @@ const u8 aMaxTypeNum[14] =
 	0,0,1,3,2,1,2,4,6,8,10,13,16,19
 };
 
+const u8 aTypeNum[14] =
+{
+    0,0,1,3,2,1,1,2,2,2,2,3,3,3
+};
+
+#if 0
+void IntiMoveMem(Junqi *pJunqi)
+{
+    int cnt = 500;
+    int i;
+    MoveNodeSlot *p;
+
+    memset(&pJunqi->mem_pool,0,sizeof(MoveNodeMem));
+    pJunqi->mem_pool.pStart = malloc(sizeof(MoveNodeSlot)*cnt);
+    p = (MoveNodeSlot*)pJunqi->mem_pool.pStart;
+    for(i=0; i<cnt; i++)
+    {
+        p->pNext = pJunqi->mem_pool.pFree;
+        pJunqi->mem_pool.pFree = p;
+        p++;
+    }
+}
+
+MoveList *MoveNodeMalloc(Junqi *pJunqi)
+{
+
+    MoveNodeSlot *pBuf;
+    pBuf = pJunqi->mem_pool.pFree;
+    assert(pBuf!=NULL);
+    pJunqi->mem_pool.pFree = pBuf->pNext;
+    return &pBuf->node;
+}
+
+void MoveNodeFree(Junqi *pJunqi,MoveList *p)
+{
+
+    MoveNodeSlot *pBuf;
+    pBuf = (MoveNodeSlot*)((u8*)p-sizeof(void*));
+    pBuf->pNext = pJunqi->mem_pool.pFree;
+    pJunqi->mem_pool.pFree = pBuf;
+}
+#endif
+
 Junqi *JunqiOpen(void)
 {
 	Junqi *pJunqi = (Junqi*)malloc(sizeof(Junqi));
 	memset(pJunqi, 0, sizeof(Junqi));
 	gJunqi = pJunqi;
 	pthread_mutex_init(&pJunqi->mutex, NULL);
+	pthread_mutex_init(&pJunqi->search_mutex, NULL);
+	//IntiMoveMem(pJunqi);
+	memsys5Init(pJunqi,30000,16);
 	return pJunqi;
 }
 
@@ -716,6 +762,96 @@ void JudgeIfBomb(
 	}
 }
 
+void PrognosisNbrChess(
+        Junqi *pJunqi,
+        BoardChess *pSrc)
+{
+    int i;
+    int x,y;
+    BoardChess *pNbr;
+
+    for(i=0; i<18; i++)
+    {
+        if( i==4 ) continue;
+        if( i<9 )
+        {
+            x = pSrc->point.x+1-i%3;
+            y = pSrc->point.y+i/3-1;
+        }
+        else if( pSrc->isNineGrid )
+        {
+            if( i==13 ) continue;
+            x = pSrc->point.x+(1-(i-9)%3)*2;
+            y = pSrc->point.y+((i-9)/3-1)*2;
+        }
+        else
+        {
+            break;
+        }
+        if( x<0||x>16||y<0||y>16 ) continue;
+
+        if( pJunqi->aBoard[x][y].pAdjList )
+        {
+            pNbr = pJunqi->aBoard[x][y].pAdjList->pChess;
+            if( pNbr->type!=NONE && !pNbr->isStronghold)
+            {
+                if( pNbr->pLineup->iDir%2!=ENGINE_DIR%2 )
+                {
+                    pNbr->pLineup->isNotBomb = 1;
+                }
+            }
+        }
+    }
+}
+
+void PrognosisChess(
+        Junqi *pJunqi,
+        int iDir)
+{
+    ChessLineup *pLineup;
+    ChessLineup *pMax = NULL;
+    int i;
+
+    if( pJunqi->aInfo[iDir].bDead )
+    {
+        return;
+    }
+    for(i=0; i<30; i++)
+    {
+        pLineup = &pJunqi->Lineup[iDir][i];
+        if( pLineup->bDead || pLineup->type<SILING )
+        {
+            continue;
+        }
+
+        if( pLineup->pChess->isCamp )
+        {
+            continue;
+        }
+
+        if( pMax==NULL )
+        {
+            pMax = pLineup;
+        }
+        else
+        {
+            if( pLineup->type<pMax->type )
+            {
+                pMax = pLineup;
+            }
+        }
+
+        if( pLineup->type<SHIZH && pLineup->nEat>0 )
+        {
+            PrognosisNbrChess(pJunqi,pLineup->pChess);
+        }
+    }
+    if( pMax->type>JUNZH && pLineup->nEat>0 )
+    {
+        PrognosisNbrChess(pJunqi,pMax->pChess);
+    }
+}
+
 void PlayResult(
 		Junqi *pJunqi,
 		BoardChess *pSrc,
@@ -774,17 +910,24 @@ void PlayResult(
 	{
 	    if( !pJunqi->aInfo[pDst->iDir].bDead )
 	    {
-            //假旗被挖后，另外一个大本营只能是军旗
-            if( pDst->index==26 )
-            {
-                pJunqi->Lineup[pDst->iDir][28].type = JUNQI;
-                pJunqi->ChessPos[pDst->iDir][28].type = JUNQI;
-            }
-            else
-            {
-                pJunqi->Lineup[pDst->iDir][26].type = JUNQI;
-                pJunqi->ChessPos[pDst->iDir][26].type = JUNQI;
-            }
+	        if( (pDst->iDir&1)!=(ENGINE_DIR&1) )
+	        {
+                //假旗被挖后，另外一个大本营只能是军旗
+                if( pDst->index==26 )
+                {
+                    pJunqi->Lineup[pDst->iDir][28].type = JUNQI;
+                    pJunqi->ChessPos[pDst->iDir][28].type = JUNQI;
+                    pJunqi->Lineup[pDst->iDir][28].isNotBomb = 1;
+                    pJunqi->Lineup[pDst->iDir][28].isNotLand = 1;
+                }
+                else
+                {
+                    pJunqi->Lineup[pDst->iDir][26].type = JUNQI;
+                    pJunqi->ChessPos[pDst->iDir][26].type = JUNQI;
+                    pJunqi->Lineup[pDst->iDir][26].isNotBomb = 1;
+                    pJunqi->Lineup[pDst->iDir][26].isNotLand = 1;
+                }
+	        }
             pJunqi->aInfo[pDst->iDir].bShowFlag |= 1;
 	    }
 	}
@@ -810,6 +953,16 @@ void PlayResult(
 	if( type==EAT || type==BOMB )
 	{
 		pDst->pLineup->bDead = 1;
+
+		if( (iDir2&1)==(ENGINE_DIR&1) )
+		{
+		    assert( pJunqi->aInfo[iDir2].aTypeNum[pDst->pLineup->type]>0 );
+		    pJunqi->aInfo[iDir2].aTypeNum[pDst->pLineup->type]--;
+		}
+		else if( type==BOMB )
+		{
+		    pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]--;
+		}
 
 		assert(pDst->type!=NONE);
 		if( type==BOMB )
@@ -886,9 +1039,22 @@ void PlayResult(
 
 	if( type==KILLED )
 	{
+        if( (iDir1&1)==(ENGINE_DIR&1) )
+        {
+            assert( pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]>0 );
+            pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]--;
+        }
+        else
+        {
+            if( pSrc->pLineup->type==DARK  )
+            {
+                pDst->pLineup->isNotLand = 1;
+            }
+        }
+
 		pSrc->pLineup->bDead = 1;
 		pDst->pLineup->nEat++;
-		if( pSrc->type==GONGB && pDst->pLineup->index>=20 )
+		if( pSrc->pLineup->type==GONGB && pDst->pLineup->index>=20 )
 		{
 			pDst->pLineup->isNotLand = 1;
 		}
@@ -949,6 +1115,7 @@ void PlayResult(
 	    AdjustMaxType(pJunqi, iDir1);
 	}
 
+
 	//assert( pJunqi->Lineup[0][24].type!=DILEI );
 	assert( aseertChess(pSrc) );
 	assert( aseertChess(pDst) );
@@ -961,15 +1128,20 @@ void InitChess(Junqi* pJunqi, u8 *data)
 	int i;
 
 	pJunqi->eTurn = pHead->iDir;
+	memset(pJunqi->aInfo, 0, sizeof(pJunqi->aInfo));
 	for(i=0; i<4; i++)
 	{
 		SetChess(pJunqi,i);
+		if(i%2==ENGINE_DIR%2)
+		{
+		    memcpy(pJunqi->aInfo[i].aTypeNum,aTypeNum,14);
+		}
 	}
 	for(i=0; i<9; i++)
 	{
 		pJunqi->NineGrid[i].type = NONE;
 	}
-	memset(pJunqi->aInfo, 0, sizeof(pJunqi->aInfo));
+
 	AdjustMaxType(pJunqi,(ENGINE_DIR+1)%4);
 	AdjustMaxType(pJunqi,(ENGINE_DIR+3)%4);
 }
@@ -1041,6 +1213,27 @@ void ChessBoardCopy(Junqi *pJunqi)
         CreatGraphVertex(pJunqi,pChess);
     }
     InitBoardGraph(pJunqi);
+}
+
+void ClearAdjNode(Junqi *pJunqi)
+{
+    int i,j;
+    AdjNode *p;
+    AdjNode *pTmp;
+
+    for(i=0; i<17; i++)
+    {
+        for(j=0; j<17; j++)
+        {
+            p = pJunqi->aBoard[i][j].pAdjList;
+            while( p!=NULL )
+            {
+                pTmp = p;
+                p=p->pNext;
+                free(pTmp);
+            }
+        }
+    }
 }
 
 void InitBoard(Junqi* pJunqi)
