@@ -721,13 +721,16 @@ void GetJunqiPath(
             if( pSrc->pLineup->isNotLand )
             {
                 pNode->nChess++;
+                //log_a("index %d nChess %d",pSrc->index,pNode->nChess);
             }
             else
             {
                 pNode->nMayLand++;
+               // log_a("index %d nLand %d",pSrc->index,pNode->nMayLand);
             }
             if( (pSrc->pLineup->iDir&1)!=(pSrc->iDir&1) )
             {
+                log_a("index %d clear",pSrc->index);
                 pNode->nChess = 0;
                 pNode->nMayLand = 0;
             }
@@ -822,9 +825,9 @@ int CalJunqiPathValue(Junqi *pJunqi, int iDir)
     u16 val1,val2;
 
     ClearJunqiPath(pEngine, 0);
-
     GetJunqiPath(pEngine,pJunqi->paPath[iDir][0]);
     pPath = pEngine->pJunqiPath[0];
+    assert(pPath!=0);
     val1 = EvaluatePathValue(pJunqi,pPath->nChess,pPath->nMayLand);
 
     log_a("nChess %d nLand %d",pPath->nChess,pPath->nMayLand);

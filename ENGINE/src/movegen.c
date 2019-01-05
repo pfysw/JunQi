@@ -511,7 +511,6 @@ int GetEatPercent(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst)
 				nDst = (nDst>num)?num:nDst;
 				percent = ((nDst-mxNum)<<8)/(num-mxNum);
 			}
-
 		}
 		else
 		{
@@ -1252,6 +1251,81 @@ void AdjustMovePercent(
         }
     }
 }
+
+u8 DiscardBadMove(
+        Junqi *pJunqi,
+        BoardChess *pSrc,
+        BoardChess *pDst)
+{
+    u8 rc = 0;
+    u8 iDir;
+
+    if( pSrc->type==GONGB )
+    {
+        if( pDst->index<20 && pDst->isSapperPath )
+        {
+            return 1;
+        }
+    }
+    else if( pSrc->type!=DARK )
+    {
+        if( (pSrc->pLineup->iDir%2)!=(ENGINE_DIR%2) )
+        {
+            if( pDst->type!=NONE &&
+                !pDst->pLineup->isNotLand &&
+                ( pSrc->pLineup->type<LVZH ||
+                   pDst->pLineup->type<TUANZH ) &&
+                pDst->pLineup->type!=JUNQI )
+            {
+                return 1;
+            }
+
+        }
+        else
+        {
+            if(  pDst->type!=NONE &&
+                 !pDst->pLineup->isNotLand &&
+                 pSrc->pLineup->type<LVZH &&
+                  pSrc->pLineup->type!=ZHADAN )
+            {
+                return 1;
+            }
+            else if( pSrc->pLineup->type==ZHADAN && pDst->isStronghold )
+            {
+                return 1;
+            }
+        }
+    }
+
+    if( pJunqi->cnt!=1 )
+    {
+        if( pJunqi->eSearchType==SEARCH_LEFT )
+        {
+            if( pDst->type!=NONE )
+            {
+                iDir = pDst->pLineup->iDir;
+                if( pJunqi->myTurn!=iDir && iDir!=((pJunqi->myTurn+3)&3) )
+                {
+                    return 1;
+                }
+            }
+        }
+        else if( pJunqi->eSearchType==SEARCH_RIGHT )
+        {
+            if( pDst->type!=NONE )
+            {
+                iDir = pDst->pLineup->iDir;
+                if( pJunqi->myTurn!=iDir && iDir!=((pJunqi->myTurn+1)&3) )
+                {
+                    return 1;
+                }
+            }
+        }
+    }
+
+    return rc;
+}
+
 void AddMoveToList(
 	Junqi *pJunqi,
 	BoardChess *pSrc,
@@ -1268,43 +1342,15 @@ void AddMoveToList(
 	{
 	    bShowFlag = pJunqi->aInfo[pDst->iDir].bShowFlag;
 	}
-#if 1
-	if( pSrc->type==GONGB )
-	{
-	    if( pDst->index<20 && pDst->isSapperPath )
-	    {
-	        return;
-	    }
-	}
-	else if( pSrc->type!=DARK )
-	{
-	    if( (pSrc->pLineup->iDir%2)!=(ENGINE_DIR%2) )
-	    {
-	        if( pDst->type!=NONE &&
-	            !pDst->pLineup->isNotLand &&
-	            ( pSrc->pLineup->type<LVZH ||
-	               pDst->pLineup->type<TUANZH ) &&
-	            pDst->pLineup->type!=JUNQI )
-	        {
-	            return;
-	        }
 
-	    }
-	    else
-	    {
-            if(  pDst->type!=NONE &&
-                 !pDst->pLineup->isNotLand &&
-                 pSrc->pLineup->type<LVZH &&
-                 pSrc->pLineup->type != ZHADAN )
-            {
-                return;
-            }
-	    }
+	if( DiscardBadMove(pJunqi,pSrc,pDst) )
+	{
+	    return;
 	}
-#endif
 
-//	if(pSrc->point.x==3&&pSrc->point.y==6&&
-//	        pDst->point.x==6&&pDst->point.y==15)
+
+//	if(pSrc->point.x==10&&pSrc->point.y==2&&
+//	        pDst->point.x==15&&pDst->point.y==6)
 //	{
 //	    log_a("sd");
 //	}

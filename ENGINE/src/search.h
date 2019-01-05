@@ -14,9 +14,7 @@
 typedef struct ExtraAdjustInfo
 {
     u8 adjustFlag;
-    u8 adjusrDir;
-    u8 adjusrIndex;
-    u8 saveType;
+    ChessLineup xLineup;
 
 }ExtraAdjustInfo;
 
@@ -159,5 +157,6 @@ void SetBestMoveNode(
         int cnt );
 void SetPathValue(Junqi *pJunqi);
 void FindBestPathMove(Junqi *pJunqi);
+void ReAdjustMaxType(Junqi *pJunqi);
 
 #endif /* SEARCH_H_ */

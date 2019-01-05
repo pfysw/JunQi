@@ -132,6 +132,7 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		pJunqi->bGo = 1;
 		pJunqi->bSearch = 0;
 		pthread_mutex_lock(&pJunqi->mutex);
+		//新建的时候还有些问题，但不是很关键
 		sleep(1);
 		CloseEngine(pJunqi->pEngine);
 		pthread_mutex_unlock(&pJunqi->mutex);

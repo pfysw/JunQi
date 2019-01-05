@@ -71,6 +71,7 @@ void *print_thread(void *arg)
 
 void SafePrint(const char *zFormat, ...)
 {
+
 	va_list ap;
 	char zBuf[50];
 	int len;

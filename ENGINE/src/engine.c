@@ -16,6 +16,7 @@
 #include "windows.h"
 #include <mqueue.h>
 
+
 int preTurn = 1000;
 
 EventHandle eventArr[] = {
@@ -431,9 +432,6 @@ int ProSearch(Junqi* pJunqi,int depth)
     Engine *pEngine = pJunqi->pEngine;
 
     eTurn = pJunqi->eTurn;
-    pJunqi->bGo = 0;
-    pJunqi->bMove = 0;
-    pJunqi->begin_time = (unsigned int)time(NULL);
 
     memset(pEngine->aBestMove,0,sizeof(pEngine->aBestMove));
 
@@ -444,7 +442,6 @@ int ProSearch(Junqi* pJunqi,int depth)
         //ClearMoveSortList(pJunqi,0);
 
         pJunqi->eTurn = eTurn;
-
 
         pJunqi->test_num = 0;
         pJunqi->test_gen_num = 0;
@@ -592,6 +589,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
         pJunqi->bSearch = 1;
         pJunqi->bAnalyse = 1;
 
+
         if( pJunqi->eTurn%2!=ENGINE_DIR )
         {
             goto search_end;
@@ -601,11 +599,14 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 
         pJunqi->malloc_cnt = 0;
         pJunqi->free_cnt = 0;
-
-#if 1
-        pJunqi->begin_flag = 0;
         pJunqi->bGo = 0;
         pJunqi->bMove = 0;
+        pJunqi->begin_time = (unsigned int)time(NULL);
+
+
+//#define ENG_TEST
+#ifndef ENG_TEST
+        pJunqi->begin_flag = 0;
         iDir = pJunqi->eTurn;
         if( !IsOnlyTwoDir(pJunqi) )
         {
@@ -631,15 +632,19 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
         QueryPerformanceCounter(&nBeginTimet);
         pJunqi->test_time[1] = 0;
 
-
+#ifndef ENG_TEST
         pJunqi->eSearchType = SEARCH_DEFAULT;
         ProSearch(pJunqi,4);
         pJunqi->eSearchType = SEARCH_SINGLE;
         ProSearch(pJunqi,3);
+#endif
 
+
+#ifdef ENG_TEST
         //pJunqi->eSearchType = SEARCH_LEFT;
-//        pJunqi->eSearchType = SEARCH_RIGHT;
-//        ProSearch(pJunqi,4);
+       // pJunqi->eSearchType = SEARCH_LEFT;
+        ProSearch(pJunqi,4);
+#endif
 
         QueryPerformanceCounter(&nEndTimet);
         pJunqi->test_time[0] = nEndTimet.QuadPart-nBeginTimet.QuadPart;
@@ -652,7 +657,9 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
     	//SelectSortMove(pJunqi);
         SetPathValue(pJunqi);
     	//PrintMoveSortList(pJunqi);
+#ifndef ENG_TEST
     	FindBestPathMove(pJunqi);
+#endif
     	ClearMoveSortList(pJunqi);
         log_a("malloc %d",pJunqi->malloc_cnt);
         log_a("free %d",pJunqi->free_cnt);
@@ -665,6 +672,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 //     	while(1);
     	//ChecAttackEvent(pEngine);
 search_end:
+
         pJunqi->bSearch = 0;
         pthread_mutex_unlock(&pJunqi->mutex);
 
@@ -711,9 +719,11 @@ search_end:
 		}
 
 	}
+
 }
 
 void *engine_thread(void *arg)
+//DWORD WINAPI engine_thread(LPVOID arg)
 {
 	int len;
 	u8 aBuf[REC_LEN];

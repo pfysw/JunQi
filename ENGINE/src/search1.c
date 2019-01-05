@@ -570,7 +570,7 @@ void CalSortSumValue(MoveSort *pHead, int type)
 
     for(p=pHead; p!=NULL; p=p->pNext)
     {
-        for(i=0;i<type;i++)
+        for(i=0;i<SEARCH_SINGLE;i++)
         {
             if( i!=SEARCH_PATH )
             {
@@ -593,22 +593,28 @@ MoveSort *ResortMoveList(MoveSort *pHead, int depth)
     switch(depth)
     {
     case 0:
-        type = SEARCH_DEFAULT;
+        type = SEARCH_SUM;
         break;
     case 1:
-        type = SEARCH_LEFT;
+        type = SEARCH_DEFAULT;
         break;
     case 2:
         type = SEARCH_RIGHT;
         break;
     case 3:
-        type = SEARCH_SINGLE;
+        type = SEARCH_LEFT;
         break;
     case 4:
+        type = SEARCH_SINGLE;
+        break;
+    case 5:
         type = SEARCH_PATH;
         break;
     default:
+
         return pHead;
+
+        break;
     }
     pHead = SortMoveValueList(pHead,type);
     pEnd = GetSortSameNodeEnd(pHead,type);
@@ -643,9 +649,9 @@ void FindBestPathMove(Junqi *pJunqi)
 
     CalSortSumValue(pHead,SEARCH_SUM);
 
-    pHead = SortMoveValueList(pHead,SEARCH_SUM);
+    //pHead = SortMoveValueList(pHead,SEARCH_SUM);
 
-    //pHead = ResortMoveList(pHead,0);
+    pHead = ResortMoveList(pHead,0);
 
 //    pHead = SortMoveValueList(pHead,SEARCH_DEFAULT);
 //    pEnd = GetSortSameNodeEnd(pHead,SEARCH_DEFAULT);
@@ -682,6 +688,7 @@ void FindBestPathMove(Junqi *pJunqi)
     }
     index = pHead->pHead->index;
     SetBestMove(pJunqi,&pHead->pHead->result[index].move);
+    ReAdjustMaxType(pJunqi);
 }
 
 void SearchAlphaBeta(
@@ -1178,6 +1185,23 @@ u8 SelectSearchType(Junqi *pJunqi, int myTurn, int iDir)
     return rc;
 }
 
+//mx_type没有入栈，所以搜索完毕要重新调整一下
+void ReAdjustMaxType(Junqi *pJunqi)
+{
+    int i;
+
+    i = (ENGINE_DIR+1)%4;
+    if( !pJunqi->aInfo[i].bDead )
+    {
+        AdjustMaxType(pJunqi,i);
+    }
+    i = (ENGINE_DIR+3)%4;
+    if( !pJunqi->aInfo[i].bDead )
+    {
+        AdjustMaxType(pJunqi,i);
+    }
+}
+
 int AlphaBeta1(
         Junqi *pJunqi,
         int depth,
@@ -1190,7 +1214,6 @@ int AlphaBeta1(
 
     int val;
 
-    static int myTurn;
     int iDir = pJunqi->eTurn;
     AlphaBetaData search_data;
     BestMove *aBestMove = pJunqi->pEngine->aBestMove;
@@ -1201,7 +1224,7 @@ int AlphaBeta1(
         aBestMove[0].mxPerFlag = 1;
         aBestMove[0].mxPerFlag1 = 1;
         aBestMove[0].pNode = aBestMove[0].pHead;
-        myTurn = iDir;
+        pJunqi->myTurn = iDir;
     }
     pJunqi->cnt++;
 
@@ -1235,7 +1258,7 @@ int AlphaBeta1(
     }
 
     //2方单独测试
-    if( SelectSearchType(pJunqi,myTurn,iDir) )
+    if( SelectSearchType(pJunqi,pJunqi->myTurn,iDir) )
     {
         ChessTurn(pJunqi);
         pJunqi->cnt--;
@@ -1293,6 +1316,7 @@ int AlphaBeta1(
     if( 0==pJunqi->cnt )
     {
         pJunqi->cnt = 0;
+        ReAdjustMaxType(pJunqi);
         //log_a("get best");
         SetBestMove(pJunqi,search_data.pBest);
 #ifdef MOVE_HASH

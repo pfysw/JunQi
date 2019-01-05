@@ -127,10 +127,12 @@ void PopMoveFromStack(
     if( pStorage->xExtraInfo.adjustFlag )
     {
         int iDir,index,type;
-        iDir = pStorage->xExtraInfo.adjusrDir;
-        index = pStorage->xExtraInfo.adjusrIndex;
-        type = pStorage->xExtraInfo.saveType;
-        pJunqi->Lineup[iDir][index].type = type;
+        iDir = pStorage->xExtraInfo.xLineup.iDir;
+        index = pStorage->xExtraInfo.xLineup.index;
+        type = pStorage->xExtraInfo.xLineup.type;
+
+        memcpy( &pJunqi->Lineup[iDir][index],
+                 &pStorage->xExtraInfo.xLineup, sizeof(ChessLineup) );
         if( !pJunqi->Lineup[iDir][index].bDead )
         {
             pJunqi->Lineup[iDir][index].pChess->type = type;
@@ -844,7 +846,7 @@ int SearchBestMove(
     return mxVal;
 }
 
-
+//此函数放弃维护
 int AlphaBeta(
 		Junqi *pJunqi,
 		int depth,

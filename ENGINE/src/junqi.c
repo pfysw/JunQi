@@ -541,7 +541,7 @@ int GetMaxType(int mx_type, int type, u8 *aTypeNumSum)
 	return mx_type;
 }
 
-void RecordAdjustInfo(Junqi *pJunqi, int iDir, int index, int type)
+void RecordAdjustInfo(Junqi *pJunqi, ChessLineup *pLineup)
 {
     Engine *pEngine = pJunqi->pEngine;
     PositionList *pHead;
@@ -553,10 +553,40 @@ void RecordAdjustInfo(Junqi *pJunqi, int iDir, int index, int type)
     pStorage = &pTail->data;
 
     pStorage->xExtraInfo.adjustFlag = 1;
-    pStorage->xExtraInfo.adjusrDir = iDir;
-    pStorage->xExtraInfo.adjusrIndex = index;
-    pStorage->xExtraInfo.saveType = type;
+    memcpy( &pStorage->xExtraInfo.xLineup,pLineup,sizeof(ChessLineup) );
 }
+
+void UpdateMaxType(
+        Junqi *pJunqi,
+        ChessLineup *pLineup,
+        enum ChessType mx_type)
+{
+
+    if( pJunqi->bSearch )
+    {
+        //todo 考虑到效率，mx_type没有入栈，可能会影响搜索准确性
+        if( !pLineup->bDead )//死子的mx_type已经固定，不能被搜索破坏
+        {
+            pLineup->mx_type = mx_type;
+        }
+    }
+    else
+    {
+        if( pLineup->bDead )
+        {
+            if( pLineup->mx_type<mx_type )//当现在估计的子力比之前算的小的话才更新
+            {
+                pLineup->mx_type = mx_type;
+            }
+        }
+        else
+        {
+            pLineup->mx_type = mx_type;
+        }
+    }
+
+}
+
 //待优化
 void AdjustMaxType(Junqi *pJunqi, int iDir)
 {
@@ -670,13 +700,11 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		{
 			continue;
 		}
-		//当现在估计的子力比之前算的小的话才更新
+
 		if( pLineup->type==DARK )
 		{
-			if( pLineup->mx_type<tmp )
-			{
-				pLineup->mx_type = tmp;
-			}
+		    UpdateMaxType(pJunqi, pLineup, tmp);
+
 		}
 		else
 		{
@@ -691,10 +719,14 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
             //后2排疑似地雷的type不会统计到aTypeNumSum里
             if( pLineup->index>=20 && !pLineup->isNotLand )
             {
-                pLineup->mx_type = tmp;
+
                 if( pLineup->type!=DILEI && pLineup->type<tmp )
                 {
-                    RecordAdjustInfo(pJunqi,iDir,pLineup->index,pLineup->type);
+                    if( pJunqi->bSearch )
+                    {
+                        RecordAdjustInfo(pJunqi,pLineup);
+                    }
+                    pLineup->mx_type = tmp;
                     pLineup->type = DILEI;
                     if( !pLineup->bDead )
                     {
@@ -706,9 +738,29 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
             }
             else
             {
-                //这里计算吃过子的棋的最大可能
-                pLineup->mx_type = GetMaxType(pLineup->mx_type,
-                        pLineup->type, aTypeNumSum);
+                if( pLineup->bDead )
+                {
+                    //这里计算吃过子的棋的最大可能
+                    pLineup->mx_type = GetMaxType(pLineup->mx_type,
+                            pLineup->type, aTypeNumSum);
+                }
+                else
+                {
+                    if( tmp<pLineup->type )
+                    {
+                        pLineup->mx_type = tmp;
+                    }
+                    else
+                    {
+                        assert( pLineup->mx_type<=pLineup->type );
+                        //此函数只能让mx_type的棋子级别变更小，而不能变更大
+                        //出现这种情况由上一个条件更新
+                        //要注意这里的值和tmp不同，这里是已经排除了自身pLineup->type后的结果
+                        pLineup->mx_type = GetMaxType(pLineup->mx_type,
+                                pLineup->type, aTypeNumSum);
+                    }
+                }
+
             }
 
 		}
@@ -869,7 +921,9 @@ void PlayResult(
 	assert( aseertChess(pSrc) );
 	assert( aseertChess(pDst) );
 
-	//assert( pJunqi->Lineup[0][24].type!=DILEI );//测试用
+	//assert( pJunqi->Lineup[2][20].mx_type!=TUANZH );//测试用
+//	assert( !(pJunqi->Lineup[2][19].mx_type==TUANZH &&
+//	        pJunqi->Lineup[2][19].type==SHIZH) );//测试用
 //    log_c("play %d %d %d %d type %d",pSrc->point.x,pSrc->point.y,
 //            pDst->point.x,pDst->point.y,type);
 //    log_c("src %d dst %d",pSrc->type,pDst->type);
@@ -1048,7 +1102,10 @@ void PlayResult(
         {
             if( pSrc->pLineup->type==DARK  )
             {
-                pDst->pLineup->isNotLand = 1;
+                if( pDst->pLineup->type!=DILEI )
+                {
+                    pDst->pLineup->isNotLand = 1;
+                }
             }
         }
 
@@ -1115,8 +1172,16 @@ void PlayResult(
 	    AdjustMaxType(pJunqi, iDir1);
 	}
 
+//	if( pJunqi->Lineup[2][20].mx_type==TUANZH )
+//	{
+//	    log_a("type %d max %d",pJunqi->Lineup[2][20].type,
+//	            pJunqi->Lineup[2][20].mx_type );
+//
+//	}
 
-	//assert( pJunqi->Lineup[0][24].type!=DILEI );
+//    assert( !(pJunqi->Lineup[2][19].mx_type==TUANZH &&
+//            pJunqi->Lineup[2][19].type==SHIZH) );//测试用
+	//assert( pJunqi->Lineup[2][20].mx_type!=TUANZH );//测试用
 	assert( aseertChess(pSrc) );
 	assert( aseertChess(pDst) );
 }

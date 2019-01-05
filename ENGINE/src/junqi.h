@@ -198,10 +198,10 @@ struct Junqi
 	u8 begin_flag;
 	u8 cntSearch;
 	u8 cnt;
+	u8 myTurn;
 	int malloc_cnt;
 	int free_cnt;
 	MoveHash **paHash;
-
 
 	struct sockaddr_in addr;
 	int socket_fd;
@@ -231,5 +231,6 @@ void ClearAdjNode(Junqi *pJunqi);
 void PrognosisChess(
         Junqi *pJunqi,
         int iDir);
+void AdjustMaxType(Junqi *pJunqi, int iDir);
 
 #endif /* JUNQI_H_ */
