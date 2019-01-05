@@ -23,7 +23,7 @@ enum MoveEvent{
 	BOMB_EVENT
 };
 
-#define TEST
+//#define TEST
 
 #ifdef  TEST
 #define ENGINE_DIR   0

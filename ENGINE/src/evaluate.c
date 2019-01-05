@@ -306,7 +306,7 @@ int CalDangerValue(Junqi *pJunqi, int iDir, u8 *pDir)
 
         }
     }
-    if( pJunqi->iRpOfst<100 || (iDir&1)!=ENGINE_DIR )//todo
+    //if( pJunqi->iRpOfst<100 || (iDir&1)!=ENGINE_DIR )//todo
     {
 
         if( landFlag1 )
@@ -430,10 +430,10 @@ int CheckDangerValue(Junqi *pJunqi, int iDir)
             vDanger = CalDangerValue(pJunqi,iDir,aRightBarrier);
         }
     }
-    else if( (iDir&1)!=(ENGINE_DIR&1) )
-    {
-        vDanger = CalDangerValue(pJunqi,iDir,aBarrier);
-    }
+//    else if( (iDir&1)!=(ENGINE_DIR&1) )
+//    {
+//        vDanger = CalDangerValue(pJunqi,iDir,aBarrier);
+//    }
     log_a("dir %d vDanger %d",iDir,vDanger);
     return vDanger;
 }

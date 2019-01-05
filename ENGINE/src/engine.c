@@ -592,10 +592,10 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
         pJunqi->bSearch = 1;
         pJunqi->bAnalyse = 1;
 
-//        if( pJunqi->eTurn%2!=ENGINE_DIR )
-//        {
-//            goto search_end;
-//        }
+        if( pJunqi->eTurn%2!=ENGINE_DIR )
+        {
+            goto search_end;
+        }
 
         pMsg = (SearchMsg*)aBuf;
 
