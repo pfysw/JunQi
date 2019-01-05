@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include "rule.h"
 #include "comm.h"
+#include "board.h"
 
 
 static GdkPixbuf *background;
@@ -21,11 +22,11 @@ extern int free_cnt;
 
 typedef struct BoardItem
 {
-	GtkWidget *lineup_button[4];
-	GtkWidget *surrender_button[4];
-	GtkWidget *jump_button[4];
-	GtkWidget *open_menu;
-	GtkWidget *save_menu;
+    GtkWidget *lineup_button[4];
+    GtkWidget *surrender_button[4];
+    GtkWidget *jump_button[4];
+    GtkWidget *open_menu;
+    GtkWidget *save_menu;
 
 }BoardItem;
 
@@ -152,6 +153,31 @@ void CreaOpenDialog(Junqi *pJunqi)
 
 }
 
+void NewMenu(Junqi *pJunqi, u8 isComm)
+{
+    pJunqi->bStart = 0;
+    pJunqi->bReplay = 0;
+    pJunqi->bStop = 0;
+    pJunqi->bAnalyse = 0;
+    pJunqi->nNoEat = 0;
+    pJunqi->eTurn = pJunqi->eFirstTurn;
+    ReSetChessBoard(pJunqi);
+    DestroyChessFlag(pJunqi);
+    ResetBoardButton(pJunqi);
+    gtk_widget_set_sensitive(gBoard.open_menu, TRUE);
+    gtk_widget_set_sensitive(gBoard.save_menu, TRUE);
+
+    if( isComm )
+    {
+        SendHeader(pJunqi, 0, COMM_READY);
+        SendHeader(pJunqi, 1, COMM_READY);
+    }
+    gtk_window_set_title(GTK_WINDOW(pJunqi->window), "四国军棋");
+    log_a("malloc %d free %d",malloc_cnt,free_cnt);
+    malloc_cnt = 0;
+    free_cnt = 0;
+}
+
 static void event_handle(GtkWidget *item,gpointer data)
 {
 	char *event = (char*)data;
@@ -162,25 +188,7 @@ static void event_handle(GtkWidget *item,gpointer data)
 	}
 	if( strcmp(event,"new" )==0 )
 	{
-		pJunqi->bStart = 0;
-		pJunqi->bReplay = 0;
-		pJunqi->bStop = 0;
-		pJunqi->bAnalyse = 0;
-		pJunqi->nNoEat = 0;
-		pJunqi->eTurn = pJunqi->eFirstTurn;
-		ReSetChessBoard(pJunqi);
-		DestroyChessFlag(pJunqi);
-		ResetBoardButton(pJunqi);
-		gtk_widget_set_sensitive(gBoard.open_menu, TRUE);
-		gtk_widget_set_sensitive(gBoard.save_menu, FALSE);
-
-		SendHeader(pJunqi, 0, COMM_READY);
-	    SendHeader(pJunqi, 1, COMM_READY);
-
-		log_a("malloc %d free %d",malloc_cnt,free_cnt);
-		malloc_cnt = 0;
-		free_cnt = 0;
-
+	    NewMenu(pJunqi,1);
 	}
 	else if( strcmp(event,"save" )==0 )
 	{
@@ -331,7 +339,7 @@ void set_menu(GtkWidget *vbox)
 	SetMenuItem(menu, "新建", event_handle, "new");
 	gBoard.open_menu = SetMenuItem(menu, "打开复盘", event_handle, "open");
 	gBoard.save_menu = SetMenuItem(menu, "保存复盘", event_handle, "save");
-	gtk_widget_set_sensitive(gBoard.save_menu, FALSE);
+	//gtk_widget_set_sensitive(gBoard.save_menu, FALSE);
 	CreatSaveLineupMenu(menu);
 
 	menuitem=gtk_menu_item_new_with_label("设定");
@@ -694,7 +702,7 @@ static void send_go(GtkWidget *button, GdkEventButton *event, gpointer data)
 }
 
 
-static void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data)
+void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data)
 {
 	Junqi *pJunqi = (Junqi *)data;
 	//隐藏调入布局按钮
@@ -1023,6 +1031,7 @@ void OpenBoard(GtkWidget *window)
 	GtkWidget *vbox, *hbox, *vbox2;
 	Junqi *pJunqi = JunqiOpen();
 	pJunqi->window = window;
+	pJunqi->pBoard = &gBoard;
 	gJunqi = pJunqi;
     hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_container_add (GTK_CONTAINER (window), hbox);

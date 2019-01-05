@@ -43,8 +43,10 @@ static void memout(u8 *pdata,u8 len)
 #endif
 ////////////////////////////////
 
-#define NOT_DEBUG1   0  //0：开棋 1：关棋
+#define NOT_DEBUG1   1  //0：开棋 1：关棋
 //#define NOT_DEBUG2
+//#define SIMULATION  //在复盘中模拟
+#define AUTO_TEST
 
 #define MOVE_SOUND         "./sound/move.wav"
 #define BOMB_SOUND         "./sound/bomb.wav"
@@ -64,6 +66,8 @@ const static u8 aMagic[4]={0x57,0x04,0,0};
 #define PLAY_EVENT 0xF5
 #define JUMP_EVENT 0x00
 #define SURRENDER_EVENT 0x01
+
+typedef struct BoardItem BoardItem;
 
 typedef struct BoardChess BoardChess;
 typedef struct ChessLineup
@@ -150,6 +154,8 @@ struct Junqi
 	u8 bAnalyse;
 	u8 bResetFlag;
 	u8 nNoEat;
+	u8 bAutoTest;
+	u8 bAutoTestCnt;
 	enum ChessColor eColor;
 	enum ChessDir eTurn;
 	enum ChessDir eFirstTurn;
@@ -160,6 +166,7 @@ struct Junqi
 	BoardChess ChessPos[4][30];
 	GtkWidget *fixed;
 	GtkWidget *window;
+	BoardItem *pBoard;
 	GtkWidget *begin_button;
 	GtkWidget *start_button;
 	GtkWidget *step_fixed;
@@ -176,6 +183,7 @@ struct Junqi
 	u8 szPath;
 	u8 szPathForSound;
 	u8 aReplay[4096];
+	u8 aAnalyseReplay[4096];
 	int iReOfst;
 	int iRpStep;
 	PartyInfo aInfo[4];
@@ -221,7 +229,7 @@ void OpenReplay(GtkNativeDialog *dialog,
 void SaveLineup(GtkNativeDialog *dialog,
         gint             response_id,
         gpointer         user_data);
-void SendSoundEvent(Junqi *pJunqi, enum CompareType type);
+
 void ReSetChessBoard(Junqi *pJunqi);
 void DestroyAllChess(Junqi *pJunqi, int iDir);
 void AddLineupToReplay(Junqi *pJunqi);
@@ -235,5 +243,6 @@ void DestroyChessFlag(Junqi *pJunqi);
 void MoveFlag(Junqi *pJunqi, BoardChess *pChess, int isInit);
 void ClearChessFlag(Junqi *pJunqi, int iDir);
 int aseertLineup(ChessLineup *pLineup);
-
+void LoadReplayLineup(Junqi *pJunqi);
+void SetReplayData(Junqi *pJunqi, u8 *aBuf, int iOfst, int iAmt);
 #endif

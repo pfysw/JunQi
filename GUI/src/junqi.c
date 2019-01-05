@@ -527,6 +527,91 @@ int assertAllLineup(Junqi *pJunqi)
 	return rc;
 }
 
+void AutoTest(Junqi *pJunqi)
+{
+    char zName[10];
+    int fd;
+    int iTolalStep;
+    char aName[10] = "test";
+    char aFirst[10] = "_";
+    u8 aBuf[PAGE_SIZE];
+    u8 iOfst = 0;
+
+    if( pJunqi->bAutoTest )
+    {
+        if( pJunqi->bAutoTest==0xff )
+        {
+            pJunqi->bAutoTest = 0;
+        }
+        return;
+    }
+    //pJunqi->bAutoTest = 0;
+    if( pJunqi->bStart )
+    {
+        return;
+    }
+    if( pJunqi->bAutoTestCnt>5 || pJunqi->bReplay )
+    {
+        return;
+    }
+    if( pJunqi->bAutoTestCnt==0 )
+    {
+        pJunqi->bAutoTestCnt = 1;
+    }
+    memset(zName,0,10);
+    memcpy(zName,aName,strlen(aName));
+    iOfst += strlen(aName);
+    zName[iOfst] = '0'+pJunqi->bAutoTestCnt;
+    iOfst++;
+    memcpy(&zName[iOfst],aFirst,strlen(aFirst));
+    iOfst += strlen(aFirst);
+    zName[iOfst] = '0'+pJunqi->eFirstTurn;
+    iOfst++;
+    log_b("name %s",zName);
+    fd = open(zName, O_RDWR|O_CREAT, 0600);
+    assert( pJunqi->iReOfst>=MOVE_OFFSET );
+    iTolalStep = (pJunqi->iReOfst-MOVE_OFFSET)/4;
+    SetReplayData(pJunqi, (u8*)&iTolalStep, 4, 4);
+    log_b("cnt %d",pJunqi->bAutoTestCnt);
+    OsWrite(fd, pJunqi->aReplay, pJunqi->iReOfst, 0);
+    pJunqi->bAutoTestCnt++;
+
+    NewMenu(pJunqi,0);
+
+    memset(zName,0,10);
+    zName[0] = '0'+pJunqi->bAutoTestCnt;
+    fd = open(zName, O_RDWR, 0600);
+    if(fd<0)
+    {
+        printf("erro %d %d\n",pJunqi->bAutoTestCnt,
+                pJunqi->bAutoTest);
+        pJunqi->bAutoTest = 0xff;//结束测试
+        return;
+    }
+    OsRead(fd, aBuf, PAGE_SIZE, 0);
+    if( memcmp(aBuf, aMagic, 4)==0 )
+    {
+        gtk_window_set_title(GTK_WINDOW(pJunqi->window), zName);
+        pJunqi->bReplay = 1;
+        memcpy(pJunqi->aReplay, aBuf, PAGE_SIZE);
+        LoadReplayLineup(pJunqi);
+        ReSetChessBoard(pJunqi);
+        ShowReplaySlider(pJunqi);
+        memset(pJunqi->aAnalyseReplay,0,PAGE_SIZE);
+        pJunqi->iReOfst = MOVE_OFFSET;
+        int max_step = *(int *)(&pJunqi->aReplay[4]);
+        gtk_adjustment_set_upper(pJunqi->slider_adj, max_step);
+        gtk_adjustment_set_value(pJunqi->slider_adj, 0);
+        pJunqi->bStart = 1;
+        pJunqi->bStop = 0;
+        pJunqi->iRpStep = 0;
+        pJunqi->bResetFlag = 0;
+    }
+
+    NewMenu(pJunqi,1);
+    pJunqi->bAutoTest = 1;
+    return;
+}
 
 void DestroyAllChess(Junqi *pJunqi, int iDir)
 {
@@ -576,13 +661,29 @@ void AddDataToReplay(Junqi *pJunqi, const u8 *aBuf, int size)
 	{
 		return;
 	}
-	memcpy(pJunqi->aReplay+pJunqi->iReOfst, aBuf, size);
+	if( !pJunqi->bReplay && !pJunqi->bAnalyse )
+	{
+	    memcpy(pJunqi->aReplay+pJunqi->iReOfst, aBuf, size);
+	}
+	else
+	{
+	    memcpy(pJunqi->aAnalyseReplay+pJunqi->iReOfst, aBuf, size);
+	    assert( !(pJunqi->aAnalyseReplay[128]==0&&
+	            pJunqi->aAnalyseReplay[129]==0) );
+	}
 	pJunqi->iReOfst += size;
 }
 
 void SetReplayData(Junqi *pJunqi, u8 *aBuf, int iOfst, int iAmt)
 {
-	memcpy(pJunqi->aReplay+iOfst, aBuf, iAmt);
+    if( !pJunqi->bReplay && !pJunqi->bAnalyse )
+    {
+        memcpy(pJunqi->aReplay+iOfst, aBuf, iAmt);
+    }
+    else
+    {
+        memcpy(pJunqi->aAnalyseReplay+iOfst, aBuf, iAmt);
+    }
 }
 
 void AddEventToReplay(Junqi *pJunqi, int event, int iDir)
@@ -768,7 +869,7 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 	ShowRectangle(pJunqi, pDst, RECTANGLE_RED);
 	ShowPathArrow(pJunqi, 0);
 
-	if(!pJunqi->bReplay && !pJunqi->bAnalyse)
+	//if(!pJunqi->bReplay && !pJunqi->bAnalyse)
 	{
 		AddMoveRecord(pJunqi, pSrc, pDst);
 	}
@@ -1431,11 +1532,14 @@ void OpenReplay(GtkNativeDialog *dialog,
 		OsRead(fd, aBuf, PAGE_SIZE, 0);
 		if( memcmp(aBuf, aMagic, 4)==0 )
 		{
+		    gtk_window_set_title(GTK_WINDOW(pJunqi->window), name);
 			pJunqi->bReplay = 1;
 			memcpy(pJunqi->aReplay, aBuf, PAGE_SIZE);
 			LoadReplayLineup(pJunqi);
 			ReSetChessBoard(pJunqi);
 			ShowReplaySlider(pJunqi);
+			memset(pJunqi->aAnalyseReplay,0,PAGE_SIZE);
+			pJunqi->iReOfst = MOVE_OFFSET;
 			int max_step = *(int *)(&pJunqi->aReplay[4]);
 			gtk_adjustment_set_upper(pJunqi->slider_adj, max_step);
 			gtk_adjustment_set_value(pJunqi->slider_adj, 0);
@@ -1465,6 +1569,9 @@ void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
     	preStep = 0;
     	pJunqi->bResetFlag = 0;
     	ReSetChessBoard(pJunqi);
+    	memset(pJunqi->aAnalyseReplay,0,PAGE_SIZE);
+    	memcpy(pJunqi->aAnalyseReplay,pJunqi->aReplay,MOVE_OFFSET);
+    	pJunqi->iReOfst = MOVE_OFFSET;
     }
 
 	for(i=preStep; i<pJunqi->iRpStep; i++)
@@ -1482,19 +1589,21 @@ void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
 				DestroyAllChess(pJunqi, iDir);
 				SendSoundEvent(pJunqi,DEAD);
 				ClearChessFlag(pJunqi,iDir);
+				AddEventToReplay(pJunqi, SURRENDER_EVENT, iDir);
 			}
 			else if( event==JUMP_EVENT )
 			{
+			    AddEventToReplay(pJunqi, JUMP_EVENT, iDir);
 				IncJumpCnt(pJunqi, iDir);
 				if( i==pJunqi->iRpStep-1 && next_flag)
 					ShowDialogMessage(pJunqi, "跳过次数", pJunqi->aInfo[iDir].cntJump);
 			}
 			//SendEvent(pJunqi, iDir, event);
 			pJunqi->addr = pJunqi->addr_tmp[0];
-			SendEvent(pJunqi, iDir, SURRENDER_EVENT);
+			SendEvent(pJunqi, iDir, event);
 	#ifndef NOT_DEBUG2
 			pJunqi->addr = pJunqi->addr_tmp[1];
-			SendEvent(pJunqi, iDir, SURRENDER_EVENT);
+			SendEvent(pJunqi, iDir, event);
 	#endif
 
 			ChessTurn(pJunqi);
@@ -1590,7 +1699,14 @@ void SaveReplay(GtkNativeDialog *dialog,
 		assert( pJunqi->iReOfst>=MOVE_OFFSET );
 		iTolalStep = (pJunqi->iReOfst-MOVE_OFFSET)/4;
 		SetReplayData(pJunqi, (u8*)&iTolalStep, 4, 4);
-		OsWrite(fd, pJunqi->aReplay, pJunqi->iReOfst, 0);
+		if( !pJunqi->bReplay )
+		{
+		    OsWrite(fd, pJunqi->aReplay, pJunqi->iReOfst, 0);
+		}
+		else
+		{
+		    OsWrite(fd, pJunqi->aAnalyseReplay, pJunqi->iReOfst, 0);
+		}
 	}
 	gtk_native_dialog_destroy (GTK_NATIVE_DIALOG (native));
 	g_object_unref (native);

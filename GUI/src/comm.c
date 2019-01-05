@@ -9,6 +9,7 @@
 #include "pthread.h"
 #include "junqi.h"
 #include "rule.h"
+#include "board.h"
 
 gboolean pro_comm_msg(gpointer data);
 
@@ -121,7 +122,13 @@ void SendReplyToEngine(Junqi *pJunqi)
 	memcpy(header.reserve,&pJunqi->iRpStep,2);
 	//len = (*((int *)(&pJunqi->aReplay[4])))*4+128;
 	len = 128;
-	SendReplyData(pJunqi, &header, pJunqi->aReplay,len);
+
+    pJunqi->addr = pJunqi->addr_tmp[0];
+    SendReplyData(pJunqi, &header, pJunqi->aReplay,len);
+#ifndef NOT_DEBUG2
+    pJunqi->addr = pJunqi->addr_tmp[1];
+    SendReplyData(pJunqi, &header, pJunqi->aReplay,len);
+#endif
 
 }
 
@@ -150,6 +157,7 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 	}
 
 	//复盘的时候引擎发过来的行棋不要处理
+#ifndef  SIMULATION
 	if( pJunqi->bAnalyse || pJunqi->bReplay )
 	{
 		if( pHead->eFun==COMM_MOVE || pHead->eFun==COMM_EVNET )
@@ -157,6 +165,8 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 			return;
 		}
 	}
+#endif
+
 
 	switch(pHead->eFun)
 	{
@@ -180,7 +190,14 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 			GetSendLineup(pJunqi, data+34, 2);
 		}
 		SendData(pJunqi, pHead, data, 64);
-
+#ifdef AUTO_TEST
+		//log_b("bAutoTest %d",pJunqi->bAutoTest);
+		if( pJunqi->bAutoTest==1 ||
+		        pJunqi->bAutoTest==2 )
+		{
+		    pJunqi->bAutoTest++;
+		}
+#endif
 		break;
 	case COMM_MOVE:
 		data = (u8*)&pHead[1];
@@ -230,6 +247,9 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 				SendHeader(pJunqi, pHead->iDir, COMM_ERROR);
 			}
 		}
+#ifdef AUTO_TEST
+                AutoTest(pJunqi);
+#endif
 		break;
 	case COMM_EVNET:
 		if( pJunqi->bStart && pJunqi->eTurn==pHead->iDir
@@ -274,6 +294,9 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 				SendHeader(pJunqi, pHead->iDir, COMM_ERROR);
 			}
 		}
+#ifdef AUTO_TEST
+                AutoTest(pJunqi);
+#endif
 		break;
 	case COMM_LINEUP:
 		if( pHead->iDir%2==1 )
@@ -294,6 +317,15 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 			pJunqi->bAnalyse = 1;
 			pJunqi->bReplay = 1;
 		}
+#ifdef AUTO_TEST
+		if(pJunqi->bAutoTest==3)
+		{
+		    sleep(1);
+		    pJunqi->bAutoTest = 0;
+		    begin_button(pJunqi->begin_button,NULL,pJunqi);
+
+		}
+#endif
 		break;
 	default:
 		break;

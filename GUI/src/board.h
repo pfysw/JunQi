@@ -35,6 +35,7 @@
 #define RECTANGLE_WHITE 0
 #define RECTANGLE_RED 1
 
+
 GtkWidget *GetSelectImage(int isVertical, int color);
 GdkPixbuf* get_from_pixbuf_position(GdkPixbuf* pixbuf,
 								gint src_x,
@@ -45,4 +46,6 @@ void SendSoundEvent(Junqi *pJunqi, enum CompareType type);
 void ShowReplaySlider(Junqi *pJunqi);
 void HideJumpButton(int iDir);
 void ShowDialogMessage(Junqi *pJunqi, char *str, int num);
+void NewMenu(Junqi *pJunqi, u8 isComm);
+void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data);
 #endif /* BOARD_H_ */
