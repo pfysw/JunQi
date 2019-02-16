@@ -1349,9 +1349,14 @@ void AddMoveToList(
 	}
 
 
-//	if(pSrc->point.x==10&&pSrc->point.y==2&&
-//	        pDst->point.x==15&&pDst->point.y==6)
+//	if(pSrc->point.x==6&&pSrc->point.y==15&&
+//	        pDst->point.x==3&&pDst->point.y==10)
 //	{
+//	        static int jj=0;
+//	        jj++;
+//	        if(jj==1933)
+//	        log_c("test");
+//	        log_c("jj %d",jj);
 //	    log_a("sd");
 //	}
 //    static int jj=0;

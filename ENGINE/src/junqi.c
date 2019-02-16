@@ -461,6 +461,10 @@ void GetTypeNum(u8 *aBombNum, u8 *aTypeNum, u8 *aTypeNumSum)
 		}
 	}
 	aTypeNum[ZHADAN] += nBomb;
+//	if( aTypeNum[ZHADAN]>2 )
+//	{
+//	    log_a("ssss");
+//	}
 	assert( aTypeNum[ZHADAN]<=2 );
 }
 
@@ -602,6 +606,8 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 	int nBomb;
 	int nExchange = 0;
 	enum ChessType tmp;
+	int sub;
+
 
 	pJunqi->aInfo[iDir].nMayLand = 0;
 	pJunqi->aInfo[iDir].nMayBombLand = 0;
@@ -665,7 +671,6 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
     //工兵大于3，说明多余的飞了炸
     if( aTypeNum[GONGB]>3 )
     {
-        int sub;
         log_b("gongb zhad %d %d",aTypeNum[GONGB], aTypeNum[ZHADAN]);
         sub = aTypeNum[GONGB]-3;
         aTypeNum[ZHADAN] += sub;
@@ -700,6 +705,10 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		{
 			continue;
 		}
+        if( pLineup->type==GONGB )
+        {
+            continue;
+        }
 
 		if( pLineup->type==DARK )
 		{
@@ -734,6 +743,10 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
                     }
 
                     aTypeNum[DILEI]++;
+                }
+                else
+                {
+                    UpdateMaxType(pJunqi, pLineup, tmp);
                 }
             }
             else
