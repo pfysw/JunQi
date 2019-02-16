@@ -9,6 +9,7 @@
 #define EVALUATE_H_
 #include "type.h"
 
+extern const u8 gChessValue[14];
 typedef struct Value_Parameter_t
 {
 	int vAllChess;
@@ -23,6 +24,8 @@ typedef struct Value_Parameter_t
 }Value_Parameter;
 
 void InitValuePara(Value_Parameter *p);
-int EvalSituation(Junqi *pJunqi);
+int EvalSituation(Junqi *pJunqi, u8 isInit);
+int GetConnectValue(Junqi *pJunqi, int iDir);
+void ReSetBombValue(Junqi *pJunqi);
 
 #endif /* ALPHA_BETA_H_ */

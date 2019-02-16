@@ -36,6 +36,8 @@ enum MoveEvent{
 #define INFINITY 10000
 #define RESULT_NUM 6
 #define BEST_LIST_NUM 20
+#define RECORD_LINEUP__NUM 20
+#define MEM_POOL_LENGTH 60000
 
 extern u8 aEventBit[100];
 
@@ -52,6 +54,7 @@ struct  BestMoveList
 {
     MoveResult result[RESULT_NUM];
     BestMoveList *pNext;
+    u8 isMove;
     u8 index;
 };
 
@@ -80,15 +83,28 @@ struct MoveSort
     BestMoveList *pHead;
     MoveSort *pNext;
     MoveSort *pPre;
-    int aValue[10];
+    int aValue[6][20];
+    u8 isSetValue[6][20];
     u8 isHead;
     u8 nNode;
+    u8 rank;
 };
 
 typedef struct SearchMsg SearchMsg;
 struct SearchMsg
 {
     SearchType type;
+    MoveSort *pNode;
+    u8 deepDepth;
+    u8 deepType;
+};
+
+typedef struct RecordLineup RecordLineup;
+struct RecordLineup
+{
+    ChessLineup *pLineup;
+    int iRpOfst;
+    u8 isRecord;
 };
 
 typedef struct ENGINE
@@ -101,12 +117,18 @@ typedef struct ENGINE
 	u16 eventId;
     u8  eventFlag;
     //--------------------------
-    MoveValue aMoveArray[100];
+    //MoveValue aMoveArray[100];
+    u8 iHashOfst;
+    RecordLineup aRecord[RECORD_LINEUP__NUM];
+
     MoveSort **ppMoveSort;
     JunqiPath *pJunqiPath[2];
     BestMove aBestMove[BEST_LIST_NUM];
+    MoveList *pFirstMove;
     BoardChess *pBest[2];
     u8 aSendBest[4];
+    u8 eatInList;
+    u8 eatIndex;
     PositionList *pPos;
     Value_Parameter valPara;
 }Engine;
@@ -122,5 +144,6 @@ pthread_t CreatEngineThread(Junqi* pJunqi);
 void SendEvent(Junqi* pJunqi, int iDir, u8 event);
 Engine *OpneEnigne(Junqi *pJunqi);
 void CloseEngine(Engine *pEngine);
+void ReSearchInDeep(Junqi* pJunqi, MoveSort *pNode, int depth);
 
 #endif /* ENGIN_H_ */

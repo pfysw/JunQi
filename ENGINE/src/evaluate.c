@@ -12,19 +12,40 @@
 #undef log_a
 #define log_a(format,...)
 
+const u8 gChessValue[14] =
+{
+    0,//none
+    0,//dark
+    0,//junqi
+    100,//dilei
+    110,//zhadan
+    210,//siling
+    190,//junzh
+    150,//shizh
+    100,//lvzh
+    85,//tuanzh
+    50,//yingzh
+    40,//lianzh
+    30,//paizh
+    90,//gongb
+};
 void InitValuePara(Value_Parameter *p)
 {
-	p->vChess[SILING] = 210;
-	p->vChess[JUNZH] = 190;
-	p->vChess[SHIZH] = 150;
-	p->vChess[LVZH] = 100;
-	p->vChess[TUANZH] = 85;
-	p->vChess[YINGZH] = 30;
-	p->vChess[LIANZH] = 20;
-	p->vChess[PAIZH] = 15;
-	p->vChess[GONGB] = 90;
-	p->vChess[DILEI] = 100;
-	p->vChess[ZHADAN] = 110;
+//	p->vChess[SILING] = 210;
+//	p->vChess[JUNZH] = 190;
+//	p->vChess[SHIZH] = 150;
+//	p->vChess[LVZH] = 100;
+//	p->vChess[TUANZH] = 85;
+//	p->vChess[YINGZH] = 50;
+//	p->vChess[LIANZH] = 40;
+//	p->vChess[PAIZH] = 30;
+//	p->vChess[GONGB] = 90;
+//	p->vChess[DILEI] = 100;
+//	p->vChess[ZHADAN] = 110;
+    for(int i=DILEI; i<=GONGB; i++)
+    {
+        p->vChess[i] = gChessValue[i];
+    }
 	p->vDarkLand =  20;
 	p->vDarkBomb =  10;
 	p->vDarkJunqi = 20;
@@ -105,11 +126,11 @@ int CheckCampValue(Junqi *pJunqi, int iDir)
             }
         }
     }
-    if( pJunqi->iRpOfst>100 && pJunqi->nNoEat>10 )
-    {
-        log_a("no eat ignore camp ");
-        val = 0;
-    }
+//    if( pJunqi->iRpOfst>100 && pJunqi->nNoEat>10 )
+//    {
+//        log_a("no eat ignore camp ");
+//        val = 0;
+//    }
     log_a("camp %d %d",val,iDir);
     return val;
 }
@@ -241,6 +262,7 @@ int CalDangerValue(Junqi *pJunqi, int iDir, u8 *pDir)
     pEngine = pJunqi->pEngine;
     pVal= &pEngine->valPara;
 
+
     for(i=0;i<7;i++)
     {
         pChess = &pJunqi->ChessPos[iDir][pDir[i]];
@@ -265,15 +287,15 @@ int CalDangerValue(Junqi *pJunqi, int iDir, u8 *pDir)
                 landFlag2 = 1;
             }
             break;
-        case 3:
-            if( pJunqi->aInfo[iDir].bShowFlag )
-            {
-                if(  NONE==pChess->type || pChess->pLineup->isNotLand )
-                {
-                    landFlag3 = 1;
-                }
-            }
-            break;
+//        case 3:
+//            if( pJunqi->aInfo[iDir].bShowFlag )
+//            {
+//                if(  NONE==pChess->type || pChess->pLineup->isNotLand )
+//                {
+//                    landFlag3 = 1;
+//                }
+//            }
+//            break;
         default:
             break;
         }
@@ -282,13 +304,17 @@ int CalDangerValue(Junqi *pJunqi, int iDir, u8 *pDir)
         {
             if((pChess->pLineup->iDir&1)!=(iDir&1))
             {
-                if( iDir==ENGINE_DIR || pChess->pLineup->type<YINGZH )
+                if(0==i)
                 {
-                    if(i<3)
-                    {
-                        value += pVal->vDanger<<2;
-                    }
-                    else
+                    value += (pVal->vDanger<<1)+pVal->vDanger;
+                }
+                else if(i<3)
+                {
+                    value += (pVal->vDanger<<2)+pVal->vDanger;
+                }
+                else if( iDir==ENGINE_DIR || pChess->pLineup->type<YINGZH )
+                {
+                    if(pJunqi->aInfo[i].value<2000)//todo
                     {
 
                         //value += 100;
@@ -296,7 +322,7 @@ int CalDangerValue(Junqi *pJunqi, int iDir, u8 *pDir)
                         {
                             value += pVal->vDanger<<1;
                         }
-                        else if( landFlag2 )
+                        else if( 4==i && landFlag2 )
                         {
                             value += pVal->vDanger;
                         }
@@ -306,22 +332,22 @@ int CalDangerValue(Junqi *pJunqi, int iDir, u8 *pDir)
 
         }
     }
-    //if( pJunqi->iRpOfst<100 || (iDir&1)!=ENGINE_DIR )//todo
+    if( (iDir&1)!=ENGINE_DIR )//todo
     {
 
         if( landFlag1 )
         {
             log_a("iRpOfst %d %d",pJunqi->iRpOfst,iDir);
-            value += pVal->vDanger<<1;
+            value += pVal->vDanger;
         }
         else if( landFlag2 )
         {
-            value += pVal->vDanger;
-        }
-        else if( landFlag3 )
-        {
             value += pVal->vDanger>>1;
         }
+//        else if( landFlag3 )
+//        {
+//            value += pVal->vDanger>>1;
+//        }
     }
 
 
@@ -412,10 +438,10 @@ int CheckDangerValue(Junqi *pJunqi, int iDir)
 {
     int vDanger = 0;
     u8 bShowFlag;
-
+   // return vDanger;
     u8 aLeftBarrier[7] = {23,29,27,24,22,20,21};
     u8 aRightBarrier[7] = {21,25,27,20,22,23,24};
-    u8 aBarrier[7] = {21,25,23,20,24,22,29};
+    //u8 aBarrier[7] = {21,25,23,20,24,22,29};
 
     bShowFlag = pJunqi->aInfo[iDir].bShowFlag;
 
@@ -438,7 +464,67 @@ int CheckDangerValue(Junqi *pJunqi, int iDir)
     return vDanger;
 }
 
-int CheckMaxChess(Junqi *pJunqi, int aMaxNum[])
+int GetConnectValue(Junqi *pJunqi, int iDir)
+{
+    BoardChess *pSrc;
+    BoardChess *pNbr;
+    ChessLineup *pLineup;
+    int i,j;
+    int x,y;
+    int value = 0;
+    u8 val;
+
+    for(i=0;  i<30; i++)
+    {
+        pLineup = &pJunqi->Lineup[pJunqi->myTurn][i];
+        if( pLineup->bDead || pLineup->type==NONE )
+        {
+            continue;
+        }
+        pSrc = pLineup->pChess;
+
+        if( pSrc->isCamp )
+        {
+            for(j=0; j<9; j++)
+            {
+
+                if( j==4 ) continue;
+                x = pSrc->point.x+1-j%3;
+                y = pSrc->point.y+j/3-1;
+
+                if( pJunqi->aBoard[x][y].pAdjList )
+                {
+                    pNbr = pJunqi->aBoard[x][y].pAdjList->pChess;
+                    if( pNbr->type!=NONE )
+                    {
+                        if( pNbr->isRailway )
+                        {
+                            val = 2;
+                        }
+                        else
+                        {
+                            val = 1;
+                        }
+                        if( !pLineup->isNotBomb )
+                        {
+                            val = val<<1;
+                        }
+                        value += val;
+                    }
+                }
+            }
+        }
+    }
+    if( iDir%2!=pJunqi->myTurn%2 )
+    {
+        value = -value;
+    }
+
+    return value;
+}
+
+
+int CheckMaxChess(Junqi *pJunqi, int aMaxNum[], int *mxType)
 {
     int nMax = 0;
     int rc = 0;
@@ -459,17 +545,21 @@ int CheckMaxChess(Junqi *pJunqi, int aMaxNum[])
             {
                 num = pJunqi->aInfo[i].aTypeNum[type];
                 nMax += num;
+
             }
             else
             {
                 num = pJunqi->aInfo[i].aLiveAllNum[type] -
                         pJunqi->aInfo[i].aLiveAllNum[type-1];
                 nMax -= num;
+
             }
         }
+        log_a("type %d num %d",type,nMax);
         aMaxNum[type] = nMax;
         if( !rc && nMax )
         {
+            *mxType = type;
             rc = nMax;
         }
     }
@@ -485,16 +575,109 @@ int CalMaxChessValue(Junqi *pJunqi, int aMaxNum[])
     pEngine = pJunqi->pEngine;
     pVal= &pEngine->valPara;
     int type;
+    int val;
 
     for(type=SILING; type<TUANZH; type++)
     {
-        value += pVal->vChess[type]*aMaxNum[type];
+//        if( type>JUNZH )
+//        {
+//            val = pVal->vChess[type]>>1;
+//        }
+//        else
+//        {
+//            val = pVal->vChess[type];
+//        }
+        val = pVal->vChess[type]>>1;
+        log_a("val %d aMaxNum[%d] %d",val,type,aMaxNum[type]);
+        value += val*aMaxNum[type];
     }
 
     return value;
 }
 
-int EvalSituation(Junqi *pJunqi)
+void ReSetBombValue(Junqi *pJunqi)
+{
+    u8 i;
+    u8 type;
+    int mxType = YINGZH;
+    Engine *pEngine;
+    Value_Parameter *pVal;
+
+
+    pEngine = pJunqi->pEngine;
+    pVal= &pEngine->valPara;
+
+    for(type=SILING; type<TUANZH; type++)
+    {
+        for(i=0; i<4; i++)
+        {
+            if( pJunqi->aInfo[i].bDead ) continue;
+            if( mxType==YINGZH )
+            {
+                mxType = type;
+            }
+        }
+    }
+    pVal->vChess[ZHADAN] = gChessValue[ZHADAN]-
+            ((gChessValue[SILING]-gChessValue[mxType])>>1);
+
+}
+
+u8 aLeftDeltaLand[5] = {21,23,24,28,29};
+u8 aRighDeltaLand[5] = {23,20,21,25,26};
+//todo 对时间效率影响很大，从16-》25
+int GetDeltaLandValue(Junqi *pJunqi, int iDir, int index)
+{
+    int value = 0;
+    u8 *pIndex;
+    Engine *pEngine;
+    Value_Parameter *pVal;
+    int vLand;
+
+    pEngine = pJunqi->pEngine;
+    pVal= &pEngine->valPara;
+    vLand = pVal->vChess[DILEI];
+
+    if( !pJunqi->aInfo[iDir].bShowFlag )
+    {
+        return 0;
+    }
+    else
+    {
+        if( pJunqi->Lineup[iDir][26].type==JUNQI  )
+        {
+            pIndex = &aLeftDeltaLand[0];
+        }
+        else
+        {
+            pIndex = &aLeftDeltaLand[1];
+        }
+    }
+
+    if( (iDir&1)!=ENGINE_DIR )
+    {
+        if( index==pIndex[0] )
+        {
+            value = 40;
+        }
+    }
+    else
+    {
+        if( index==pIndex[1] || index==pIndex[2] )
+        {
+            value = 40-vLand;
+        }
+        else if( index==pIndex[3] || index==pIndex[4] )
+        {
+            value = 10-vLand;
+        }
+    }
+
+    return value;
+}
+
+
+int EvalSituation(Junqi *pJunqi, u8 isInit)
 {
 	int i,j;
 	ChessLineup *pLineup;
@@ -506,24 +689,30 @@ int EvalSituation(Junqi *pJunqi)
 	int vDeltaBomb = 0;
 	int rc = 0;
 	int vMaxChess = 0;
+	int typeValue;
+	int mxType = PAIZH;
 
 	pEngine = pJunqi->pEngine;
 	pVal= &pEngine->valPara;
 
 
 
-	rc = CheckMaxChess(pJunqi,aMaxNum);
+	rc = CheckMaxChess(pJunqi,aMaxNum,&mxType);
+
 	if( rc>0 )
 	{
+	    vMaxChess += (pVal->vChess[mxType]>>1);
 	    vDeltaBomb = 30;
 	}
-	else
+	else if( rc<0 )
 	{
+	    vMaxChess -= (pVal->vChess[mxType]>>1);
 	    vDeltaBomb = -30;
 	}
+	log_a("maxTye %d val %d rc %d",mxType,vMaxChess,rc);
 	if( pJunqi->iRpOfst<100 )
 	{
-	    vMaxChess = CalMaxChessValue(pJunqi,aMaxNum);
+	    vMaxChess += CalMaxChessValue(pJunqi,aMaxNum);
 	}
 	log_a("max %d rc %d",vMaxChess,rc);
     value += vMaxChess;
@@ -546,11 +735,19 @@ int EvalSituation(Junqi *pJunqi)
 					if( i%2==ENGINE_DIR%2 )
 					{
 
-						if( pLineup->bDead ||
-						    (pLineup->pChess->isStronghold && pLineup->pChess->iDir!=i) )
+						if( pLineup->bDead )
+						    //|| (pLineup->pChess->isStronghold && pLineup->pChess->iDir!=i) )
 						{
-
-							tempValue -= pVal->vChess[pLineup->type];
+						    typeValue = pVal->vChess[pLineup->type];
+							tempValue -= typeValue;
+							if( pLineup->type<LVZH && pLineup->type>=SILING )
+							{
+							    if( 0==pLineup->nEat && pJunqi->nEat<30 )//todo 防止残局优势时会变得退缩
+							    {
+							        //tempValue -= (typeValue)>>1;
+							        tempValue -= typeValue;
+							    }
+							}
 							if( pLineup->index>=20 )
 							{
 								tempValue -= (pVal->vDarkBomb+pVal->vDarkLand);
@@ -561,7 +758,22 @@ int EvalSituation(Junqi *pJunqi)
 							}
 							if( pLineup->type==ZHADAN )
 							{
-							    tempValue += vDeltaBomb;//令子多则减少炸弹价值，否则增加炸弹价值
+							    if( 0!=pJunqi->aInfo[i].aTypeNum[ZHADAN] )
+							    {
+							        tempValue += vDeltaBomb;//令子多则减少炸弹价值，否则增加炸弹价值
+							    }
+							    else if( rc<0 )
+							    {
+							        tempValue += vDeltaBomb+(vDeltaBomb>>2);
+							    }
+							}
+							if( pLineup->type==DILEI )
+							{
+							    tempValue -= GetDeltaLandValue(pJunqi,i,pLineup->index);
+							    if( pJunqi->aInfo[i].value>2000 )
+							    {
+							        tempValue += (typeValue>>1);
+							    }
 							}
 						}
 						else
@@ -584,8 +796,7 @@ int EvalSituation(Junqi *pJunqi)
 					}
 					else
 					{
-						if( pLineup->bDead ||
-						    (pLineup->pChess->isStronghold && pLineup->pChess->iDir!=i) )
+						if( pLineup->bDead )
 						{
 							if( pLineup->type==DARK )
 							{
@@ -623,6 +834,10 @@ int EvalSituation(Junqi *pJunqi)
                             {
                                 tempValue += vDeltaBomb;//令子多则减少炸弹价值，否则增加炸弹价值
                             }
+                            if( pLineup->type==DILEI )
+                            {
+                                tempValue += GetDeltaLandValue(pJunqi,i,pLineup->index);
+                            }
 						}
 						else
 						{
@@ -643,11 +858,12 @@ int EvalSituation(Junqi *pJunqi)
 					}
 
 				}
+				log_a("i,j %d %d tempValue %d",i,j,tempValue);
 			}
 
             if( i%2==ENGINE_DIR%2 )
             {
-                log_a("temp value %d %d",i,tempValue);
+
                 //tempValue -= (CheckDangerValue(pJunqi,i)>>1);
                 tempValue -= CheckDangerValue(pJunqi,i);
                 tempValue -= CheckCampValue(pJunqi,i);
@@ -659,7 +875,7 @@ int EvalSituation(Junqi *pJunqi)
                         tempValue -= pVal->vDarkJunqi;
                     }
                 }
-                log_a("temp value %d %d",i,tempValue);
+                log_a("temp1 value %d %d",i,tempValue);
                 if( pJunqi->aInfo[i].bDead )
                 {
                     if( tempValue>-pVal->vAllChess )
@@ -673,6 +889,7 @@ int EvalSituation(Junqi *pJunqi)
                     pJunqi->aInfo[i].deadValue = tempValue;
 
                 }
+                log_a("temp2 value %d %d",i,tempValue);
             }
             else
             {
@@ -683,7 +900,7 @@ int EvalSituation(Junqi *pJunqi)
                     tempValue += (pVal->vDarkBomb+pVal->vDarkLand);
                     tempValue += pVal->vDarkJunqi;
                 }
-                log_a("temp value %d %d",i,tempValue);
+                log_a("temp3 value %d %d",i,tempValue);
                 if( pJunqi->aInfo[i].bDead )
                 {
                     if( tempValue<pVal->vAllChess )
@@ -696,6 +913,7 @@ int EvalSituation(Junqi *pJunqi)
                     }
                     pJunqi->aInfo[i].deadValue = tempValue;
                 }
+                log_a("temp4 value %d %d",i,tempValue);
             }
 
 		}
@@ -711,8 +929,24 @@ int EvalSituation(Junqi *pJunqi)
 			}
 			log_a("dead value %d %d",i,tempValue);
 		}
+		if( isInit )
+		{
+
+		    if(i%2==ENGINE_DIR)
+		    {
+		        pJunqi->aInfo[i].value = -tempValue;
+		    }
+		    else
+		    {
+		        pJunqi->aInfo[i].value = tempValue;
+		    }
+		    log_a("dir %d value %d",i,pJunqi->aInfo[i].value);
+		}
 		value += tempValue;
 	}
-
+    if( isInit )
+    {
+        pJunqi->beginValue = value;
+    }
 	return value;
 }

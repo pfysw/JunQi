@@ -1170,44 +1170,68 @@ u8 IsPossibleBomb(
 	return rc;
 }
 
-//int SpecialCase(
-//	Junqi *pJunqi,
-//	BoardChess *pSrc,
-//	BoardChess *pDst)
-//{
-//	int rc = 0;
-//	if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
-//	{
-//		if( pSrc->pLineup->type==SILING )
-//		{
-//			if( pDst->pLineup->isNotBomb )
-//			{
-//				return 1;
-//			}
-//		}
-//	}
-//	else
-//	{
-//		if( pDst->pLineup->type==SILING )
-//		{
-//			if( pSrc->pLineup->isNotBomb )
-//			{
-//				return 1;
-//			}
-//		}
-//	}
-//
-//	return rc;
-//}
+
+
+void ReduceEatPercent(
+        Junqi *pJunqi,
+        int nLeftBomb
+        )
+{
+    MoveList *p;
+    int sum;
+
+    p = pJunqi->pMoveList->pPre;
+    if( p->move.result==BOMB &&
+        p->pPre->move.result==EAT )
+    {
+        sum = p->pPre->percent + p->percent;
+
+        if( nLeftBomb==2 )
+        {
+            p->pPre->percent = sum>>2;
+            p->percent = sum-p->pPre->percent;
+        }
+        else
+        {
+            p->pPre->percent = sum>>1;
+            p->percent = sum-p->pPre->percent;
+        }
+    }
+}
+
+void EnlargeBombPercent(
+        Junqi *pJunqi,
+        int nLeftBomb
+        )
+{
+    MoveList *p;
+    int sum;
+
+    p = pJunqi->pMoveList->pPre;
+    if( p->move.result==KILLED &&
+        p->pPre->move.result==BOMB )
+    {
+        sum = p->pPre->percent + p->percent;
+
+        if( nLeftBomb==2 )
+        {
+            p->percent = sum>>2;
+            p->pPre->percent = sum-p->percent;
+        }
+        else
+        {
+            p->percent = sum>>1;
+            p->pPre->percent = sum-p->percent;
+        }
+    }
+}
 
 void AdjustMovePercent(
         Junqi *pJunqi,
         BoardChess *pSrc,
         BoardChess *pDst )
 {
-    int iDir = pSrc->pLineup->iDir;
-    MoveList *p;
-    int sum;
+    int iDir;
     int nLeftBomb;
 
 
@@ -1216,40 +1240,44 @@ void AdjustMovePercent(
     {
         return;
     }
+    //todo 区分是否暴露过的暗子
     if( (pSrc->pLineup->iDir&1)!=(ENGINE_DIR&1) )
     {
+        iDir = pSrc->pLineup->iDir;
         nLeftBomb = 2-pJunqi->aInfo[iDir].aTypeNum[ZHADAN];
-        if( pDst->pLineup->nEat>1 &&
+        if( pDst->pLineup->nEat>0 &&
             !pSrc->pLineup->isNotBomb &&
             nLeftBomb>0 )
         {
-            p = pJunqi->pMoveList->pPre;
-            if( p->move.result==KILLED &&
-                p->pPre->move.result==BOMB )
+            if( pDst->pLineup->nEat>1 ||
+                ( 2==pSrc->pLineup->isMayBomb &&
+                        pDst->pLineup->type<LVZH )  )
             {
-                sum = p->pPre->percent + p->percent;
-
-                p->percent = sum>>2;
-                p->pPre->percent = sum-p->percent;
-
-                if( nLeftBomb==2 )
-                {
-                    p->percent = sum>>2;
-                    p->pPre->percent = sum-p->percent;
-                }
-                else
-                {
-                    p->pPre->percent = sum>>2;
-                    p->percent = sum-p->pPre->percent;
-                }
-
-//                p->pPre->pNext = pJunqi->pMoveList;
-//                p->pNext->pPre = p->pPre;
-//                free(p);
+                EnlargeBombPercent(pJunqi,nLeftBomb);
             }
-
         }
     }
+    else
+    {
+        iDir = pDst->pLineup->iDir;
+        nLeftBomb = 2-pJunqi->aInfo[iDir].aTypeNum[ZHADAN];
+        if( !pDst->pLineup->isNotBomb &&
+                2==pDst->pLineup->isMayBomb && //todo
+                pDst->pLineup->isNotLand &&
+                pSrc->pLineup->type!=GONGB &&
+                nLeftBomb>0 )
+        {
+            if( pSrc->pLineup->type>LVZH )
+            {
+                EnlargeBombPercent(pJunqi,nLeftBomb);
+            }
+            else if( pSrc->pLineup->nEat>0 )
+            {
+                ReduceEatPercent(pJunqi,nLeftBomb);
+            }
+        }
+    }
+
 }
 
 u8 DiscardBadMove(
@@ -1260,24 +1288,56 @@ u8 DiscardBadMove(
     u8 rc = 0;
     u8 iDir;
 
+//    if( pSrc->isCamp && !pDst->pLineup->isNotLand &&
+//            (pSrc->pLineup->iDir&1)==ENGINE_DIR )
+//    {
+//        return 1;
+//    }
+
     if( pSrc->type==GONGB )
     {
+//        if( pDst->index<20 && ( pDst->isSapperPath ||
+//                (pSrc->pLineup->iDir&1)!=ENGINE_DIR ) )
         if( pDst->index<20 && pDst->isSapperPath )
         {
             return 1;
         }
+        else if( pDst->index>20 )
+        {
+            if( pDst->isSapperPath && pDst->type==NONE )
+            {
+                //飞到对家那里
+                if( (pSrc->iDir&1)==(pDst->iDir&1) )
+                {
+                    return 1;
+                }
+            }
+        }
+
     }
-    else if( pSrc->type!=DARK )
+    else //if( pSrc->type!=DARK )
     {
-        if( (pSrc->pLineup->iDir%2)!=(ENGINE_DIR%2) )
+        if( (pSrc->pLineup->iDir&1)!=ENGINE_DIR )
         {
             if( pDst->type!=NONE &&
                 !pDst->pLineup->isNotLand &&
-                ( pSrc->pLineup->type<LVZH ||
-                   pDst->pLineup->type<TUANZH ) &&
                 pDst->pLineup->type!=JUNQI )
             {
-                return 1;
+                if( pDst->pLineup->type!=DILEI )
+                {
+                    return 1;
+                }
+            }
+
+            if( !pSrc->pLineup->isNotLand  )
+            {
+                iDir = pSrc->pLineup->iDir;
+                //被挖的地雷不超过2个
+                if( pJunqi->aInfo[iDir].aTypeNum[DILEI]<2 )
+                {
+                    return 1;
+                }
+
             }
 
         }
@@ -1285,10 +1345,14 @@ u8 DiscardBadMove(
         {
             if(  pDst->type!=NONE &&
                  !pDst->pLineup->isNotLand &&
-                 pSrc->pLineup->type<LVZH &&
                   pSrc->pLineup->type!=ZHADAN )
             {
-                return 1;
+                iDir = pSrc->pLineup->iDir;
+                if( pSrc->pLineup->type<LVZH ||
+                        0!=pJunqi->aInfo[iDir].aTypeNum[GONGB] )
+                {
+                    return 1;
+                }
             }
             else if( pSrc->pLineup->type==ZHADAN && pDst->isStronghold )
             {
@@ -1297,9 +1361,11 @@ u8 DiscardBadMove(
         }
     }
 
-    if( pJunqi->cnt!=1 )
+#if 1
+    if( pJunqi->cnt!=1 || pJunqi->eSearchType==SEARCH_DEEP )
     {
-        if( pJunqi->eSearchType==SEARCH_LEFT )
+        if( pJunqi->eSearchType==SEARCH_LEFT ||
+                pJunqi->eDeepType==SEARCH_LEFT )
         {
             if( pDst->type!=NONE )
             {
@@ -1309,8 +1375,17 @@ u8 DiscardBadMove(
                     return 1;
                 }
             }
+            else
+            {
+                iDir = pDst->iDir;
+                if( pJunqi->myTurn!=iDir && iDir!=((pJunqi->myTurn+3)&3) )
+                {
+                    return 1;
+                }
+            }
         }
-        else if( pJunqi->eSearchType==SEARCH_RIGHT )
+        else if( pJunqi->eSearchType==SEARCH_RIGHT ||
+                pJunqi->eDeepType==SEARCH_RIGHT )
         {
             if( pDst->type!=NONE )
             {
@@ -1320,6 +1395,35 @@ u8 DiscardBadMove(
                     return 1;
                 }
             }
+            else if( !pDst->isNineGrid )
+            {
+                iDir = pDst->iDir;
+                if( pJunqi->myTurn!=iDir && iDir!=((pJunqi->myTurn+1)&3) )
+                {
+                    return 1;
+                }
+            }
+        }
+    }
+#endif
+
+    if( pJunqi->gFlag[FLAG_EAT] )
+    {
+        if( pDst->type!=NONE )
+        {
+            rc = !CheckMoveHash(pJunqi,pDst);
+        }
+        else
+        {
+            rc = 1;
+        }
+    }
+
+    if( pDst->isStronghold && pDst->type!=NONE )
+    {
+        if( (pDst->iDir&1)!=(pDst->pLineup->iDir&1) )
+        {
+            return 1;
         }
     }
 
@@ -1336,6 +1440,7 @@ void AddMoveToList(
 	enum CompareType type;
 	int aPercent[3] = {0};
 	int bShowFlag;
+	u8 bombFlag = 0;
 	assert( pSrc->type!=NONE );
 
 	if( pDst->type!=NONE )
@@ -1349,25 +1454,39 @@ void AddMoveToList(
 	}
 
 
-//	if(pSrc->point.x==6&&pSrc->point.y==15&&
-//	        pDst->point.x==3&&pDst->point.y==10)
+//	if(pSrc->point.x==0x0a&&pSrc->point.y==0x0a&&
+//	        pDst->point.x==0x0a&&pDst->point.y==0x03)
 //	{
-//	        static int jj=0;
-//	        jj++;
-//	        if(jj==1933)
-//	        log_c("test");
-//	        log_c("jj %d",jj);
-//	    log_a("sd");
+////	        static int jj=0;
+////	        jj++;
+////	        if(jj==525)
+////	        log_c("test");
+////	        log_c("jj %d",jj);
+//	   // sleep(1);
+//	   // assert(0);
+//	    log_a("sd1");
 //	}
 //    static int jj=0;
 //    jj++;
-//    if(jj==31313)
+//    if(jj==10847)
 //    log_c("test");
 //    log_c("jj %d",jj);
 //
-//    log_c("add %d %d %d %d",pSrc->point.x,pSrc->point.y,
+//	if(pJunqi->bDebug && pJunqi->cnt==2)
+//    log_a("add %d %d %d %d",pSrc->point.x,pSrc->point.y,
 //            pDst->point.x,pDst->point.y);
 //	log_c("dst %d",pDst->type);
+
+	if( pJunqi->nNoEat>50 && pJunqi->nEat>30 &&
+	        pJunqi->beginValue>500 && pDst->type==DARK )
+	{
+	    if( !pDst->pLineup->isNotBomb )
+	    {
+	        bombFlag = 1;
+            //先设定为非炸弹计算概率，函数最后再恢复
+            pDst->pLineup->isNotBomb = 1;
+	    }
+	}
 	for(type=MOVE; type<=KILLED; type++)
 	{
 		memset(&temp, 0 ,sizeof(temp));
@@ -1474,6 +1593,10 @@ void AddMoveToList(
 
 	AdjustMovePercent(pJunqi,pSrc,pDst);
 
+    if( bombFlag )
+    {
+        pDst->pLineup->isNotBomb = 0;
+    }
 	if( pDst->type!=NONE )
 	{
 	    assert( (pSrc->pLineup->iDir&1)!=(pDst->pLineup->iDir&1) );
@@ -1542,6 +1665,7 @@ void ClearMoveList(Junqi *pJunqi, MoveList *pHead)
 		{
 			//free(p);
 			//MoveNodeFree(pJunqi,p);
+		    FreeMoveHashNode(pJunqi,p);
 			memsys5Free(pJunqi,p);
 			break;
 		}
@@ -1551,6 +1675,7 @@ void ClearMoveList(Junqi *pJunqi, MoveList *pHead)
 			p = p->pNext;
 			//free(pTmp);
 			//MoveNodeFree(pJunqi,pTmp);
+			FreeMoveHashNode(pJunqi,pTmp);
 			memsys5Free(pJunqi,pTmp);
 		}
 
@@ -1561,6 +1686,7 @@ void ClearMoveList(Junqi *pJunqi, MoveList *pHead)
 u8 IsDirectRail(
         Junqi *pJunqi,
         BoardGraph *pSrc,
+        BoardGraph *pPre,
         BoardGraph *pDst )
 {
     BoardChess *pSrcChess;
@@ -1570,6 +1696,11 @@ u8 IsDirectRail(
     pSrcChess = pSrc->pAdjList->pChess;
     pDstChess = pDst->pAdjList->pChess;
 
+//      if(pSrcChess->point.x==5&&pSrcChess->point.y==10&&
+//              pDstChess->point.x==5&&pDstChess->point.y==6)
+//      {
+//          log_a("sd");
+//      }
     if( pSrcChess->point.x==pDstChess->point.x )
         rc = 1;
 
@@ -1582,10 +1713,21 @@ u8 IsDirectRail(
     if( !rc )
     {
         pDstChess->isSapperPath = 1;
+        pDst->isSapperPath[pJunqi->cnt] = 1;
     }
     else
     {
-        pDstChess->isSapperPath = 0;
+        //pDstChess->isSapperPath = 1;
+
+        if( pPre->isSapperPath[pJunqi->cnt] )
+        {
+            pDstChess->isSapperPath = 1;
+            pDst->isSapperPath[pJunqi->cnt] = 1;
+        }
+        else
+        {
+            pDstChess->isSapperPath = 0;
+        }
     }
 
     return rc;
@@ -1594,8 +1736,7 @@ u8 IsDirectRail(
 void SearchRailPath(
         Junqi* pJunqi,
         BoardGraph *pSrc,
-        BoardGraph *pDst,
-        int flag )
+        BoardGraph *pDst )
 {
     AdjNode *p;
     BoardGraph *pVertex;
@@ -1613,7 +1754,7 @@ void SearchRailPath(
             continue;
         }
         //顺序不能调换，IsDirectRail必须执行，记录是否是工兵特有路径
-        else if( !IsDirectRail(pJunqi, pSrc, pVertex) && pChess->type!=GONGB  )
+        else if( !IsDirectRail(pJunqi, pSrc, pDst, pVertex) && pChess->type!=GONGB  )
         {
             continue;
         }
@@ -1622,31 +1763,21 @@ void SearchRailPath(
             if( (p->pChess->pLineup->iDir&1)!=(pChess->pLineup->iDir&1) )
             {
                 pVertex->passCnt++;
-                if( !flag )
-                {
-                    AddMoveToList(pJunqi, pChess, p->pChess);
+                AddMoveToList(pJunqi, pChess, p->pChess);
 
 //                    log_a("dir %d %d",p->pChess->iDir,pChess->iDir);
 //                    log_a("dst %d %d %d %d",pChess->point.x,pChess->point.y,
 //                            p->pChess->point.x,p->pChess->point.y);
-                }
-                else
-                {
-                    AddMoveToHash(pJunqi, pChess, p->pChess);
-                }
             }
             continue;
         }
         else
         {
 
-            if( !flag )
-            {
-                AddMoveToList(pJunqi, pChess, p->pChess);
+            AddMoveToList(pJunqi, pChess, p->pChess);
 //                log_a("path %d %d %d %d",pChess->point.x,pChess->point.y,
 //                        p->pChess->point.x,p->pChess->point.y);
-            }
-            SearchRailPath(pJunqi, pSrc, pVertex,flag);
+            SearchRailPath(pJunqi, pSrc, pVertex);
         }
     }
 
@@ -1655,8 +1786,7 @@ void SearchRailPath(
 
 void SearchMovePath(
         Junqi* pJunqi,
-        BoardChess *pSrc,
-        int flag )
+        BoardChess *pSrc)
 {
 
     BoardGraph *pVertex;
@@ -1684,7 +1814,7 @@ void SearchMovePath(
     {
         pVertex = &pJunqi->aBoard[pSrc->point.x][pSrc->point.y];
 
-        SearchRailPath(pJunqi, pVertex, pVertex, flag);
+        SearchRailPath(pJunqi, pVertex, pVertex );
     }
     for(i=0; i<9; i++)
     {
@@ -1702,7 +1832,7 @@ void SearchMovePath(
             {
                 continue;
             }
-            else if( pNbr->isCamp && pNbr->type!=NONE && !flag )
+            else if( pNbr->isCamp && pNbr->type!=NONE )
             {
                 continue;
             }
@@ -1714,30 +1844,16 @@ void SearchMovePath(
 
             if( pSrc->isCamp || pNbr->isCamp )
             {
-                if( !flag )
-                {
-                    AddMoveToList(pJunqi, pSrc, pNbr);
-    //                log_a("nbr1 %d %d %d %d",pSrc->point.x,pSrc->point.y,
-    //                        pNbr->point.x,pNbr->point.y);
-                }
-                else if( pNbr->type!=NONE )
-                {
-                    AddMoveToHash(pJunqi, pSrc, pNbr);
-                }
+                AddMoveToList(pJunqi, pSrc, pNbr);
+//                log_a("nbr1 %d %d %d %d",pSrc->point.x,pSrc->point.y,
+//                        pNbr->point.x,pNbr->point.y);
             }
             //非斜相邻
             else if( pNbr->point.x==pSrc->point.x || pNbr->point.y==pSrc->point.y)
             {
-                if( !flag )
-                {
-                    AddMoveToList(pJunqi, pSrc, pNbr);
-    //                log_a("nbr2 %d %d %d %d",pSrc->point.x,pSrc->point.y,
-    //                        pNbr->point.x,pNbr->point.y);
-                }
-                else if( pNbr->type!=NONE )
-                {
-                    AddMoveToHash(pJunqi, pSrc, pNbr);
-                }
+                AddMoveToList(pJunqi, pSrc, pNbr);
+//                log_a("nbr2 %d %d %d %d",pSrc->point.x,pSrc->point.y,
+//                        pNbr->point.x,pNbr->point.y);
             }
 
         }
@@ -1759,7 +1875,7 @@ MoveList *GenerateMoveList(Junqi* pJunqi, int iDir)
             continue;
         }
         pSrc = pLineup->pChess;
-        SearchMovePath(pJunqi,pSrc,0);
+        SearchMovePath(pJunqi,pSrc);
     }
     return pJunqi->pMoveList;
 }

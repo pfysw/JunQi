@@ -31,6 +31,6 @@ int memsys5Init(Junqi *pJunqi, int nHeap, int mnReq);
 void *memsys5Malloc(Junqi *pJunqi, int nByte);
 void memsys5Free(Junqi *pJunqi, void *pOld);
 
-MoveSort *SortMoveValueList(MoveSort *pIn, int type);
+MoveSort *SortMoveValueList(MoveSort *pIn, int type, int depth);
 
 #endif /* UTILIY_H_ */

@@ -31,16 +31,39 @@ struct PositionData
 	u8 junqi_chess_type[2];
 	u8 isSrcdead;
 	u8 isDstDead;
+	u8 eatInList;
+	u8 eatIndex;
 	ExtraAdjustInfo xExtraInfo;
 };
+
+typedef struct AlphaBetaData
+{
+    int alpha;
+    int beta;
+    int depth;
+    u8 aInitBest[4];
+    MoveList bestMove;
+    MoveList *pCur;
+    MoveList *pHead;
+    int mxVal;
+    int iDir;
+    u8 cnt;
+    u8 hasBest;
+    u8 hasEat;
+    u8 cut;
+    u8 bestFlag;
+}AlphaBetaData;
 
 typedef struct MoveHash MoveHash;
 struct MoveHash
 {
     int iKey;
-    u8 depth;
+    MoveList *pMove;
+    u8 cnt;
+    u8 eatFlag;
     u8 iDir;
-    int value;
+    u8 bSet;
+//    int value;
     MoveHash *pNext;
 };
 
@@ -74,27 +97,27 @@ int AlphaBeta(
 		int beta);
 int TimeOut(Junqi *pJunqi);
 u8 SendBestMove(Engine *pEngine);
-void AddMoveToHash(
+void ClearMoveHash(Junqi *pJunqi,MoveHash ***paHash);
+int AddMoveToHash(
         Junqi *pJunqi,
-        BoardChess *pSrc,
-        BoardChess *pDst );
+        MoveList *pMove,
+        u8 isEat);
+
 u8 IsNotSameMove(MoveList *p);
 
 int SearchBestMove(
         Junqi *pJunqi,
         BestMove *aBestMove,
-        int cnt,
-        int alpha,
-        int beta,
-        MoveResultData **ppBest ,
-        int depth,
+        AlphaBetaData *pData,
+        MoveList *pBest ,
         int flag
         );
 int AlphaBeta1(
         Junqi *pJunqi,
         int depth,
         int alpha,
-        int beta);
+        int beta,
+        u8 isMove);
 
 void FreeBestMoveList(
         Junqi *pJunqi,
@@ -108,26 +131,30 @@ int CallAlphaBeta1(
         int beta,
         int iDir,
         u8 isMove);
-void RecordMoveHash(
+
+int RecordMoveHash(
+        Junqi *pJunqi,
         MoveHash ***paHash,
-        int iKey,
-        u8 iDir,
-        u8 depth,
-        int val);
+        MoveList *pMove,
+        int alpha,
+        u8 isEat );
 
 void UpdateBestMove(
         Junqi *pJunqi,
         BestMove *aBeasMove,
         MoveList *pMove,
+        MoveList *pMaxMove,
         int depth,
-        int cnt,
-        u8 isHashVal);
+        int cnt);
+
 void UpdateBestList(
         Junqi *pJunqi,
         BestMoveList *pDst,
         BestMoveList *pSrc,
         u8 isShare);
-int CheckMoveHash(MoveHash ***paHash, int iKey, int depth, int iDir);
+int CheckMoveHash(
+        Junqi *pJunqi,
+        BoardChess *pDst);
 int GetHashKey(Junqi* pJunqi);
 void MakeNextMove(Junqi *pJunqi, MoveResultData *pResult);
 void UnMakeMove(Junqi *pJunqi, MoveResultData *pResult);
@@ -144,19 +171,32 @@ void AddMoveSortList(
         Junqi *pJunqi,
         BestMove *aBestMove,
         void *pSrc,
+        MoveList *pMaxMove,
         int value,
         u8 flag);
+void FreeMoveHashNode(Junqi *pJunqi,  MoveList *pMove);
 void PrintMoveSortList(Junqi *pJunqi);
 int SelectSortMove(Junqi *pJunqi);
 int GetMaxPerMove(MoveResult *result);
 int ProSearch(Junqi* pJunqi,int depth);
 void SetBestMoveNode(
-        BestMove *aBestMove,
         BestMoveList *pList,
         MoveList *pMove,
-        int cnt );
+        MoveList *pMaxMove );
 void SetPathValue(Junqi *pJunqi);
 void FindBestPathMove(Junqi *pJunqi);
 void ReAdjustMaxType(Junqi *pJunqi);
-
+void FindBestMove(
+        Junqi *pJunqi,
+        MoveSort *pHead,
+        MoveSort **pResult,
+        int type,
+        int depth,
+        u8 hasHead );
+int DeepSearch(Junqi *pJunqi, BestMoveList *pNode, int type, int depth);
+MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead);
+void CheckPreventMove(
+        Junqi *pJunqi,
+        MoveList *p,
+        u8 *preventFlag);
 #endif /* SEARCH_H_ */

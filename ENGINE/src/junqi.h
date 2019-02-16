@@ -24,6 +24,13 @@ enum SpcRail {RAIL1=1,RAIL2,RAIL3,RAIL4};
 enum RailType {GONGB_RAIL,HORIZONTAL_RAIL,VERTICAL_RAIL,CURVE_RAIL};
 enum CompareType {MOVE=1,EAT,BOMB,KILLED,SELECT,SHOW_FLAG,DEAD,BEGIN,TIMER};
 
+enum FlagType {
+    SEARCH_GONGB,
+    FLAG_EAT,
+    FLAG_PREVENT,
+    TIME_OUT
+};
+
 #define PLAY_EVENT 0xF5
 #define JUMP_EVENT 0x00
 #define SURRENDER_EVENT 0x01
@@ -45,6 +52,7 @@ typedef struct ChessLineup
 	u8 bDead;
 	u8 bBomb;
 	u8 index;
+	u8 isMayBomb;
 	u8 isNotLand;
 	u8 isNotBomb;
 	u8 nEat;
@@ -89,7 +97,8 @@ typedef struct BoardGraph
 {
 	AdjNode *pAdjList;
 	int passCnt;
-	u8 cnt[28];
+	u8 cnt[BEST_LIST_NUM];
+	u8 isSapperPath[BEST_LIST_NUM];
 }BoardGraph;
 
 typedef struct GraphPath GraphPath;
@@ -104,6 +113,7 @@ struct GraphPath
 typedef struct PartyInfo
 {
     int deadValue;
+    int value;
 	u8 bDead;
 	u8 cntJump;
 	u8 bShowFlag;
@@ -113,6 +123,7 @@ typedef struct PartyInfo
 	u8 nMayBomb;
 	u8 nMayLand;
 	u8 nMayBombLand;
+	u8 perLand;
 }PartyInfo;
 
 typedef struct JunqiPathList JunqiPathList;
@@ -171,6 +182,8 @@ struct Junqi
 	u8 findMoveFlag;
 	u8 nNoEat;
 	u8 bAnalyse;
+	u8 gFlag[8];
+	int nEat;
 	enum ChessDir eTurn;
 	ChessLineup Lineup[4][30];
 	BoardChess ChessPos[4][30];
@@ -178,6 +191,7 @@ struct Junqi
 	//棋盘是17*17，9宫格是5*5
 	BoardGraph aBoard[17][17];
 
+	int beginValue;
 	PartyInfo aInfo[4];
 	Engine *pEngine;
 	Junqi *pJunqiBase;
@@ -194,14 +208,18 @@ struct Junqi
 	int test_num;
 	int searche_num[2];
 	int iKey;
-	SearchType eSearchType;
-	u8 begin_flag;
-	u8 cntSearch;
-	u8 cnt;
-	u8 myTurn;
-	int malloc_cnt;
-	int free_cnt;
 	MoveHash **paHash;
+    SearchType eSearchType;
+    SearchType eDeepType;
+    u8 begin_flag;
+    u8 cntSearch;
+    u8 cnt;
+    u8 nDepth;
+    u8 myTurn;
+    u8 deepTurn;
+    int malloc_cnt;
+    int free_cnt;
+    u8 bDebug;
 
 	struct sockaddr_in addr;
 	int socket_fd;
@@ -232,5 +250,6 @@ void PrognosisChess(
         Junqi *pJunqi,
         int iDir);
 void AdjustMaxType(Junqi *pJunqi, int iDir);
+void ReSetLineupType(Junqi *pJunqi);
 
 #endif /* JUNQI_H_ */

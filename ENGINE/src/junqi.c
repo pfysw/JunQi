@@ -67,7 +67,7 @@ Junqi *JunqiOpen(void)
 	pthread_mutex_init(&pJunqi->mutex, NULL);
 	pthread_mutex_init(&pJunqi->search_mutex, NULL);
 	//IntiMoveMem(pJunqi);
-	memsys5Init(pJunqi,30000,16);
+	memsys5Init(pJunqi,MEM_POOL_LENGTH,16);
 	return pJunqi;
 }
 
@@ -182,6 +182,7 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 		pJunqi->Lineup[dir][i].bDead = 0;
 		pJunqi->Lineup[dir][i].index = i;
 		pJunqi->Lineup[dir][i].nEat = 0;
+		pJunqi->Lineup[dir][i].isMayBomb = 0;
 		pJunqi->Lineup[dir][i].mx_type= SILING;
 		if( i<5 )   pJunqi->Lineup[dir][i].isNotBomb = 1;
 		if( i<20 )  pJunqi->Lineup[dir][i].isNotLand = 1;
@@ -461,10 +462,10 @@ void GetTypeNum(u8 *aBombNum, u8 *aTypeNum, u8 *aTypeNumSum)
 		}
 	}
 	aTypeNum[ZHADAN] += nBomb;
-//	if( aTypeNum[ZHADAN]>2 )
-//	{
-//	    log_a("ssss");
-//	}
+	if( aTypeNum[ZHADAN]>2 )
+	{
+	    log_a("sdsd");
+	}
 	assert( aTypeNum[ZHADAN]<=2 );
 }
 
@@ -608,7 +609,6 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 	enum ChessType tmp;
 	int sub;
 
-
 	pJunqi->aInfo[iDir].nMayLand = 0;
 	pJunqi->aInfo[iDir].nMayBombLand = 0;
 	pJunqi->aInfo[iDir].nMayBomb = 0;
@@ -705,10 +705,10 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		{
 			continue;
 		}
-        if( pLineup->type==GONGB )
-        {
-            continue;
-        }
+		if( pLineup->type==GONGB )
+		{
+		    continue;
+		}
 
 		if( pLineup->type==DARK )
 		{
@@ -779,7 +779,6 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		}
 
 	}
-
 }
 
 void JudgeIfBomb(
@@ -827,14 +826,123 @@ void JudgeIfBomb(
 	}
 }
 
+
+u8 isContinueSearch(
+        Junqi *pJunqi,
+        BoardChess *pSrc,
+        ChessLineup *pLineup,
+        int iDir )
+{
+    u8 rc = 0;
+
+    if( pLineup->bDead || pLineup->type==NONE  )
+    {
+        return 1;
+    }
+
+    if( !pLineup->pChess->isRailway ||
+           !(pLineup->pChess->eCurveRail==pSrc->eCurveRail
+            || pLineup->pChess->point.x==pSrc->point.x
+            || pLineup->pChess->point.y==pSrc->point.y)  )
+    {
+        return 1;
+    }
+
+//    static int jj=0;
+//    jj++;
+//    if(jj==1694)
+//    log_c("test");
+//    log_a("jj %d",jj);
+
+    if( iDir%2!=ENGINE_DIR )
+    {
+        if( pLineup->isNotBomb  )
+        {
+            return 1;
+        }
+    }
+    else
+    {
+        if( !(pLineup->type<YINGZH && pLineup->nEat>0) )
+        {
+            return 1;
+        }
+    }
+
+    if( !IsEnableMove(pJunqi, pSrc,pLineup->pChess) )
+    {
+        return 1;
+    }
+
+    return rc;
+}
+
+
+void SetMayBombValue(
+        Junqi *pJunqi,
+        BoardChess *pSrc,
+        ChessLineup *pLineup,
+        int iDir )
+{
+    if( iDir%2!=ENGINE_DIR )
+    {
+        pLineup->isMayBomb = 1;
+    }
+    else
+    {
+        if( 0==pSrc->pLineup->isMayBomb )
+        {
+            pSrc->pLineup->isMayBomb = 2;
+        }
+        if( 1==pSrc->pLineup->isMayBomb )
+        {
+            pSrc->pLineup->isNotBomb = 1;
+        }
+    }
+}
+void CheckMayBomb(
+        Junqi *pJunqi,
+        BoardChess *pSrc,
+        int iDir )
+{
+    int i;
+    ChessLineup *pLineup;
+
+    if( pJunqi->aInfo[iDir].bDead )
+    {
+        return;
+    }
+
+    for(i=0; i<30; i++)
+    {
+        pLineup = &pJunqi->Lineup[iDir][i];
+//        if( i==20 )
+//        {
+//            log_a("sd");
+//        }
+        if( isContinueSearch(pJunqi,pSrc,pLineup,iDir) )
+        {
+            continue;
+        }
+
+
+        SetMayBombValue(pJunqi,pSrc,pLineup,iDir);
+    }
+}
 void PrognosisNbrChess(
         Junqi *pJunqi,
-        BoardChess *pSrc)
+        BoardChess *pSrc,
+        int iDir )
 {
     int i;
     int x,y;
     BoardChess *pNbr;
 
+    if( pSrc->isRailway )
+    {
+        CheckMayBomb(pJunqi,pSrc,(iDir+1)&3);
+        CheckMayBomb(pJunqi,pSrc,(iDir+3)&3);
+    }
     for(i=0; i<18; i++)
     {
         if( i==4 ) continue;
@@ -858,12 +966,22 @@ void PrognosisNbrChess(
         if( pJunqi->aBoard[x][y].pAdjList )
         {
             pNbr = pJunqi->aBoard[x][y].pAdjList->pChess;
-            if( pNbr->type!=NONE && !pNbr->isStronghold)
+            if( pSrc->isRailway && pNbr->isRailway )
             {
-                if( pNbr->pLineup->iDir%2!=ENGINE_DIR%2 )
-                {
-                    pNbr->pLineup->isNotBomb = 1;
-                }
+                continue;
+            }
+            if( pNbr->type==NONE || pNbr->isCamp || pNbr->isStronghold )
+            {
+                continue;
+            }
+            if( pNbr->pLineup->iDir%2==iDir%2 )
+            {
+                continue;
+            }
+            if( pSrc->isCamp || pNbr->point.x==pSrc->point.x ||
+                    pNbr->point.y==pSrc->point.y )
+            {
+                SetMayBombValue(pJunqi,pSrc,pNbr->pLineup,iDir);
             }
         }
     }
@@ -883,13 +1001,18 @@ void PrognosisChess(
     }
     for(i=0; i<30; i++)
     {
+//        if( i==15 )
+//        {
+//            log_a("sd");
+//        }
         pLineup = &pJunqi->Lineup[iDir][i];
-        if( pLineup->bDead || pLineup->type<SILING )
+        if( pLineup->bDead ||
+            ( pLineup->type<SILING && pLineup->type!=DARK)  )
         {
             continue;
         }
 
-        if( pLineup->pChess->isCamp )
+        if( pLineup->pChess->isCamp && (iDir&1)==ENGINE_DIR )
         {
             continue;
         }
@@ -906,16 +1029,82 @@ void PrognosisChess(
             }
         }
 
-        if( pLineup->type<SHIZH && pLineup->nEat>0 )
+        if( iDir%2==ENGINE_DIR )
         {
-            PrognosisNbrChess(pJunqi,pLineup->pChess);
+            if( pLineup->type<SHIZH && pLineup->nEat>0 )
+            {
+                PrognosisNbrChess(pJunqi,pLineup->pChess,iDir);
+            }
+        }
+        else if( !pLineup->isNotBomb )
+        {
+            PrognosisNbrChess(pJunqi,pLineup->pChess,iDir);
         }
     }
-    if( pMax->type>JUNZH && pLineup->nEat>0 )
+    if( pMax!=NULL && iDir%2==ENGINE_DIR )
     {
-        PrognosisNbrChess(pJunqi,pMax->pChess);
+        if( pMax->type>JUNZH && pLineup->nEat>0 )
+        {
+            PrognosisNbrChess(pJunqi,pMax->pChess,iDir);
+        }
     }
 }
+
+void RecordLineupToHash(Junqi *pJunqi, ChessLineup *pLineup)
+{
+    Engine *pEngine;
+    int iHashOfst;
+
+    if( pLineup->iDir%2==ENGINE_DIR )
+    {
+        return;
+    }
+    pEngine = pJunqi->pEngine;
+    iHashOfst = pEngine->iHashOfst;
+    if( pEngine->iHashOfst<RECORD_LINEUP__NUM )
+    {
+        pEngine->aRecord[iHashOfst].pLineup = pLineup;
+        pEngine->aRecord[iHashOfst].iRpOfst = pJunqi->iRpOfst;
+        pEngine->aRecord[iHashOfst].isRecord = 1;
+        pEngine->iHashOfst++;
+    }
+    else
+    {
+        pEngine->iHashOfst = 0;
+        pEngine->aRecord[iHashOfst].pLineup = pLineup;
+        pEngine->aRecord[iHashOfst].iRpOfst = pJunqi->iRpOfst;
+        pEngine->aRecord[iHashOfst].isRecord = 1;
+        pEngine->iHashOfst++;
+    }
+}
+
+void ReSetLineupType(Junqi *pJunqi)
+{
+    Engine *pEngine;
+    ChessLineup *pLineup;
+    int i;
+
+    pEngine = pJunqi->pEngine;
+
+    for(i=0; i<RECORD_LINEUP__NUM; i++)
+    {
+        if( pEngine->aRecord[i].isRecord )
+        {
+            pLineup = pEngine->aRecord[i].pLineup;
+            assert( pLineup->iDir%2!=ENGINE_DIR );
+
+            if( pJunqi->iRpOfst>pEngine->aRecord[i].iRpOfst+30 )
+            {
+                //如果是工兵的话，前面已经设置最大是mx_type
+                pLineup->type = (pLineup->type+pLineup->mx_type)>>1;
+                pEngine->aRecord[i].isRecord = 0;
+                ReAdjustMaxType(pJunqi);
+            }
+        }
+    }
+
+}
+
 
 void PlayResult(
 		Junqi *pJunqi,
@@ -941,6 +1130,7 @@ void PlayResult(
 //            pDst->point.x,pDst->point.y,type);
 //    log_c("src %d dst %d",pSrc->type,pDst->type);
 	iDir1 = pSrc->pLineup->iDir;
+
 	if( type!=MOVE )
 	{
 		iDir2 = pDst->pLineup->iDir;
@@ -973,9 +1163,9 @@ void PlayResult(
 		pJunqi->aInfo[iDir2].bShowFlag |= 2;
 	}
 
-	if( pDst->isStronghold && ((pResult->extra_info&1)==0) )
+	if( pDst->isStronghold )
 	{
-	    if( !pJunqi->aInfo[pDst->iDir].bDead )
+	    if( !pJunqi->aInfo[pDst->iDir].bDead && ((pResult->extra_info&1)==0) )
 	    {
 	        if( (pDst->iDir&1)!=(ENGINE_DIR&1) )
 	        {
@@ -996,6 +1186,15 @@ void PlayResult(
                 }
 	        }
             pJunqi->aInfo[pDst->iDir].bShowFlag |= 1;
+	    }
+	    pSrc->pLineup->bDead = 1;
+	    if( MOVE==type )
+	    {
+            if( (iDir1&1)==(ENGINE_DIR&1) )
+            {
+                assert( pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]>0 );
+                pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]--;
+            }
 	    }
 	}
 
@@ -1028,6 +1227,10 @@ void PlayResult(
 		}
 		else if( type==BOMB )
 		{
+		    if( pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]<=0 )
+		    {
+		        assert( pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]>0 );
+		    }
 		    pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]--;
 		}
 
@@ -1050,7 +1253,12 @@ void PlayResult(
 		}
 		else
 		{
-		    pSrc->pLineup->nEat++;
+
+		    if( pDst->pLineup->type<LVZH &&
+		            pDst->pLineup->type>=SILING )
+		    {
+		        pSrc->pLineup->nEat++;
+		    }
 			if( pSrc->pLineup->index>=5 )
 			{
 				pSrc->pLineup->isNotBomb = 1;
@@ -1069,6 +1277,11 @@ void PlayResult(
 					pSrc->pLineup->type = GONGB;
 					pSrc->pLineup->mx_type = GONGB;
 				}
+//				if( pSrc->pLineup->nEat>0 )
+//				{
+//                      pSrc->pLineup->type = (pSrc->pLineup->type+
+//                              pSrc->pLineup->mx_type)>>1;
+//				}
 			}
 			else
 			{
@@ -1080,8 +1293,20 @@ void PlayResult(
 				else if( pDst->pLineup->mx_type < pSrc->pLineup->type+1 )
 				{
 					pDst->pLineup->mx_type = pSrc->pLineup->type+1;
+
+					if( !pJunqi->bSearch && pDst->pLineup->nEat &&
+					        !pSrc->pLineup->nEat )
+					{
+//					    pDst->pLineup->type = (pDst->pLineup->type+
+//					            pDst->pLineup->mx_type)>>1;
+					    //todo 先保存下来，50步后乐观估计自己第一次吃到的子
+					    RecordLineupToHash(pJunqi,pDst->pLineup);
+					}
 				}
 			}
+			//前面判断要用到，所以放在后面
+			pSrc->pLineup->nEat++;
+
 		}
 
 		if( pResult->extra_info&1 )
@@ -1106,24 +1331,6 @@ void PlayResult(
 
 	if( type==KILLED )
 	{
-        if( (iDir1&1)==(ENGINE_DIR&1) )
-        {
-            assert( pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]>0 );
-            pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]--;
-        }
-        else
-        {
-            if( pSrc->pLineup->type==DARK  )
-            {
-                if( pDst->pLineup->type!=DILEI )
-                {
-                    pDst->pLineup->isNotLand = 1;
-                }
-            }
-        }
-
-		pSrc->pLineup->bDead = 1;
-		pDst->pLineup->nEat++;
 		if( pSrc->pLineup->type==GONGB && pDst->pLineup->index>=20 )
 		{
 			pDst->pLineup->isNotLand = 1;
@@ -1134,8 +1341,11 @@ void PlayResult(
 		}
 
 
-		if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
+		if( (iDir1&1)==ENGINE_DIR )
 		{
+            assert( pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]>0 );
+            pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]--;
+
 			if( pDst->pLineup->type>=pSrc->type || pDst->pLineup->type==DARK )
 			{
 				pDst->pLineup->type = pSrc->type-1;
@@ -1151,14 +1361,32 @@ void PlayResult(
 		}
 		else
 		{
+            if( pSrc->pLineup->type==DARK  )
+            {
+                if( pDst->pLineup->type!=DILEI )
+                {
+                    pDst->pLineup->isNotLand = 1;
+                }
+            }
+
 			if( pDst->pLineup->type!=DILEI )
 			{
 				//如果是用40吃的子，对方最大39，只有对方的最大值比39大时才更新
 				if( pSrc->pLineup->mx_type < pDst->pLineup->type+1 )
+				{
 					pSrc->pLineup->mx_type = pDst->pLineup->type+1;
+				}
+//	            if( !pJunqi->bSearch && pDst->pLineup->nEat )//todo
+//	            {
+//	                pSrc->pLineup->type = pSrc->pLineup->mx_type;
+//	            }
 			}
 
+
 		}
+
+        pSrc->pLineup->bDead = 1;
+        pDst->pLineup->nEat++;
 
         if( pSrc->pLineup->type==SILING )
         {
