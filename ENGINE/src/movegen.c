@@ -1198,6 +1198,45 @@ void ReduceEatPercent(
         }
     }
 }
+void EnlargeKillPercent(Junqi *pJunqi)
+{
+    MoveList *p;
+    MoveList *pEat;
+    int sum;
+
+    p = pJunqi->pMoveList->pPre;
+    if( p->move.result!=KILLED )
+    {
+        return;
+    }
+    else
+    {
+        if( p->pPre->move.result==BOMB )
+        {
+            pEat = p->pPre->pPre;
+            if( pEat->move.result!=EAT )
+            {
+                return;
+            }
+        }
+        else
+        {
+            pEat = p->pPre;
+            if( pEat->move.result!=EAT )
+            {
+                return;
+            }
+        }
+    }
+
+    sum = pEat->percent + p->percent;
+    if( sum>256 )
+    {
+        return;
+    }
+    pEat->percent = sum>>1;
+    p->percent = sum-pEat->percent;
+}
 
 void EnlargeBombPercent(
         Junqi *pJunqi,
@@ -1232,6 +1271,7 @@ void AdjustMovePercent(
         BoardChess *pDst )
 {
     int iDir;
+    int iDir2;
     int nLeftBomb;
 
 
@@ -1251,15 +1291,25 @@ void AdjustMovePercent(
         {
             if( pDst->pLineup->nEat>1 ||
                 ( 2==pSrc->pLineup->isMayBomb &&
-                        pDst->pLineup->type<LVZH )  )
+                        pDst->pLineup->type<LVZH )  )//等于2说明以前抓过令子
             {
                 EnlargeBombPercent(pJunqi,nLeftBomb);
+            }
+            else if( pDst->pLineup->type<LVZH )
+            {
+                MoveList *p = pJunqi->pEngine->pFirstMove;
+                if( !(p->move.dst[0]==pDst->point.x &&
+                        p->move.dst[1]==pDst->point.y) )
+                {
+                    EnlargeBombPercent(pJunqi,nLeftBomb);
+                }
             }
         }
     }
     else
     {
         iDir = pDst->pLineup->iDir;
+        iDir2 = pSrc->pLineup->iDir;
         nLeftBomb = 2-pJunqi->aInfo[iDir].aTypeNum[ZHADAN];
         if( !pDst->pLineup->isNotBomb &&
                 2==pDst->pLineup->isMayBomb && //todo
@@ -1276,6 +1326,16 @@ void AdjustMovePercent(
                 ReduceEatPercent(pJunqi,nLeftBomb);
             }
         }
+
+        if( (pJunqi->aInfo[iDir].mxType<pJunqi->aInfo[iDir2].mxType) &&
+            pSrc->pLineup->type>pDst->pLineup->mx_type &&
+            (pJunqi->nEat<30 || pJunqi->nNoEat<10) )
+        {
+            if( pSrc->pLineup->type<LVZH || pDst->pLineup->nEat>0 )
+            {
+                EnlargeKillPercent(pJunqi);
+            }
+        }
     }
 
 }
@@ -1283,7 +1343,8 @@ void AdjustMovePercent(
 u8 DiscardBadMove(
         Junqi *pJunqi,
         BoardChess *pSrc,
-        BoardChess *pDst)
+        BoardChess *pDst,
+        AlphaBetaData *pData)
 {
     u8 rc = 0;
     u8 iDir;
@@ -1314,6 +1375,14 @@ u8 DiscardBadMove(
             }
         }
 
+        if( pData!=NULL && pData->isGongB )
+        {
+            if( !pDst->isSapperPath )
+            {
+                return 1;
+            }
+        }
+
     }
     else //if( pSrc->type!=DARK )
     {
@@ -1323,7 +1392,7 @@ u8 DiscardBadMove(
                 !pDst->pLineup->isNotLand &&
                 pDst->pLineup->type!=JUNQI )
             {
-                if( pDst->pLineup->type!=DILEI )
+                if( pDst->pLineup->type!=DILEI && pDst->isRailway)
                 {
                     return 1;
                 }
@@ -1362,6 +1431,9 @@ u8 DiscardBadMove(
     }
 
 #if 1
+    //第一步不过滤可能搜到淘汰着法
+    //注释掉后可能有些搜索会过滤这着，而有些搜索不会
+    //todo 后续可以增加一个变量标记是否是淘汰着法
     if( pJunqi->cnt!=1 || pJunqi->eSearchType==SEARCH_DEEP )
     {
         if( pJunqi->eSearchType==SEARCH_LEFT ||
@@ -1375,7 +1447,7 @@ u8 DiscardBadMove(
                     return 1;
                 }
             }
-            else
+            else if( !pDst->isNineGrid )
             {
                 iDir = pDst->iDir;
                 if( pJunqi->myTurn!=iDir && iDir!=((pJunqi->myTurn+3)&3) )
@@ -1433,7 +1505,8 @@ u8 DiscardBadMove(
 void AddMoveToList(
 	Junqi *pJunqi,
 	BoardChess *pSrc,
-	BoardChess *pDst)
+	BoardChess *pDst,
+	AlphaBetaData *pData)
 {
 
 	MoveResultData temp;
@@ -1448,24 +1521,40 @@ void AddMoveToList(
 	    bShowFlag = pJunqi->aInfo[pDst->iDir].bShowFlag;
 	}
 
-	if( DiscardBadMove(pJunqi,pSrc,pDst) )
+
+
+//    if(pSrc->point.x==0x01&&pSrc->point.y==0x07&&
+//            pDst->point.x==0x00&&pDst->point.y==0x07)
+//    {
+////        if( pJunqi->eSearchType==SEARCH_DEEP &&
+////                pJunqi->eDeepType == SEARCH_LEFT )
+//        {
+//            if(pJunqi->nDepth==4 && pJunqi->cnt==6 && pJunqi->bDebug )
+//            {
+//                log_a("dsds");
+//            }
+//        }
+//    }
+
+	if( DiscardBadMove(pJunqi,pSrc,pDst,pData) )
 	{
 	    return;
 	}
 
+//    if(pSrc->point.x==0x06&&pSrc->point.y==0x05&&
+//            pDst->point.x==0x05&&pDst->point.y==0x06)
+//    {
+//
+//
+//        if( pJunqi->cnt==4 && testFlag)
+//        {
+//            log_c("ggg %d",jj);
+//            sleep(1);
+//            assert(0);
+//            log_a("sd1");
+//        }
+//    }
 
-//	if(pSrc->point.x==0x0a&&pSrc->point.y==0x0a&&
-//	        pDst->point.x==0x0a&&pDst->point.y==0x03)
-//	{
-////	        static int jj=0;
-////	        jj++;
-////	        if(jj==525)
-////	        log_c("test");
-////	        log_c("jj %d",jj);
-//	   // sleep(1);
-//	   // assert(0);
-//	    log_a("sd1");
-//	}
 //    static int jj=0;
 //    jj++;
 //    if(jj==10847)
@@ -1763,7 +1852,7 @@ void SearchRailPath(
             if( (p->pChess->pLineup->iDir&1)!=(pChess->pLineup->iDir&1) )
             {
                 pVertex->passCnt++;
-                AddMoveToList(pJunqi, pChess, p->pChess);
+                AddMoveToList(pJunqi, pChess, p->pChess,NULL);
 
 //                    log_a("dir %d %d",p->pChess->iDir,pChess->iDir);
 //                    log_a("dst %d %d %d %d",pChess->point.x,pChess->point.y,
@@ -1774,7 +1863,7 @@ void SearchRailPath(
         else
         {
 
-            AddMoveToList(pJunqi, pChess, p->pChess);
+            AddMoveToList(pJunqi, pChess, p->pChess,NULL);
 //                log_a("path %d %d %d %d",pChess->point.x,pChess->point.y,
 //                        p->pChess->point.x,p->pChess->point.y);
             SearchRailPath(pJunqi, pSrc, pVertex);
@@ -1844,14 +1933,14 @@ void SearchMovePath(
 
             if( pSrc->isCamp || pNbr->isCamp )
             {
-                AddMoveToList(pJunqi, pSrc, pNbr);
+                AddMoveToList(pJunqi, pSrc, pNbr,NULL);
 //                log_a("nbr1 %d %d %d %d",pSrc->point.x,pSrc->point.y,
 //                        pNbr->point.x,pNbr->point.y);
             }
             //非斜相邻
             else if( pNbr->point.x==pSrc->point.x || pNbr->point.y==pSrc->point.y)
             {
-                AddMoveToList(pJunqi, pSrc, pNbr);
+                AddMoveToList(pJunqi, pSrc, pNbr,NULL);
 //                log_a("nbr2 %d %d %d %d",pSrc->point.x,pSrc->point.y,
 //                        pNbr->point.x,pNbr->point.y);
             }

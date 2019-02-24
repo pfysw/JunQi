@@ -33,11 +33,11 @@ void FindBestMove(
     pthread_mutex_lock(&pJunqi->search_mutex);
     for(p=pHead; ; p=p->pNext)
     {
-      //  assert(p->pNext!=pHead);
-//        int index;
-//        index = p->pHead->index;
+
+//        int index = p->pHead->index;
 //        SafeMemout((u8*)&p->pHead->result[index].move, 4);
-        //if(p->pNext->aValue[type]+10<p->aValue[type] )
+//        log_a("depthe %d type %d val %d",depth,type,p->aValue[depth][type]);
+
         if( !p->isSetValue[depth][type] )
         {
             goto continue_search;
@@ -119,20 +119,46 @@ void SetSortRank(MoveSort *pHead)
     }
 }
 
+int CalMaxSumMinValue(
+        Junqi *pJunqi,
+        MoveSort *pNode,
+        int deepDepth,
+        int *pMinVal)
+{
+    int maxSum = 0;
+    *pMinVal = 10000;
+    for(int j=0; j<3; j++)
+    {
+        if( pNode->isSetValue[deepDepth][j] )
+        {
+            maxSum += pNode->aValue[deepDepth][j];
+            if( *pMinVal>pNode->isSetValue[deepDepth][j] )
+            {
+                *pMinVal = pNode->aValue[deepDepth][j];
+            }
+        }
+    }
+    if( pJunqi->nEat>20 )
+    {
+        maxSum += pNode->aValue[0][SEARCH_PATH];
+    }
+
+    return maxSum;
+}
 MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
 {
     MoveSort *pResult[5];
+    MoveSort *pSelect[5];
     MoveSort *pNode;
     MoveSort *pBest = pHead;
     int index;
     int deepDepth = 3;
-    u8 isUpdate = 0;
-    int delta = 0;
     u8 headCnt = 0;
-    int subValue = 0;
-    MoveSort *pDefalut;
     int  maxSum = 0;
+    int minValue = 0;
+    int min;
     int sum;
+    //MoveSort *pDebug[5];
 
     SetSortRank(pHead);
 
@@ -141,12 +167,29 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
     {
         FindBestMove(pJunqi,pHead,pResult,i,3,0);
         pNode = pResult[0];
+//        if( i==1 )
+//        {
+//            pJunqi->bDebug = 1;
+//            log_a("sdsd");
+//        }
+//        sleep(1);
+//        assert(0);
+        //pDebug[i] = pNode;
+        pSelect[i] = pNode;
         if( pNode!=NULL && pNode!=pHead )
         {
-//            log_a("************");
-//            log_a("i %d val %d",i,pNode->aValue[3][1]);
+            log_a("************");
+            index = pNode->pHead->index;
+            SafeMemout((u8*)&pNode->pHead->result[index].move, 4);
+            log_a("i %d val %d",i,pNode->aValue[3][2]);
             ReSearchInDeep(pJunqi,pNode,3);
-          //  log_a("i %d val %d",i,pNode->aValue[3][1]);
+            log_a("i %d val %d",i,pNode->aValue[3][2]);
+//            if( i==1 )
+//            {
+//                log_a("sdsd");
+//                sleep(1);
+//                assert(0);
+//            }
         }
         else
         {
@@ -156,26 +199,19 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
             }
             else
             {
-                log_a("samr %d",i);
+                log_a("same %d",i);
             }
         }
     }
 
 
-    maxSum = 0;
-    for(int j=0; j<3; j++)
-    {
-        maxSum += pHead->aValue[deepDepth][j];
-    }
-    log_a("head sum %d",maxSum);
+    maxSum = CalMaxSumMinValue(pJunqi,pHead,deepDepth,&minValue);
+    log_a("head sum %d min %d",maxSum,minValue);
     for(int i=SEARCH_DEFAULT; i<3; i++)
     {
-        FindBestMove(pJunqi,pHead,pResult,i,3,0);
-        pNode = pResult[0];
-        if( i==SEARCH_DEFAULT )
-        {
-            pDefalut = pNode;
-        }
+//        FindBestMove(pJunqi,pHead,pResult,i,3,0);
+//        pNode = pResult[0];
+        pNode = pSelect[i];
         if( pNode!=NULL )
         {
             index = pNode->pHead->index;
@@ -192,12 +228,13 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
         }
         if( pNode!=NULL && pNode!=pHead )
         {
-            sum = 0;
-            for(int j=0; j<3; j++)
+            sum = CalMaxSumMinValue(pJunqi,pNode,deepDepth,&min);
+            log_a("type %d sum %d min %d",i,sum,min);
+            if( min>minValue+50 )
             {
-                sum += pNode->aValue[deepDepth][j];
+                maxSum = sum;
+                pBest = pNode;
             }
-            log_a("type %d sum %d",i,sum);
             if( sum>maxSum )
             {
                 maxSum = sum;

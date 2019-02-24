@@ -817,6 +817,190 @@ int EvaluatePathValue(Junqi *pJunqi, u8 nChess, u8 nMayLand)
 
     return val;
 }
+
+int CanMoveToCorner(Junqi* pJunqi, int iDir,BoardChess *pDst)
+{
+    int i;
+    int rc = 0;
+    BoardChess *pSrc;
+    ChessLineup *pLineup;
+
+    for(i=0;  i<30; i++)
+    {
+        pLineup = &pJunqi->Lineup[iDir][i];
+        if( pLineup->bDead )
+        {
+            continue;
+        }
+        pSrc = pLineup->pChess;
+
+        if(pLineup->type!=NONE && pLineup->type!=JUNQI && pLineup->type!=DILEI )
+        {
+            if( IsEnableMove(pJunqi, pSrc, pDst) )
+            {
+                if( pDst->type==NONE )
+                {
+                    rc = 1;
+                    break;
+                }
+                else if( pLineup->mx_type<pDst->type )
+                {
+                    rc = 1;
+                    break;
+                }
+            }
+        }
+    }
+    return rc;
+
+}
+
+u8 IsNoBigChess(Junqi *pJunqi, int iDir, u8 *pIndex)
+{
+    u8 isDanger = 0;
+    if( pJunqi->ChessPos[iDir][pIndex[1]].type>SHIZH ||
+            pJunqi->ChessPos[iDir][pIndex[1]].type==NONE   )
+    {
+        isDanger = 1;
+    }
+    else if( pJunqi->ChessPos[iDir][pIndex[0]].type>SHIZH ||
+            pJunqi->ChessPos[iDir][pIndex[0]].type==NONE )
+    {
+        if( pJunqi->ChessPos[iDir][22].type>SHIZH ||
+                pJunqi->ChessPos[iDir][22].type==NONE )
+        {
+            isDanger = 1;
+        }
+    }
+    return isDanger;
+}
+
+int CheckDangerPath(Junqi *pJunqi, int iDir)
+{
+
+    Engine *pEngine = pJunqi->pEngine;
+    Value_Parameter *pVal;
+    BoardChess *pCorner;
+    BoardChess *pChess;
+    BoardChess *pNbr;
+    int value = 0;
+    u8 isEatCorner = 0;
+    u8 isCornerLand = 0;
+    u8 isDanger = 0;
+    int enemyDir;
+    u8 aLeftChess[2] = {21,25};
+    u8 aRighChess[2] = {24,29};
+    u8 aLeftLine[8] = {0,5,10,15,1,6,11,16};
+    u8 aRightLine[8] = {4,9,14,19,3,8,13,18};
+    u8 *pIndex;
+    u8 *pLine;
+    int i,j;
+
+
+    assert( iDir%2==ENGINE_DIR );
+    pVal= &pEngine->valPara;
+
+    if( pJunqi->Lineup[iDir][26].type==JUNQI  )
+    {
+        pCorner = &pJunqi->ChessPos[iDir][20];
+        pIndex = &aLeftChess[0];
+        pLine = &aLeftLine[0];
+    }
+    else
+    {
+        pCorner = &pJunqi->ChessPos[iDir][24];
+        pIndex = &aRighChess[0];
+        pLine = &aRightLine[0];
+    }
+
+    enemyDir = (ENGINE_DIR+1)&3;
+    if( !pJunqi->aInfo[enemyDir].bDead)
+    {
+        isEatCorner = CanMoveToCorner(pJunqi,enemyDir, pCorner);
+    }
+    enemyDir = (ENGINE_DIR+3)&3;
+    if( !pJunqi->aInfo[enemyDir].bDead)
+    {
+        isEatCorner = CanMoveToCorner(pJunqi,enemyDir, pCorner);
+    }
+
+    if( pCorner->type!=NONE && (pCorner->pLineup->iDir&1)==ENGINE_DIR )
+    {
+        if( pCorner->type==DILEI )
+        {
+            if( pJunqi->ChessPos[iDir][pIndex[0]].type==DILEI &&
+                    pJunqi->ChessPos[iDir][pIndex[1]].type==DILEI  )
+            {
+                isCornerLand = 1;
+            }
+        }
+        else if( pCorner->type>SHIZH )
+        {
+            isDanger = IsNoBigChess(pJunqi,iDir,pIndex);
+        }
+    }
+    else
+    {
+        isDanger = IsNoBigChess(pJunqi,iDir,pIndex);
+    }
+
+    for(i=0; i<4; i++)
+    {
+        pChess = &pJunqi->ChessPos[iDir][pLine[i]];
+        pNbr = &pJunqi->ChessPos[iDir][pLine[i+4]];
+        if( pChess->type!=NONE )
+        {
+            if( pChess->pLineup->iDir%2==ENGINE_DIR )
+            {
+                value += pVal->vPathChess;
+                if( pNbr->type!=NONE &&
+                        pNbr->pLineup->iDir%2==ENGINE_DIR )
+                {
+                    if( !pNbr->pLineup->isNotBomb )
+                    {
+                        value += pVal->vPathChess<<1;
+                    }
+                    else
+                    {
+                        value += pVal->vPathChess;
+                    }
+                }
+                if( i==2 )
+                {
+                    for(j=1; j<4; j=j+2)
+                    {
+                        pNbr = &pJunqi->ChessPos[iDir][pLine[4+j]];
+                        if( !pNbr->pLineup->isNotBomb )
+                        {
+                            value += pVal->vPathChess<<1;
+                        }
+                        else
+                        {
+                            value += pVal->vPathChess;
+                        }
+                    }
+                }
+
+            }
+            else
+            {
+                value = 0;
+            }
+        }
+    }
+
+    if( 0==value )
+    {
+        if( isCornerLand ||
+            (isEatCorner && isDanger) )
+        {
+            value = -100;
+        }
+    }
+
+    return value;
+}
+
 int CalJunqiPathValue(Junqi *pJunqi, int iDir)
 {
     int value = 0;
@@ -870,6 +1054,7 @@ int GetJunqiPathValue(Junqi *pJunqi, int iDir)
             if( i%2==ENGINE_DIR )
             {
                 value += CalJunqiPathValue(pJunqi,i);
+                value += CheckDangerPath(pJunqi,i);
             }
             else
             {

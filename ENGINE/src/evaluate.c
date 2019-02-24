@@ -49,8 +49,8 @@ void InitValuePara(Value_Parameter *p)
 	p->vDarkLand =  20;
 	p->vDarkBomb =  10;
 	p->vDarkJunqi = 20;
-	p->vPathLand = 100;
-	p->vPathChess = 50;
+	p->vPathLand = 10;
+	p->vPathChess = 5;
 	p->vDanger = 100;
 
 	p->vAllChess = p->vChess[SILING]+
@@ -88,37 +88,69 @@ int CheckCampValue(Junqi *pJunqi, int iDir)
         {
             if( (pChess->pLineup->iDir&1)!=(iDir&1) )
             {
+                if( pChess->pLineup->type==GONGB &&
+                        (iDir&1)!=ENGINE_DIR )
+                {
+                    continue;
+                }
                 val += aCampVal[i];
 
                 if( i>2 && pJunqi->ChessPos[iDir][aCamp[i]+10].type==JUNQI)
                 {
                     val += 40;
+                    if( (iDir&1)==ENGINE_DIR )//营不能被敌人占掉
+                    {
+                        if( pJunqi->aInfo[iDir].value<2000 )
+                        {
+                            val += 200;
+                        }
+                        else
+                        {
+                            val += 20;
+                        }
+
+                    }
                 }
                 else if( i==2 && pJunqi->aInfo[iDir].bShowFlag )
                 {
                     val += 40;
+                    if( (iDir&1)==ENGINE_DIR )
+                    {
+                        val += 20;
+                    }
                 }
-                if( (iDir&1)!=(ENGINE_DIR&1) )
+
+                if( (iDir&1)!=ENGINE_DIR )
                 {
-                    if( i<2 )
+
+                    if( pJunqi->nEat>30 )
                     {
-                        //大字应该控盘而不是进营
-                        if( pChess->pLineup->type<LVZH )
+                        int tempDir;
+                        tempDir = pChess->pLineup->iDir;
+                        if( i<2 || ( pJunqi->beginValue>300 &&
+                                pChess->pLineup->type==pJunqi->aInfo[tempDir].mxType ) )
                         {
-                            val -= 20;
+                            val -= aCampVal[i];
                         }
                     }
-                    else
+                    else if( pChess->pLineup->type<LVZH )
                     {
-                        if(pChess->pLineup->type<LVZH)
+                        if( i<2 )
                         {
-                            val -= 50;
+                            //大字应该控盘而不是进营
+                            val -= (aCampVal[i]>>1);
                         }
                     }
+
+
                 }
+
             }
             else
             {
+                log_a("idr %d %d isNotBomb %d",iDir,
+                        pChess->pLineup->iDir,
+                        pChess->pLineup->isNotBomb );
                 if( pChess->pLineup->isNotBomb )
                 {
                     val += 5;
@@ -567,6 +599,47 @@ int CheckMaxChess(Junqi *pJunqi, int aMaxNum[], int *mxType)
     return rc;
 }
 
+void SetMaxType(Junqi *pJunqi)
+{
+    int num;
+    u8 i;
+    u8 type;
+    u8 aSetFlag[4] = {0};
+
+    for(i=0; i<4; i++)
+    {
+        pJunqi->aInfo[i].mxType = TUANZH;
+    }
+
+    for(type=SILING; type<TUANZH; type++)
+    {
+        for(i=0; i<4; i++)
+        {
+            if( pJunqi->aInfo[i].bDead ) continue;
+            if( aSetFlag[i] ) continue;
+
+
+            if( (i&1)==(ENGINE_DIR&1) )
+            {
+                num = pJunqi->aInfo[i].aTypeNum[type];
+
+            }
+            else
+            {
+                num = pJunqi->aInfo[i].aLiveAllNum[type] -
+                        pJunqi->aInfo[i].aLiveAllNum[type-1];
+            }
+            if( num!=0 )
+            {
+                pJunqi->aInfo[i].mxType = type;
+                aSetFlag[i] = 1;
+            }
+        }
+    }
+
+}
+
+
 int CalMaxChessValue(Junqi *pJunqi, int aMaxNum[])
 {
     int value = 0;
@@ -624,7 +697,7 @@ void ReSetBombValue(Junqi *pJunqi)
 }
 
 u8 aLeftDeltaLand[5] = {21,23,24,28,29};
-u8 aRighDeltaLand[5] = {23,20,21,25,26};
+u8 aRighDeltaLand[5] = {23,21,20,26,25};
 //todo 对时间效率影响很大，从16-》25
 int GetDeltaLandValue(Junqi *pJunqi, int iDir, int index)
 {
@@ -650,7 +723,7 @@ int GetDeltaLandValue(Junqi *pJunqi, int iDir, int index)
         }
         else
         {
-            pIndex = &aLeftDeltaLand[1];
+            pIndex = &aRighDeltaLand[0];
         }
     }
 
@@ -663,13 +736,13 @@ int GetDeltaLandValue(Junqi *pJunqi, int iDir, int index)
     }
     else
     {
-        if( index==pIndex[1] || index==pIndex[2] )
+        if( index==pIndex[1] )
         {
-            value = 40-vLand;
+            value = 20-vLand;
         }
-        else if( index==pIndex[3] || index==pIndex[4] )
+        else if( index==pIndex[2] || index==pIndex[3] || index==pIndex[4] )
         {
-            value = 10-vLand;
+            value = -vLand-20;
         }
     }
 
@@ -735,6 +808,10 @@ int EvalSituation(Junqi *pJunqi, u8 isInit)
 					if( i%2==ENGINE_DIR%2 )
 					{
 
+//					    if(i==1 && j==20)
+//					    {
+//					        log_a("aaa");
+//					    }
 						if( pLineup->bDead )
 						    //|| (pLineup->pChess->isStronghold && pLineup->pChess->iDir!=i) )
 						{
@@ -766,6 +843,7 @@ int EvalSituation(Junqi *pJunqi, u8 isInit)
 							    {
 							        tempValue += vDeltaBomb+(vDeltaBomb>>2);
 							    }
+
 							}
 							if( pLineup->type==DILEI )
 							{
@@ -786,6 +864,14 @@ int EvalSituation(Junqi *pJunqi, u8 isInit)
 							if( pLineup->isNotBomb && pLineup->index>=5 )
 							{
 								tempValue -= pVal->vDarkBomb;
+							}
+							if( pJunqi->nEat>30 && pJunqi->beginValue>300 )
+							{
+							    if( pLineup->type==pJunqi->aInfo[i].mxType &&
+							            !pLineup->pChess->isRailway )
+							    {
+							        tempValue -= 10;
+							    }
 							}
 //							if( pLineup->nEat>1 )
 //							{

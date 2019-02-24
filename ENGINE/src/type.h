@@ -31,5 +31,6 @@ typedef struct PositionData PositionData;
 typedef struct ChessLineup ChessLineup;
 typedef struct JunqiPath JunqiPath;
 typedef struct MoveSort MoveSort;
+typedef struct AlphaBetaData AlphaBetaData;
 
 #endif

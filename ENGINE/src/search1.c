@@ -19,7 +19,7 @@
 
 
 
-
+#define CALL_ALPHA_TEST 1
 int CallAlphaBeta1(
         Junqi *pJunqi,
         int depth,
@@ -38,44 +38,30 @@ int CallAlphaBeta1(
         if( isMove )
             val = AlphaBeta1(pJunqi,depth,alpha,beta,isMove);
         else
+#if CALL_ALPHA_TEST
+            val = AlphaBeta1(pJunqi,depth,-INFINITY,INFINITY,isMove);
+#else
             val = AlphaBeta1(pJunqi,depth,alpha,INFINITY,isMove);
+#endif
     }
     else
     {
         if( isMove )
             val = -AlphaBeta1(pJunqi,depth,-beta,-alpha,isMove);
         else
+#if CALL_ALPHA_TEST
+            //为了防止吃子时下下层被剪枝
+            val = -AlphaBeta1(pJunqi,depth,-INFINITY,INFINITY,isMove);
+#else
             val = -AlphaBeta1(pJunqi,depth,-beta,INFINITY,isMove);
+#endif
     }
 
-//    switch(pJunqi->cnt)
+
+//    if( pJunqi->bDebug==1 )
 //    {
-//    case 5:
-//        log_a("dsd %d",pJunqi->cnt);
-//        break;
-//    case 6:
-//        log_a("dsd %d",pJunqi->cnt);
-//        break;
-//    case 7:
-//        log_a("dsd %d",pJunqi->cnt);
-//        break;
-//    case 4:
-//        log_a("dsd %d",pJunqi->cnt);
-//        break;
-//    case 8:
-//        log_a("dsd %d",pJunqi->cnt);
-//        break;
-//    case 9:
-//        log_a("dsd %d",pJunqi->cnt);
-//        break;
-//    case 10:
-//        log_a("dsd %d",pJunqi->cnt);
-//        break;
-//    default:
-//        log_a("dsd %d",pJunqi->cnt);
-//        break;
+//        log_a("val %d dir %d cnt %d",val,iDir,pJunqi->cnt);
 //    }
-//    log_a("val %d dir %d",val,iDir);
 //    static int jj=0;
 //    jj++;
 //    if(jj==13)
@@ -355,7 +341,7 @@ int DeepSearch(Junqi *pJunqi, BestMoveList *pNode, int type, int depth)
 
         if( i==mxPerMove || depth==1 )
         {
-            MakeNextMove(pJunqi,&pNode->result[i].move);
+            MakeNextMove(pJunqi,&pNode->result[i].move,NULL);
             if( iDir%2==pJunqi->eTurn%2 )
             {
                 val = DeepSearch(pJunqi,pNode->pNext,type,depth-1);
@@ -568,17 +554,10 @@ void CalSortSumValue(MoveSort *pHead, int type, int depth)
         {
             for(i=0;i<SEARCH_SINGLE;i++)
             {
-                if( i!=SEARCH_PATH )
-                {
-                    p->aValue[j][type] += p->aValue[j][i];
-                }
-                else
-                {
-                    p->aValue[j][type] += p->aValue[j][i]>>2;
-                }
-
+                p->aValue[j][type] += p->aValue[j][i];
             }
-    }
+            p->aValue[j][type] += p->aValue[0][SEARCH_PATH];
+        }
     }
 }
 
@@ -590,12 +569,6 @@ MoveSort *ResortMoveList(MoveSort *pHead, int pri, int depth)
     static u8 cnt = 0;
     static u8 firstPri;
     static u8 firstType;
-
-    if( cnt==0 )
-    {
-        firstPri = pri;
-        firstType = type;
-    }
 
     cnt++;
 
@@ -638,6 +611,14 @@ MoveSort *ResortMoveList(MoveSort *pHead, int pri, int depth)
         break;
     }
 
+    if( cnt==1 )
+    {
+        assert( pri<7 );
+        firstPri = pri;
+        firstType = type;
+    }
+
+
     if( type!=SEARCH_PATH &&  type!=SEARCH_CONNECT )
     {
         pHead = SortMoveValueList(pHead,type,depth);
@@ -669,9 +650,7 @@ void FindBestPathMove(Junqi *pJunqi)
     MoveSort *pHead = *(pEngine->ppMoveSort);
     MoveSort *pNode;
     MoveSort *pBest;
-    MoveSort *pResult[5];
     u8 index;
-    int value;
     int depth;
 
     depth = 3-1;//第3层，0地址为第1层
@@ -744,26 +723,35 @@ u8 IsSearchAllMove(Junqi *pJunqi, int cnt, int iDir)
     return rc;
 }
 
+//todo 这段代码为了解决送子问题
+//但是所消耗的搜索时间太多
+//所以如果不影响胜负，暂时不用
 void CheckPreventMove(
         Junqi *pJunqi,
         MoveList *p,
         u8 *flag)
 {
+
     Engine *pEngine = pJunqi->pEngine;
 
     if( 2==pJunqi->gFlag[FLAG_PREVENT] )
     {
         return;
     }
-    if( pJunqi->cnt==1 )
+    if( pJunqi->cnt==1 && pJunqi->eSearchType!=SEARCH_DEEP )
     {
         pEngine->pFirstMove = p;
     }
     else
     {
+        if( pJunqi->eSearchType!=SEARCH_DEEP )
+        {
+            return;//todo 暂时不要
+        }
         if( p->move.result==EAT && p->percent==256 &&
                 pJunqi->eSearchType!=SEARCH_DEFAULT )
         {
+            //故意送吃阻挡时，多搜几层
             if( !memcmp(pEngine->pFirstMove->move.dst,p->move.dst,2) )
             {
                 pJunqi->gFlag[FLAG_PREVENT] = 1;
@@ -851,14 +839,8 @@ void SearchAlphaBeta(
 
         CheckPreventMove(pJunqi,p,&preventFlag);
         //模拟着法产生后的局面
-        MakeNextMove(pJunqi,&p->move);
+        MakeNextMove(pJunqi,&p->move,&preventFlag);
 
-
-        if( p->move.result==EAT )
-        {
-            pData->hasEat = 1;
-            val = RecordMoveHash(pJunqi,&pJunqi->paHash,p,val,1);
-        }
         pJunqi->pMoveList = pData->pHead;
         assert(pJunqi->pEngine->pPos!=NULL);
 
@@ -873,6 +855,36 @@ void SearchAlphaBeta(
         {
             assert(cnt==pJunqi->cnt);
 
+            if( p->move.result==EAT )
+            {
+                pData->hasEat = 1;
+                val = RecordMoveHash(pJunqi,&pJunqi->paHash,p,val,1);
+            }
+
+            pJunqi->pEngine->pDebugMove[cnt-1] = p;
+
+            u8 test1[4] = {0x04,0x08,0x05,0x08};
+            u8 test2[4] = {0x01,0x06,0x01,0x07};
+            u8 test3[4] = {0x01,0x08,0x01,0x07};
+//            if(pJunqi->nDepth==3 && cnt==1 && !memcmp((u8*)&p->move,test3,4) )
+//            {
+//                pJunqi->bDebug = 1;
+//            }
+
+//            if( pJunqi->nDepth==3 && cnt==1 )
+//            {
+//                //log_a("eat");
+//                if( !memcmp(pEngine->pDebugMove[0],test2,4) &&
+//                        !memcmp(pEngine->pDebugMove[1],test3,4) &&
+//                        !memcmp((u8*)&p->move,test1,4) &&
+//                       pEngine->pDebugMove[1]->move.result==EAT )
+//                {
+//                    log_a("cnt %d val %d per %d",cnt,val,p->percent);
+//                    SafeMemout((u8*)&p->move, sizeof(p->move));
+////                    sleep(1);
+////                    assert(0);
+//                }
+//            }
 
             if( p->move.result==MOVE )
             {
@@ -894,32 +906,75 @@ void SearchAlphaBeta(
                 val = CallAlphaBeta1(pJunqi,depth-1,alpha,beta,pData->iDir,0);
             }
             p->value = val;
-          //  u8 test1[4] = {0x0E,0x0A,0x0E,0x09};
-           // if(cnt<2 )
+
+
            // if( pJunqi->gFlag[FLAG_EAT] )
-           // if(pJunqi->nDepth==4 && cnt==2 && pJunqi->bDebug )//&& !memcmp((u8*)&p->move,test1,4) )
-            //if( pJunqi->bDebug )
+           // if(pJunqi->nDepth==3 && cnt==2 && !memcmp((u8*)&p->move,test1,4) )
+            //if( pJunqi->bDebug && pJunqi->nDepth==4 && cnt==2 )
+//            if( pJunqi->nDepth==3 && cnt==3 && pJunqi->eSearchType==SEARCH_DEEP &&
+//                    pJunqi->eDeepType==SEARCH_RIGHT && pJunqi->bDebug )
+//            if( cnt==1  )
 //            {
 //                //log_a("eat");
+//                u8 test4[4] = {0x02,0x08,0x01,0x08};
+////                u8 test5[4] = {0x0B,0x0A,0x0B,0x09};
+////                u8 test6[4] = {0x0E,0x07,0x0F,0x06};
+////                if( !memcmp(pEngine->pDebugMove[0],test5,4)
+////                     &&  !memcmp(pEngine->pDebugMove[1],test6,4) )
+////                       && pEngine->pDebugMove[0]->move.result==3 )
+////                if( !memcmp(pEngine->pDebugMove[2],test3,4)
+////                        && !memcmp(pEngine->pDebugMove[3],test2,4)
+////                        && !memcmp(pEngine->pDebugMove[4],test1,4) &&
+////                        !memcmp(pEngine->pDebugMove[0],test4,4) )
+//                {
+//
+//                   // if( pEngine->pDebugMove[3]->move.result==2 )
+//                    {
+////                            static int jj=0;
+////                            jj++;
+////                            if(jj==2)
+////                            log_c("test");
+////                            log_c("jj %d",jj);
+//
+//                        log_a("cnt %d val %d per %d",cnt,val,p->percent);
+//                        //log_a("max %d",pData->mxVal);
+//                        SafeMemout((u8*)&p->move, sizeof(p->move));
+//                    }
+////                    if( pJunqi->bDebug==2 )
+////                    {
+////                        sleep(1);
+////                        assert(0);
+////                    }
+//                }
+//            }
+
+//            if( cnt==1 && !memcmp((u8*)&p->move,test3,4)  )
+//            {
 //                log_a("cnt %d val %d per %d",cnt,val,p->percent);
 //                SafeMemout((u8*)&p->move, sizeof(p->move));
+//                if( pJunqi->nDepth==3 )
+//                {
+//                    sleep(1);
+//                    assert(0);
+//                }
+//
 //            }
-//            if(pJunqi->nDepth==4 && cnt==1 && !memcmp((u8*)&p->move,test2,4) )
+//            if(pJunqi->nDepth==2 && cnt==1 && !memcmp((u8*)&p->move,test3,4) )
 //            {
-//                pJunqi->bDebug=0;
+//                pJunqi->bDebug = 0;
 //            }
 
             //把局面撤回到上一步
             pJunqi->pMoveList = pData->pHead;
             assert(pJunqi->pEngine->pPos!=NULL);
             UnMakeMove(pJunqi,&p->move);
+
+            if( p->move.result==EAT )
+            {
+                FreeMoveHashNode(pJunqi,p);
+            }
         }
 
-
-        if( p->move.result==EAT )
-        {
-            FreeMoveHashNode(pJunqi,p);
-        }
 
         if( preventFlag )
         {
@@ -937,12 +992,14 @@ void SearchAlphaBeta(
                 aBestMove[cnt].mxPerFlag1 = 1;
                 val = sum>>8;
                 //这段代码起负作用
-//                if( (pData->iDir&1)!=ENGINE_DIR && !pJunqi->gFlag[SEARCH_GONGB] )
+//                if( (pData->iDir&1)!=ENGINE_DIR && !pData->isGongB] )
 //                {
 //                    val = RecordMoveHash(pJunqi,&pJunqi->paHash,p,val,0);
 //                }
 
                 sum = 0;
+
+
             }
             else
             {
@@ -979,7 +1036,6 @@ void SearchAlphaBeta(
             AddMoveSortList(pJunqi,aBestMove,p,pMaxMove,val,0);
         }
 
-beta_cut:
         //产生截断
         if( val>=beta )//todo 被剪枝的最后可能分数不准确
         {
@@ -1087,7 +1143,8 @@ void SearchRailPath1(
         {
             if( (p->pChess->pLineup->iDir&1)!=(pChess->pLineup->iDir&1) )
             {
-                AddMoveToList(pJunqi, pChess, p->pChess);
+
+                AddMoveToList(pJunqi, pChess, p->pChess, pData);
                 pVertex->cnt[pData->cnt]++;
                 //log_a("dir %d %d",p->pChess->iDir,pChess->iDir);
 //                log_a("dst %d %d %d %d",pChess->point.x,pChess->point.y,
@@ -1099,7 +1156,7 @@ void SearchRailPath1(
         }
         else
         {
-            AddMoveToList(pJunqi, pChess, p->pChess);
+            AddMoveToList(pJunqi, pChess, p->pChess, pData);
             //log_a("path %d %d %d %d",pChess->point.x,pChess->point.y,
                    // p->pChess->point.x,p->pChess->point.y);
             SearchAlphaBeta(pJunqi,pData);
@@ -1193,7 +1250,7 @@ void SearchMoveList(
             pNbr->isSapperPath = 0;
             if( pSrc->isCamp || pNbr->isCamp )
             {
-                AddMoveToList(pJunqi, pSrc, pNbr);
+                AddMoveToList(pJunqi, pSrc, pNbr,pData);
 //                log_a("nbr1 %d %d %d %d",pSrc->point.x,pSrc->point.y,
 //                        pNbr->point.x,pNbr->point.y);
 
@@ -1202,7 +1259,7 @@ void SearchMoveList(
             //非斜相邻
             else if( pNbr->point.x==pSrc->point.x || pNbr->point.y==pSrc->point.y)
             {
-                AddMoveToList(pJunqi, pSrc, pNbr);
+                AddMoveToList(pJunqi, pSrc, pNbr,pData);
 //                log_a("nbr2 %d %d %d %d",pSrc->point.x,pSrc->point.y,
 //                        pNbr->point.x,pNbr->point.y);
                 SearchAlphaBeta(pJunqi,pData);
@@ -1276,13 +1333,13 @@ u8 SearchEat(Junqi *pJunqi)
     Engine *pEngine = pJunqi->pEngine;
     u8 maxCnt;
 
-    if( pJunqi->nEat<10 )
+    if( pJunqi->nEat<20 )
     {
-        maxCnt = 5;
+        maxCnt = pJunqi->nDepth+1;
     }
-    else if(pJunqi->nEat<20 )
+    else if(pJunqi->nEat<40 )
     {
-        maxCnt = 6;
+        maxCnt = pJunqi->nDepth+2;
     }
     else
     {
@@ -1397,7 +1454,8 @@ int AlphaBeta1(
             pJunqi->gFlag[FLAG_PREVENT] = 1;
             pJunqi->gFlag[FLAG_EAT] = eatFlag;
         }
-        else if( SearchEat(pJunqi) )
+        else if( pJunqi->eSearchType==SEARCH_DEEP &&
+                SearchEat(pJunqi) )
 #else
         if( SearchEat(pJunqi) )
 #endif
@@ -1413,6 +1471,13 @@ int AlphaBeta1(
 
             val = EvalSituation(pJunqi,0);
 
+//            if(val==-380 && pJunqi->nDepth==2 && pJunqi->bDebug )
+//            {
+//                log_a("sss");
+//                pJunqi->bDebug = 2;
+////                sleep(1);
+////                assert(0);
+//            }
             pJunqi->gFlag[FLAG_EAT] = eatFlag;
             //EvalSituation是针对引擎评价的，所以对方的分值应取负值
             if( (iDir&1)!=ENGINE_DIR )
@@ -1479,9 +1544,9 @@ int AlphaBeta1(
         SearchMoveList(pJunqi,pSrc,&search_data);
 
         if( pSrc->pLineup->type==DARK && pSrc->isRailway &&
-            pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[GONGB]<3 && !flag )
+            pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[GONGB]<3 && !flag
+            && !pJunqi->gFlag[FLAG_EAT] && !pJunqi->gFlag[FLAG_PREVENT]  )
         {
-            u8 isFlag = 0;
             temp[0] = pSrc->type;
             memcpy(&tempLineup,pSrc->pLineup,sizeof(tempLineup));
             flag = 1;
@@ -1492,16 +1557,9 @@ int AlphaBeta1(
             pSrc->pLineup->isNotLand = 1;
             pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[GONGB]++;
             pJunqi->aInfo[pSrc->pLineup->iDir].aLiveTypeSum[GONGB]++;
-            if( !pJunqi->gFlag[SEARCH_GONGB] )
-            {
-                isFlag = 1;
-                pJunqi->gFlag[SEARCH_GONGB] = 1;
-            }
+            search_data.isGongB = 1;
             SearchMoveList(pJunqi,pSrc,&search_data);
-            if( isFlag )
-            {
-                pJunqi->gFlag[SEARCH_GONGB] = 0;
-            }
+            search_data.isGongB = 0;
             pJunqi->aInfo[pSrc->pLineup->iDir].aTypeNum[GONGB]--;
             pJunqi->aInfo[pSrc->pLineup->iDir].aLiveTypeSum[GONGB]--;
             memcpy(pSrc->pLineup,&tempLineup,sizeof(tempLineup));
@@ -1547,7 +1605,6 @@ int AlphaBeta1(
             aBestMove[0].pNode = NULL;
         }
     }
-
 
 
     if( 1==pJunqi->cnt )

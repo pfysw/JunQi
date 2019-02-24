@@ -25,7 +25,6 @@ enum RailType {GONGB_RAIL,HORIZONTAL_RAIL,VERTICAL_RAIL,CURVE_RAIL};
 enum CompareType {MOVE=1,EAT,BOMB,KILLED,SELECT,SHOW_FLAG,DEAD,BEGIN,TIMER};
 
 enum FlagType {
-    SEARCH_GONGB,
     FLAG_EAT,
     FLAG_PREVENT,
     TIME_OUT
@@ -120,6 +119,7 @@ typedef struct PartyInfo
 	u8 aTypeNum[14];
 	u8 aLiveTypeSum[14];//大于某个级别的明棋总和
 	u8 aLiveAllNum[14];//大于某个级别的明棋和暗棋总和
+	u8 mxType;
 	u8 nMayBomb;
 	u8 nMayLand;
 	u8 nMayBombLand;

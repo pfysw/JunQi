@@ -38,5 +38,6 @@ u8 IsDirectRail(
 void AddMoveToList(
     Junqi *pJunqi,
     BoardChess *pSrc,
-    BoardChess *pDst);
+    BoardChess *pDst,
+    AlphaBetaData *pData);
 #endif /* MOVEGEN_H_ */

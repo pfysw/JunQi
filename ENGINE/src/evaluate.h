@@ -27,5 +27,6 @@ void InitValuePara(Value_Parameter *p);
 int EvalSituation(Junqi *pJunqi, u8 isInit);
 int GetConnectValue(Junqi *pJunqi, int iDir);
 void ReSetBombValue(Junqi *pJunqi);
+void SetMaxType(Junqi *pJunqi);
 
 #endif /* ALPHA_BETA_H_ */

@@ -23,7 +23,7 @@ enum MoveEvent{
 	BOMB_EVENT
 };
 
-#define TEST
+//#define TEST
 
 #ifdef  TEST
 #define ENGINE_DIR   0
@@ -125,6 +125,7 @@ typedef struct ENGINE
     JunqiPath *pJunqiPath[2];
     BestMove aBestMove[BEST_LIST_NUM];
     MoveList *pFirstMove;
+    MoveList *pDebugMove[10];
     BoardChess *pBest[2];
     u8 aSendBest[4];
     u8 eatInList;

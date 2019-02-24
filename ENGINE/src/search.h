@@ -36,7 +36,8 @@ struct PositionData
 	ExtraAdjustInfo xExtraInfo;
 };
 
-typedef struct AlphaBetaData
+typedef struct AlphaBetaData AlphaBetaData;
+struct AlphaBetaData
 {
     int alpha;
     int beta;
@@ -52,7 +53,8 @@ typedef struct AlphaBetaData
     u8 hasEat;
     u8 cut;
     u8 bestFlag;
-}AlphaBetaData;
+    u8 isGongB;
+};
 
 typedef struct MoveHash MoveHash;
 struct MoveHash
@@ -156,7 +158,7 @@ int CheckMoveHash(
         Junqi *pJunqi,
         BoardChess *pDst);
 int GetHashKey(Junqi* pJunqi);
-void MakeNextMove(Junqi *pJunqi, MoveResultData *pResult);
+void MakeNextMove(Junqi *pJunqi, MoveResultData *pResult,u8 *flag);
 void UnMakeMove(Junqi *pJunqi, MoveResultData *pResult);
 void SetBestMove(Junqi *pJunqi, MoveResultData *pResult);
 void PrintBestMove(BestMove *aBestMove, int alpha);

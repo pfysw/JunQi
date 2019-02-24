@@ -215,10 +215,14 @@ void PopMoveFromStack(
 	}
 }
 
-void MakeNextMove(Junqi *pJunqi, MoveResultData *pResult)
+void MakeNextMove(
+        Junqi *pJunqi,
+        MoveResultData *pResult,
+        u8 *flag)
 {
 	BoardChess *pSrc, *pDst;
 	BoardPoint p1,p2;
+	int index;
 
 	p1.x = pResult->src[0]%17;
 	p1.y = pResult->src[1]%17;
@@ -236,6 +240,20 @@ void MakeNextMove(Junqi *pJunqi, MoveResultData *pResult)
 	assert( pSrc->type!=NONE );
 
 	pDst = pJunqi->aBoard[p2.x][p2.y].pAdjList->pChess;
+
+	if( (pSrc->pLineup->iDir&1)!=ENGINE_DIR &&
+	        (pDst->iDir&1)==ENGINE_DIR && flag!=NULL )
+	{
+	    index = pDst->index+5;//敌方棋子到旗上时多搜一层
+	    if( pJunqi->ChessPos[pDst->iDir][index].type==JUNQI &&
+	            pJunqi->cnt>=pJunqi->nDepth && pResult->result<BOMB )
+	    {
+	        //这个变量本来是用来解决送子问题的
+	        //现在用来解决炸弹回防时多搜一层
+            pJunqi->gFlag[FLAG_PREVENT] = 1;
+            *flag = 1;
+	    }
+	}
 
 	PushMoveToStack(pJunqi, pSrc, pDst, pResult);
 
@@ -1031,7 +1049,7 @@ int SearchBestMove(
                 aBestMove[cnt].mxPerFlag = 0;
                 aBestMove[cnt].mxPerFlag1 = 0;
             }
-            MakeNextMove(pJunqi,&pNode->result[i].move);
+            MakeNextMove(pJunqi,&pNode->result[i].move,&preventFlag);
 
             if( pJunqi->aInfo[pJunqi->eTurn].bDead )
             {
@@ -1049,6 +1067,9 @@ int SearchBestMove(
                 }
             }
             CheckPreventMove(pJunqi,pBest,&preventFlag);
+
+            pJunqi->pEngine->pDebugMove[cnt-1] = pBest;
+            pBest->move.result = i+1;//test
 
             if( pNode->result[i].move.result==MOVE )
             {
@@ -1117,8 +1138,7 @@ int SearchBestMove(
 
         if( 1==cnt )
         {
-           // aBestMove[0].pHead->index = mxPerMove;
-            if( !pJunqi->gFlag[TIME_OUT] )
+           // if( !pJunqi->gFlag[TIME_OUT] )
             {
                 AddMoveSortList(pJunqi,aBestMove,aBestMove[0].pHead,NULL,val,1);
             }

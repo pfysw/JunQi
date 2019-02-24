@@ -264,9 +264,7 @@ void MakeDeepSearch(
         int type)
 {
     Engine *pEngine = pJunqi->pEngine;
-    MoveSort *pHead = *(pEngine->ppMoveSort);
     int value;
-    int i;
     int eTurn;
 
     pJunqi->eSearchType = SEARCH_DEEP;
@@ -290,6 +288,14 @@ void MakeDeepSearch(
     }
     if( !pJunqi->aInfo[pJunqi->deepTurn].bDead )
     {
+        //设置记录第一层的行棋
+        int index;
+        MoveList firdtMove;
+        index = pNode->pHead->index;
+        memcpy(&firdtMove.move,&pNode->pHead->result[index].move,
+                sizeof(MoveResultData));
+        pEngine->pFirstMove = &firdtMove;
+
         value = DeepSearch(pJunqi,pNode->pHead,SEARCH_DEEP,1);
         pNode->aValue[depth][type] = value;
         pNode->isSetValue[depth][type] = 1;
@@ -511,14 +517,16 @@ void ReSearchInDeep(Junqi* pJunqi, MoveSort *pNode, int depth)
         pMsg->type = SEARCH_DEEP;
         pMsg->deepDepth = depth;
         pMsg->pNode = pNode;
-        if( !pJunqi->aInfo[(iDir+1)%4].bDead )
+        if( !pJunqi->aInfo[(iDir+1)%4].bDead &&
+                !pNode->isSetValue[depth][SEARCH_RIGHT] )
         {
 
             pMsg->deepType = SEARCH_RIGHT;
             mq_send(pJunqi->search_qid, aBuf, sizeof(SearchMsg), 0);
             nTread++;
         }
-        if( !pJunqi->aInfo[(iDir+3)%4].bDead )
+        if( !pJunqi->aInfo[(iDir+3)%4].bDead &&
+                !pNode->isSetValue[depth][SEARCH_LEFT] )
         {
             pMsg->deepType = SEARCH_LEFT;
             mq_send(pJunqi->search_qid, aBuf, sizeof(SearchMsg), 0);
@@ -528,10 +536,13 @@ void ReSearchInDeep(Junqi* pJunqi, MoveSort *pNode, int depth)
     while( pJunqi->cntSearch<nTread );//等待所有线程都初始化完毕
     pJunqi->begin_flag = 1;
 
-    MakeDeepSearch(pJunqi,pNode,depth,SEARCH_DEFAULT);
+    if( !pNode->isSetValue[depth][SEARCH_DEFAULT] )
+    {
+        MakeDeepSearch(pJunqi,pNode,depth,SEARCH_DEFAULT);
+    }
 
     while(pJunqi->cntSearch);//等所有线程搜索完毕
-   //MakeDeepSearch(pJunqi,pNode,depth,SEARCH_LEFT);
+  // MakeDeepSearch(pJunqi,pNode,depth,SEARCH_LEFT);
 
 }
 
@@ -590,6 +601,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 	}
 
 	ReSetBombValue(pJunqi);
+	SetMaxType(pJunqi);
 	ReSetLineupType(pJunqi);
 	EvalSituation(pJunqi,1);//初始化分数
 
@@ -670,16 +682,22 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
         pJunqi->gFlag[TIME_OUT] = 0;
         pJunqi->begin_time = (unsigned int)time(NULL);
 
+//        MoveSort *pResult[5];
+//        FindBestMove(pJunqi,*pJunqi->pEngine->ppMoveSort,pResult,0,3,1);
+//        sleep(1);
+//        assert(0);
+
         pJunqi->eSearchType = SEARCH_SINGLE;
         ProSearch(pJunqi,3);
 #endif
 
 
 #ifdef ENG_TEST
-       // pJunqi->eSearchType = SEARCH_LEFT;
-       // pJunqi->eSearchType = SEARCH_RIGHT;
+        pJunqi->eSearchType = SEARCH_LEFT;
+        //pJunqi->eSearchType = SEARCH_RIGHT;
         //pJunqi->eSearchType = SEARCH_SINGLE;
         ProSearch(pJunqi,4);
+       // log_a("path %d",CheckDangerPath(pJunqi,3));
         //MakeDeepSearch(pJunqi,pJunqi->eSearchType);
 
 #endif
@@ -693,10 +711,10 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 
         while(pJunqi->cntSearch);//等所有线程搜索完毕
 
-    	//SelectSortMove(pJunqi);
         SetPathValue(pJunqi);
-    	//PrintMoveSortList(pJunqi);
+
 #ifndef ENG_TEST
+
     	FindBestPathMove(pJunqi);
 #endif
     	ClearMoveSortList(pJunqi);

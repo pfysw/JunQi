@@ -462,10 +462,7 @@ void GetTypeNum(u8 *aBombNum, u8 *aTypeNum, u8 *aTypeNumSum)
 		}
 	}
 	aTypeNum[ZHADAN] += nBomb;
-	if( aTypeNum[ZHADAN]>2 )
-	{
-	    log_a("sdsd");
-	}
+
 	assert( aTypeNum[ZHADAN]<=2 );
 }
 
