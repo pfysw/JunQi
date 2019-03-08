@@ -75,8 +75,9 @@ int CheckCampValue(Junqi *pJunqi, int iDir)
     int val = 0;
     int i;
     u8 aCamp[5] = {6,8,12,16,18};
-    u8 aCampVal[5] = {40,40,50,70,70};
+    u8 aCampVal[5] = {40,40,90,70,70};
     BoardChess *pChess;
+
     for(i=0; i<5; i++)
     {
         pChess = &pJunqi->ChessPos[iDir][aCamp[i]];
@@ -93,56 +94,48 @@ int CheckCampValue(Junqi *pJunqi, int iDir)
                 {
                     continue;
                 }
-                val += aCampVal[i];
 
                 if( i>2 && pJunqi->ChessPos[iDir][aCamp[i]+10].type==JUNQI)
                 {
-                    val += 40;
-                    if( (iDir&1)==ENGINE_DIR )//营不能被敌人占掉
+                    aCampVal[i] += 40;
+                    if( (iDir&1)==ENGINE_DIR )//下营不能被敌人占掉
                     {
                         if( pJunqi->aInfo[iDir].value<2000 )
                         {
-                            val += 200;
+                            aCampVal[i] += 200;
                         }
                         else
                         {
-                            val += 20;
+                            aCampVal[i] += 20;
                         }
 
                     }
+                    val += 10;
                 }
-                else if( i==2 && pJunqi->aInfo[iDir].bShowFlag )
+                else if( i==2 && (iDir&1)==ENGINE_DIR )
                 {
-                    val += 40;
-                    if( (iDir&1)==ENGINE_DIR )
-                    {
-                        val += 20;
-                    }
+                    aCampVal[i] += 20;
                 }
 
-                if( (iDir&1)!=ENGINE_DIR )
+                if( pChess->isCamp!=2 )//空营没有价值
+                {
+                    val += aCampVal[i];
+                }
+
+                if( (iDir&1)!=ENGINE_DIR && pChess->isCamp!=2 )
                 {
 
-                    if( pJunqi->nEat>30 )
+                    int tempDir;
+                    tempDir = pChess->pLineup->iDir;
+                    if( pChess->pLineup->type==pJunqi->aInfo[tempDir].mxType  )
                     {
-                        int tempDir;
-                        tempDir = pChess->pLineup->iDir;
-                        if( i<2 || ( pJunqi->beginValue>300 &&
-                                pChess->pLineup->type==pJunqi->aInfo[tempDir].mxType ) )
-                        {
-                            val -= aCampVal[i];
-                        }
+                        val -= aCampVal[i];
                     }
                     else if( pChess->pLineup->type<LVZH )
                     {
-                        if( i<2 )
-                        {
-                            //大字应该控盘而不是进营
-                            val -= (aCampVal[i]>>1);
-                        }
+                        //大字应该控盘而不是进营
+                        val -= (aCampVal[i]>>1);
                     }
-
-
                 }
 
             }
@@ -288,13 +281,18 @@ int CalDangerValue(Junqi *pJunqi, int iDir, u8 *pDir)
     int landFlag1 = 0;
     int landFlag2 = 0;
     int landFlag3 = 0;
+    int vDanger;
     Engine *pEngine;
     Value_Parameter *pVal;
 
     pEngine = pJunqi->pEngine;
     pVal= &pEngine->valPara;
+    vDanger = pVal->vDanger;
 
-
+    if( (iDir&1)!=ENGINE_DIR && pJunqi->aInfo[iDir].value>2200 )
+    {
+        vDanger = 20;
+    }
     for(i=0;i<7;i++)
     {
         pChess = &pJunqi->ChessPos[iDir][pDir[i]];
@@ -319,15 +317,12 @@ int CalDangerValue(Junqi *pJunqi, int iDir, u8 *pDir)
                 landFlag2 = 1;
             }
             break;
-//        case 3:
-//            if( pJunqi->aInfo[iDir].bShowFlag )
-//            {
-//                if(  NONE==pChess->type || pChess->pLineup->isNotLand )
-//                {
-//                    landFlag3 = 1;
-//                }
-//            }
-//            break;
+        case 3:
+            if(  NONE==pChess->type || pChess->pLineup->isNotLand )
+            {
+                landFlag3 = 1;
+            }
+            break;
         default:
             break;
         }
@@ -336,27 +331,25 @@ int CalDangerValue(Junqi *pJunqi, int iDir, u8 *pDir)
         {
             if((pChess->pLineup->iDir&1)!=(iDir&1))
             {
-                if(0==i)
+
+                if(i<3)
                 {
-                    value += (pVal->vDanger<<1)+pVal->vDanger;
-                }
-                else if(i<3)
-                {
-                    value += (pVal->vDanger<<2)+pVal->vDanger;
+                    value += vDanger<<1;
                 }
                 else if( iDir==ENGINE_DIR || pChess->pLineup->type<YINGZH )
                 {
-                    if(pJunqi->aInfo[i].value<2000)//todo
+                    if( pJunqi->aInfo[iDir].value<2000 ||
+                           pJunqi->aInfo[(iDir+2)&3].bDead )//todo
                     {
 
                         //value += 100;
                         if( 3==i && landFlag1 )
                         {
-                            value += pVal->vDanger<<1;
+                            value += vDanger;
                         }
                         else if( 4==i && landFlag2 )
                         {
-                            value += pVal->vDanger;
+                            value += vDanger;
                         }
                     }
                 }
@@ -364,22 +357,18 @@ int CalDangerValue(Junqi *pJunqi, int iDir, u8 *pDir)
 
         }
     }
+
     if( (iDir&1)!=ENGINE_DIR )//todo
     {
-
         if( landFlag1 )
         {
             log_a("iRpOfst %d %d",pJunqi->iRpOfst,iDir);
-            value += pVal->vDanger;
+            value += vDanger;
         }
-        else if( landFlag2 )
+        else if( landFlag2 || landFlag3 )
         {
-            value += pVal->vDanger>>1;
+            value += vDanger>>1;
         }
-//        else if( landFlag3 )
-//        {
-//            value += pVal->vDanger>>1;
-//        }
     }
 
 
@@ -733,6 +722,10 @@ int GetDeltaLandValue(Junqi *pJunqi, int iDir, int index)
         {
             value = 40;
         }
+//        else if( index==pIndex[1] || index==pIndex[2] )
+//        {
+//            value = -20;
+//        }
     }
     else
     {
@@ -865,7 +858,7 @@ int EvalSituation(Junqi *pJunqi, u8 isInit)
 							{
 								tempValue -= pVal->vDarkBomb;
 							}
-							if( pJunqi->nEat>30 && pJunqi->beginValue>300 )
+							if( pJunqi->nEat>30  )
 							{
 							    if( pLineup->type==pJunqi->aInfo[i].mxType &&
 							            !pLineup->pChess->isRailway )
@@ -893,8 +886,9 @@ int EvalSituation(Junqi *pJunqi, u8 isInit)
 							{
 								if( pLineup->bBomb )
 								{
+								    //低估敌方炸弹的价值
 								    tempValue += (pVal->vChess[pLineup->type]+
-								    	 	pVal->vChess[ZHADAN]+vDeltaBomb)/2;
+								    	 	(pVal->vChess[ZHADAN]-40) )/2;
 								}
 								else if( pLineup->type==GONGB || pLineup->type==DILEI )
 								{
@@ -916,10 +910,11 @@ int EvalSituation(Junqi *pJunqi, u8 isInit)
 								tempValue += pVal->vDarkBomb;
 							}
 
-                            if( pLineup->type==ZHADAN )
-                            {
-                                tempValue += vDeltaBomb;//令子多则减少炸弹价值，否则增加炸弹价值
-                            }
+							//这样一改可能敌方炸弹的价值比我方39都要大
+//                            if( pLineup->type==ZHADAN )
+//                            {
+//                                tempValue += vDeltaBomb;//令子多则减少炸弹价值，否则增加炸弹价值
+//                            }
                             if( pLineup->type==DILEI )
                             {
                                 tempValue += GetDeltaLandValue(pJunqi,i,pLineup->index);
@@ -964,13 +959,20 @@ int EvalSituation(Junqi *pJunqi, u8 isInit)
                 log_a("temp1 value %d %d",i,tempValue);
                 if( pJunqi->aInfo[i].bDead )
                 {
+//                    if( tempValue>-pVal->vAllChess )
+//                    {
+//                        tempValue = -(pVal->vAllChess+(pVal->vDanger<<2)+50);
+//                    }
+
+                    tempValue = -pJunqi->aInfo[i].value-pVal->vDanger;
                     if( tempValue>-pVal->vAllChess )
                     {
-                        tempValue = -(pVal->vAllChess+(pVal->vDanger<<2)+50);
+                        tempValue = -pVal->vAllChess;
                     }
+
                     if( pJunqi->aInfo[(i+2)&3].bDead)
                     {
-                        tempValue -= 1000;
+                        tempValue -= 2000;
                     }
                     pJunqi->aInfo[i].deadValue = tempValue;
 
@@ -989,13 +991,20 @@ int EvalSituation(Junqi *pJunqi, u8 isInit)
                 log_a("temp3 value %d %d",i,tempValue);
                 if( pJunqi->aInfo[i].bDead )
                 {
+//                    if( tempValue<pVal->vAllChess )
+//                    {
+//                        tempValue = pVal->vAllChess+(pVal->vDanger<<2)+50;
+//                    }
+
+                    tempValue = pJunqi->aInfo[i].value+pVal->vDanger;
                     if( tempValue<pVal->vAllChess )
                     {
-                        tempValue = pVal->vAllChess+(pVal->vDanger<<2)+50;
+                        tempValue = pVal->vAllChess;
                     }
+
                     if( pJunqi->aInfo[(i+2)&3].bDead)
                     {
-                        tempValue = tempValue+1000;
+                        tempValue = tempValue+2000;
                     }
                     pJunqi->aInfo[i].deadValue = tempValue;
                 }

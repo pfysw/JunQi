@@ -14,6 +14,7 @@ typedef enum SearchType{
     SEARCH_LEFT,
     SEARCH_SINGLE,
     SEARCH_PATH,
+    DANGER_PATH,
     SEARCH_CONNECT,
     SEARCH_DEEP,
     SEARCH_SUM

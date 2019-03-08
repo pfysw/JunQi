@@ -37,6 +37,8 @@ enum FlagType {
 #define MOVE_OFFSET (8+30*4)//4字节起始标志+4字节总步数+4家布阵
 
 
+#define off_set_of(type, member)  ((int)&(((type *)0)->member))
+
 extern int free_cnt;
 extern int malloc_cnt;
 
@@ -79,9 +81,10 @@ struct BoardChess
 	int index;
 	BoardPoint point;
 	u8  isStronghold;
-	u8  isCamp;
+	u8  isCamp;//等于2说明营周围无字，该营没有价值
 	u8  isRailway;
 	u8  isNineGrid;
+	u8  isBottom;//表示三角雷，1：底线  2：旗上 3：角上 4:下营
 };
 
 //邻接表adjacency list;
@@ -124,6 +127,7 @@ typedef struct PartyInfo
 	u8 nMayLand;
 	u8 nMayBombLand;
 	u8 perLand;
+	u8 nExchange;
 }PartyInfo;
 
 typedef struct JunqiPathList JunqiPathList;
@@ -206,7 +210,6 @@ struct Junqi
 	int test_time[2];
 	int test_gen_num;
 	int test_num;
-	int searche_num[2];
 	int iKey;
 	MoveHash **paHash;
     SearchType eSearchType;
@@ -251,5 +254,7 @@ void PrognosisChess(
         int iDir);
 void AdjustMaxType(Junqi *pJunqi, int iDir);
 void ReSetLineupType(Junqi *pJunqi);
+void InitTimestamp(Junqi *pJunqi);
+void SetBottomLine(Junqi *pJunqi);
 
 #endif /* JUNQI_H_ */

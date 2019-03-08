@@ -119,6 +119,27 @@ void SetSortRank(MoveSort *pHead)
     }
 }
 
+MoveSort * SelectRandMove(Junqi *pJunqi,MoveSort *pHead)
+{
+    MoveSort *p;
+    Engine *pEngine = pJunqi->pEngine;
+    int maxLoop;
+    int i = 0;
+
+
+    if( pHead==NULL ) return NULL;
+    maxLoop = pEngine->gInfo.timeStamp%5;
+    log_a("timeStamp rand %d",maxLoop);
+    for(p=pHead; p->pNext!=NULL; p=p->pNext)
+    {
+        if( ++i>maxLoop )
+        {
+            break;
+        }
+    }
+    return p;
+}
+
 int CalMaxSumMinValue(
         Junqi *pJunqi,
         MoveSort *pNode,
@@ -132,19 +153,24 @@ int CalMaxSumMinValue(
         if( pNode->isSetValue[deepDepth][j] )
         {
             maxSum += pNode->aValue[deepDepth][j];
-            if( *pMinVal>pNode->isSetValue[deepDepth][j] )
+            if( *pMinVal>pNode->aValue[deepDepth][j] )
             {
                 *pMinVal = pNode->aValue[deepDepth][j];
             }
         }
     }
-    if( pJunqi->nEat>20 )
+    if( pJunqi->nEat>20 && pJunqi->nNoEat<15 )
     {
-        maxSum += pNode->aValue[0][SEARCH_PATH];
+        maxSum += pNode->aValue[0][DANGER_PATH];
+    }
+    if( pJunqi->nNoEat>15 )
+    {
+        maxSum += pNode->aValue[2][SEARCH_SINGLE];
     }
 
     return maxSum;
 }
+
 MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
 {
     MoveSort *pResult[5];
@@ -158,22 +184,30 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
     int minValue = 0;
     int min;
     int sum;
+    u8 isDanger = 0;
     //MoveSort *pDebug[5];
 
     SetSortRank(pHead);
+    if( pJunqi->nEat<5 )
+    {
+        pHead = SelectRandMove(pJunqi,pHead);
 
+    }
     ReSearchInDeep(pJunqi,pHead,3);
+//    sleep(1);
+//    assert(0);
+
     for(int i=SEARCH_DEFAULT; i<3; i++)
     {
         FindBestMove(pJunqi,pHead,pResult,i,3,0);
         pNode = pResult[0];
-//        if( i==1 )
+//        if( i==0 )
 //        {
-//            pJunqi->bDebug = 1;
 //            log_a("sdsd");
+//            sleep(1);
+//            assert(0);
 //        }
-//        sleep(1);
-//        assert(0);
+
         //pDebug[i] = pNode;
         pSelect[i] = pNode;
         if( pNode!=NULL && pNode!=pHead )
@@ -204,9 +238,15 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
         }
     }
 
+    log_a("new head %d",pJunqi->pEngine->gInfo.timeStamp);
 
     maxSum = CalMaxSumMinValue(pJunqi,pHead,deepDepth,&minValue);
     log_a("head sum %d min %d",maxSum,minValue);
+//    log_a("head defalut %d",pHead->aValue[2][0]);
+//    if( pHead->aValue[2][0]==-12 )
+//    {
+//        assert(0);
+//    }
     for(int i=SEARCH_DEFAULT; i<3; i++)
     {
 //        FindBestMove(pJunqi,pHead,pResult,i,3,0);
@@ -234,11 +274,14 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
             {
                 maxSum = sum;
                 pBest = pNode;
+                minValue = min;
+                isDanger = 1;
             }
-            if( sum>maxSum )
+            else if( sum>maxSum )
             {
                 maxSum = sum;
                 pBest = pNode;
+                minValue = min;
             }
         }
         else if( pHead==pNode)
@@ -251,7 +294,7 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
     }
 
    // if( (headCnt>1 || pDefalut==pHead) )//&& subValue<80 )
-    if( headCnt>1 )
+    if( headCnt>1 && !isDanger )
     {
         pBest = pHead;
     }

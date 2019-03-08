@@ -25,4 +25,6 @@ void CheckEatEvent(Engine *pEngine);
 u8 ProJunqiEvent(Engine *pEngine);
 void CheckJunqiEvent(Engine *pEngine);
 void ChecAttackEvent(Engine *pEngine);
+
+void CheckGLobalInfo(Engine *pEngine);
 #endif /* EVENT_H_ */

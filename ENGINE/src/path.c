@@ -970,13 +970,16 @@ int CheckDangerPath(Junqi *pJunqi, int iDir)
                     for(j=1; j<4; j=j+2)
                     {
                         pNbr = &pJunqi->ChessPos[iDir][pLine[4+j]];
-                        if( !pNbr->pLineup->isNotBomb )
+                        if( pNbr->type!=NONE )
                         {
-                            value += pVal->vPathChess<<1;
-                        }
-                        else
-                        {
-                            value += pVal->vPathChess;
+                            if( !pNbr->pLineup->isNotBomb )
+                            {
+                                value += pVal->vPathChess<<1;
+                            }
+                            else
+                            {
+                                value += pVal->vPathChess;
+                            }
                         }
                     }
                 }
@@ -1042,7 +1045,7 @@ int CalJunqiPathValue(Junqi *pJunqi, int iDir)
     return value;
 }
 
-int GetJunqiPathValue(Junqi *pJunqi, int iDir)
+int GetJunqiPathValue(Junqi *pJunqi, int iDir, u8 isDanger)
 {
     int value = 0;
     int i;
@@ -1053,12 +1056,22 @@ int GetJunqiPathValue(Junqi *pJunqi, int iDir)
         {
             if( i%2==ENGINE_DIR )
             {
-                value += CalJunqiPathValue(pJunqi,i);
-                value += CheckDangerPath(pJunqi,i);
+                if( !isDanger )
+                {
+                    value += CalJunqiPathValue(pJunqi,i);//todo
+                    value += CheckDangerPath(pJunqi,i);//计算常规路径分数时，把危险分数也算上
+                }
+                else
+                {
+                    value += CheckDangerPath(pJunqi,i);
+                }
             }
             else
             {
-                value -= CalJunqiPathValue(pJunqi,i);
+                if( !isDanger )
+                {
+                    value -= CalJunqiPathValue(pJunqi,i);
+                }
             }
         }
     }

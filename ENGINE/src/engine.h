@@ -107,6 +107,14 @@ struct RecordLineup
     u8 isRecord;
 };
 
+typedef struct GLOBAL_INFO GLOBAL_INFO;
+struct GLOBAL_INFO
+{
+    int timeStamp;
+    int timeSearch;
+    int mxDepth;
+};
+
 typedef struct ENGINE
 {
 	Junqi *pJunqi;
@@ -120,7 +128,7 @@ typedef struct ENGINE
     //MoveValue aMoveArray[100];
     u8 iHashOfst;
     RecordLineup aRecord[RECORD_LINEUP__NUM];
-
+    GLOBAL_INFO gInfo;
     MoveSort **ppMoveSort;
     JunqiPath *pJunqiPath[2];
     BestMove aBestMove[BEST_LIST_NUM];
@@ -146,5 +154,6 @@ void SendEvent(Junqi* pJunqi, int iDir, u8 event);
 Engine *OpneEnigne(Junqi *pJunqi);
 void CloseEngine(Engine *pEngine);
 void ReSearchInDeep(Junqi* pJunqi, MoveSort *pNode, int depth);
+void SetMaxDepth(Engine *pEngine);
 
 #endif /* ENGIN_H_ */

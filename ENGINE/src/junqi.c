@@ -136,18 +136,70 @@ void SetBoardRailway(Junqi *pJunqi, enum ChessDir dir, int i)
 	}
 }
 
+void InitTimestamp(Junqi *pJunqi)
+{
+    int timeStamp = 0;
+    int i,j;
+    for(i=0; i<4; i++)
+    {
+        if( i%2!=ENGINE_DIR )
+        {
+            continue;
+        }
+        for(j=11; j<18; j++)
+        {
+            timeStamp += pJunqi->ChessPos[i][j].type;
+        }
+    }
+    pJunqi->pEngine->gInfo.timeStamp = timeStamp;
+}
+
+void SetBottomLine(Junqi *pJunqi)
+{
+    u8 aLeft[5] = {25,29,21,20,16};
+    u8 aRight[5] = {29,25,23,24,18};
+    u8 *pIndex;
+    int i;
+
+    for(i=0;i<4;i++)
+    {
+        if( i%2!=ENGINE_DIR )
+        {
+            continue;
+        }
+        if( pJunqi->Lineup[i][26].type==JUNQI  )
+        {
+            pIndex = &aLeft[0];
+        }
+        else
+        {
+            pIndex = &aRight[0];
+        }
+        pJunqi->ChessPos[i][pIndex[0]].isBottom = 1;
+        pJunqi->ChessPos[i][pIndex[2]].isBottom = 2;
+        pJunqi->ChessPos[i][pIndex[3]].isBottom = 3;
+        pJunqi->ChessPos[i][pIndex[4]].isBottom = 4;
+        pJunqi->ChessPos[i][27].isBottom = 1;
+        pJunqi->Lineup[i][pIndex[1]].isNotLand = 1;
+    }
+}
 
 void SetChess(Junqi *pJunqi, enum ChessDir dir)
 {
 	enum ChessType iType;
+	ChessLineup *pLineup;
 	int i;
+	int begin_addr;
 
     //从方阵的左上角从上往下，从左往右遍历
 	for(i=0;i<30;i++)
 	{
 		iType = pJunqi->Lineup[dir][i].type;
-
 		assert( iType>=NONE && iType<=GONGB );
+
+		pLineup = &pJunqi->Lineup[dir][i];
+		begin_addr = off_set_of(ChessLineup,bDead);
+		memset((u8*)pLineup+begin_addr,0,sizeof(ChessLineup)-begin_addr);
         // 下家最右侧横坐标为0
 		// 对家最上面纵坐标为0
 		switch(dir)
@@ -177,6 +229,7 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 		pJunqi->ChessPos[dir][i].type = pJunqi->Lineup[dir][i].type;
 		pJunqi->ChessPos[dir][i].index = i;
 		pJunqi->ChessPos[dir][i].iDir = dir;
+		pJunqi->ChessPos[dir][i].isBottom = 0;
 		pJunqi->Lineup[dir][i].iDir = dir;
 		pJunqi->Lineup[dir][i].pChess = &pJunqi->ChessPos[dir][i];
 		pJunqi->Lineup[dir][i].bDead = 0;
@@ -189,6 +242,7 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 		SetBoardCamp(pJunqi, dir, i);
 		SetBoardRailway(pJunqi, dir, i);
 	}
+
 }
 
 
@@ -404,6 +458,11 @@ void ChessTurn(Junqi *pJunqi)
 		if( pJunqi->aInfo[pJunqi->eTurn].bDead )
 		{
 			pJunqi->eTurn = (pJunqi->eTurn+1)%4;
+			//上家阵亡
+	        if( pJunqi->aInfo[pJunqi->eTurn].bDead )
+	        {
+	            pJunqi->eTurn = (pJunqi->eTurn+1)%4;
+	        }
 		}
 	}
 
@@ -660,7 +719,10 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 		if( pLineup->bBomb )
 		{
 			aBombNum[pLineup->type]++;
-			nExchange++;
+			if( pLineup->type!=ZHADAN )
+			{
+			    nExchange++;
+			}
 		}
 	}
 
@@ -686,10 +748,11 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 
 	GetLiveTypeSum(aLiveTypeSum,aLiveTypeNum,aLiveAllNum);
 
-    if( nExchange>3 && aTypeNum[ZHADAN]<2 )
+    if( nExchange>1 && aTypeNum[ZHADAN]<2 )
     {
         aTypeNum[ZHADAN]++;
     }
+    pJunqi->aInfo[iDir].nExchange = nExchange;
 
     //这里先计算好暗子的最大可能性
 	tmp = GetMaxType(SILING, GONGB, aTypeNumSum);
@@ -1185,7 +1248,7 @@ void PlayResult(
             pJunqi->aInfo[pDst->iDir].bShowFlag |= 1;
 	    }
 	    pSrc->pLineup->bDead = 1;
-	    if( MOVE==type )
+	    if( type<BOMB )
 	    {
             if( (iDir1&1)==(ENGINE_DIR&1) )
             {
@@ -1447,6 +1510,8 @@ void InitChess(Junqi* pJunqi, u8 *data)
 
 	AdjustMaxType(pJunqi,(ENGINE_DIR+1)%4);
 	AdjustMaxType(pJunqi,(ENGINE_DIR+3)%4);
+	InitTimestamp(pJunqi);
+	SetBottomLine(pJunqi);
 }
 
 void ReInitAdjNode(Junqi *pJunqi)

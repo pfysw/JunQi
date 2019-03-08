@@ -25,6 +25,15 @@ struct MoveList
 
 };
 
+typedef struct MoveStack MoveStack;
+struct MoveStack
+{
+    u8 bSetNotBomb;
+    u8 bSetMaxType;
+    u8 tempType;
+    u8 isNotBomb;
+};
+
 void ClearMoveList(Junqi *pJunqi, MoveList *pHead);
 MoveList *GenerateMoveList(Junqi* pJunqi, int iDir);
 void SearchMovePath(

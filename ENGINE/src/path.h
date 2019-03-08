@@ -23,6 +23,6 @@ void GetJunqiPath(
         JunqiPathList *pSrcData );
 void InitJunqiPath(Junqi *pJunqi);
 void ClearJunqiPath(Engine *pEngine, int iPath);
-int GetJunqiPathValue(Junqi *pJunqi, int iDir);
+int GetJunqiPathValue(Junqi *pJunqi, int iDir, u8 isDanger);
 
 #endif /* PATH_H_ */

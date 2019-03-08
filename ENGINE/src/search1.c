@@ -293,12 +293,15 @@ void ClearMoveSortList(Junqi *pJunqi)
 int GetSearchTypeValue(Junqi *pJunqi, int type, int iDir)
 {
     int val;
+    int depth;
+
+    depth = pJunqi->pEngine->gInfo.mxDepth-1;
     switch(type)
     {
     case SEARCH_DEEP:
         if( pJunqi->eDeepType!=SEARCH_SINGLE )
         {
-            val = ProSearch(pJunqi,3);
+            val = ProSearch(pJunqi,depth);
         }
         else
         {
@@ -307,7 +310,10 @@ int GetSearchTypeValue(Junqi *pJunqi, int type, int iDir)
         }
         break;
     case SEARCH_PATH:
-        val = GetJunqiPathValue(pJunqi,iDir);
+        val = GetJunqiPathValue(pJunqi,iDir,0);
+        break;
+    case DANGER_PATH:
+        val = GetJunqiPathValue(pJunqi,iDir,1);
         break;
     case SEARCH_CONNECT:
         val = GetConnectValue(pJunqi,iDir);
@@ -439,9 +445,18 @@ void SetPathValue(Junqi *pJunqi)
 
     for(pNode=pHead; ;)
     {
-        pJunqi->myTurn = pJunqi->eTurn;
-        val = DeepSearch(pJunqi,pNode->pHead,SEARCH_PATH,1);
-        pNode->aValue[0][SEARCH_PATH] = val;
+        if( pJunqi->nEat>10 )//开局不要搜
+        {
+            pJunqi->myTurn = pJunqi->eTurn;
+            val = DeepSearch(pJunqi,pNode->pHead,SEARCH_PATH,1);
+            pNode->aValue[0][SEARCH_PATH] = val;
+
+            pJunqi->myTurn = pJunqi->eTurn;
+            val = DeepSearch(pJunqi,pNode->pHead,DANGER_PATH,1);
+            pNode->aValue[0][DANGER_PATH] = val;
+        }
+
+
 
         pJunqi->myTurn = pJunqi->eTurn;
         val = DeepSearch(pJunqi,pNode->pHead,SEARCH_CONNECT,1);
@@ -540,7 +555,11 @@ void AdjustSortMoveValue(MoveSort *pHead, int type, int depth)
     }
 }
 
-void CalSortSumValue(MoveSort *pHead, int type, int depth)
+void CalSortSumValue(
+        Junqi *pJunqi,
+        MoveSort *pHead,
+        int type,
+        int depth)
 {
     MoveSort *p;
     int i,j;
@@ -556,7 +575,14 @@ void CalSortSumValue(MoveSort *pHead, int type, int depth)
             {
                 p->aValue[j][type] += p->aValue[j][i];
             }
-            p->aValue[j][type] += p->aValue[0][SEARCH_PATH];
+            if( pJunqi->iRpOfst<100 || pJunqi->nNoEat<10 )
+            {
+                p->aValue[j][type] += p->aValue[0][DANGER_PATH];
+            }
+            if( pJunqi->nNoEat>15 )
+            {
+                p->aValue[j][type] += p->aValue[j][SEARCH_SINGLE];
+            }
         }
     }
 }
@@ -666,7 +692,7 @@ void FindBestPathMove(Junqi *pJunqi)
         AdjustSortMoveValue(pHead,SEARCH_DEFAULT,depth);
     }
 
-    CalSortSumValue(pHead,SEARCH_SUM,depth);
+    CalSortSumValue(pJunqi,pHead,SEARCH_SUM,depth);
 
     //pHead = SortMoveValueList(pHead,SEARCH_SUM);
     //pHead = SortMoveValueList(pHead,SEARCH_RIGHT);
@@ -694,6 +720,7 @@ void FindBestPathMove(Junqi *pJunqi)
             log_a("right[%d] %d",i,pNode->aValue[i][SEARCH_RIGHT]);
             log_a("single[%d] %d",i,pNode->aValue[i][SEARCH_SINGLE]);
         }
+        log_a("danger %d",pNode->aValue[0][DANGER_PATH]);
         log_a("path %d",pNode->aValue[0][SEARCH_PATH]);
         log_a("connect %d",pNode->aValue[0][SEARCH_CONNECT]);
         pNode=pNode->pNext;
@@ -863,24 +890,24 @@ void SearchAlphaBeta(
 
             pJunqi->pEngine->pDebugMove[cnt-1] = p;
 
-            u8 test1[4] = {0x04,0x08,0x05,0x08};
-            u8 test2[4] = {0x01,0x06,0x01,0x07};
-            u8 test3[4] = {0x01,0x08,0x01,0x07};
+            u8 test1[4] = {0x0D,0x07,0x0D,0x08};
+            u8 test2[4] = {0x0D,0x09,0x0E,0x09};
+            u8 test3[4] = {0x09,0x04,0x0a,0x03};
 //            if(pJunqi->nDepth==3 && cnt==1 && !memcmp((u8*)&p->move,test3,4) )
 //            {
 //                pJunqi->bDebug = 1;
 //            }
 
-//            if( pJunqi->nDepth==3 && cnt==1 )
+//            if( pJunqi->nDepth==3 && cnt==3 )
 //            {
 //                //log_a("eat");
-//                if( !memcmp(pEngine->pDebugMove[0],test2,4) &&
-//                        !memcmp(pEngine->pDebugMove[1],test3,4) &&
-//                        !memcmp((u8*)&p->move,test1,4) &&
-//                       pEngine->pDebugMove[1]->move.result==EAT )
+//                if( !memcmp(pEngine->pDebugMove[0],test1,4) &&
+//                        !memcmp(pEngine->pDebugMove[1],test2,4) &&
+//                        !memcmp((u8*)&p->move,test3,4) )
 //                {
-//                    log_a("cnt %d val %d per %d",cnt,val,p->percent);
-//                    SafeMemout((u8*)&p->move, sizeof(p->move));
+//                    pJunqi->bDebug = 1;
+////                    log_a("cnt %d val %d per %d",cnt,val,p->percent);
+////                    SafeMemout((u8*)&p->move, sizeof(p->move));
 ////                    sleep(1);
 ////                    assert(0);
 //                }
@@ -916,12 +943,12 @@ void SearchAlphaBeta(
 //            if( cnt==1  )
 //            {
 //                //log_a("eat");
-//                u8 test4[4] = {0x02,0x08,0x01,0x08};
-////                u8 test5[4] = {0x0B,0x0A,0x0B,0x09};
-////                u8 test6[4] = {0x0E,0x07,0x0F,0x06};
-////                if( !memcmp(pEngine->pDebugMove[0],test5,4)
-////                     &&  !memcmp(pEngine->pDebugMove[1],test6,4) )
-////                       && pEngine->pDebugMove[0]->move.result==3 )
+//                u8 test4[4] = {0x09,0x0E,0x09,0x0F};
+//                u8 test5[4] = {0x0D,0x09,0x0E,0x09};
+//                u8 test6[4] = {0x0E,0x07,0x0F,0x06};
+// //               if( !memcmp(pEngine->pDebugMove[0],test4,4)
+//          //           &&  !memcmp(pEngine->pDebugMove[1],test5,4) )
+// //                      && pEngine->pDebugMove[0]->move.result==2 )
 ////                if( !memcmp(pEngine->pDebugMove[2],test3,4)
 ////                        && !memcmp(pEngine->pDebugMove[3],test2,4)
 ////                        && !memcmp(pEngine->pDebugMove[4],test1,4) &&
@@ -940,11 +967,6 @@ void SearchAlphaBeta(
 //                        //log_a("max %d",pData->mxVal);
 //                        SafeMemout((u8*)&p->move, sizeof(p->move));
 //                    }
-////                    if( pJunqi->bDebug==2 )
-////                    {
-////                        sleep(1);
-////                        assert(0);
-////                    }
 //                }
 //            }
 
@@ -1335,11 +1357,11 @@ u8 SearchEat(Junqi *pJunqi)
 
     if( pJunqi->nEat<20 )
     {
-        maxCnt = pJunqi->nDepth+1;
+        maxCnt = pJunqi->nDepth;
     }
     else if(pJunqi->nEat<40 )
     {
-        maxCnt = pJunqi->nDepth+2;
+        maxCnt = pJunqi->nDepth+1;
     }
     else
     {
@@ -1454,8 +1476,9 @@ int AlphaBeta1(
             pJunqi->gFlag[FLAG_PREVENT] = 1;
             pJunqi->gFlag[FLAG_EAT] = eatFlag;
         }
-        else if( pJunqi->eSearchType==SEARCH_DEEP &&
-                SearchEat(pJunqi) )
+//        else if( pJunqi->eSearchType==SEARCH_DEEP &&
+//                SearchEat(pJunqi) )
+        else if( SearchEat(pJunqi) )
 #else
         if( SearchEat(pJunqi) )
 #endif
@@ -1471,12 +1494,12 @@ int AlphaBeta1(
 
             val = EvalSituation(pJunqi,0);
 
-//            if(val==-380 && pJunqi->nDepth==2 && pJunqi->bDebug )
+//            if(val==290 && pJunqi->nDepth==3 && pJunqi->bDebug )
 //            {
 //                log_a("sss");
-//                pJunqi->bDebug = 2;
-////                sleep(1);
-////                assert(0);
+//
+//                sleep(1);
+//                assert(0);
 //            }
             pJunqi->gFlag[FLAG_EAT] = eatFlag;
             //EvalSituation是针对引擎评价的，所以对方的分值应取负值

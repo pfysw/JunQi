@@ -101,7 +101,9 @@ void PushMoveToStack(
         }
 
 	}
-	else if( pDst->isStronghold )
+	//else if( pDst->isStronghold )
+    else if( pDst->isStronghold || ( pSrc->type==GONGB &&
+            (pSrc->pLineup->iDir&1)!=ENGINE_DIR ))//多加了判断条件，搜索时间变少了
 	{
 	    //进入大本营当死子处理，type数量被更新，所以要入栈
         memcpy(&pStorage->info[0], &pJunqi->aInfo[pSrc->pLineup->iDir], sizeof(PartyInfo));
@@ -196,7 +198,9 @@ void PopMoveFromStack(
     	memcpy(&pJunqi->aInfo[pDst->pLineup->iDir], &pStorage->info[1], sizeof(PartyInfo));
 
 	}
-    else if( pDst->isStronghold )
+	//else if( pDst->isStronghold )
+    else if( pDst->isStronghold || ( pSrc->type==GONGB &&
+            (pSrc->pLineup->iDir&1)!=ENGINE_DIR ))//多加了判断条件，搜索时间变少了
     {
         memcpy(&pJunqi->aInfo[pSrc->pLineup->iDir], &pStorage->info[0], sizeof(PartyInfo));
     }
@@ -244,14 +248,20 @@ void MakeNextMove(
 	if( (pSrc->pLineup->iDir&1)!=ENGINE_DIR &&
 	        (pDst->iDir&1)==ENGINE_DIR && flag!=NULL )
 	{
-	    index = pDst->index+5;//敌方棋子到旗上时多搜一层
-	    if( pJunqi->ChessPos[pDst->iDir][index].type==JUNQI &&
-	            pJunqi->cnt>=pJunqi->nDepth && pResult->result<BOMB )
+//	    index = pDst->index+5;//敌方棋子到旗上时多搜一层
+//	    if( pJunqi->ChessPos[pDst->iDir][index].type==JUNQI &&
+//	            pJunqi->cnt>=pJunqi->nDepth && pResult->result<BOMB )
+	    if( pDst->isBottom && pJunqi->cnt>=pJunqi->nDepth &&
+	            pResult->result<BOMB )
 	    {
 	        //这个变量本来是用来解决送子问题的
 	        //现在用来解决炸弹回防时多搜一层
-            pJunqi->gFlag[FLAG_PREVENT] = 1;
-            *flag = 1;
+	        if( 2!=pJunqi->gFlag[FLAG_PREVENT] )//防止重复
+	        {
+	            pJunqi->gFlag[FLAG_PREVENT] = 1;
+	            *flag = 1;
+	        }
+
 	    }
 	}
 
@@ -309,7 +319,7 @@ void SetBestMove(Junqi *pJunqi, MoveResultData *pResult)
 
 }
 
-#define SEARCH_TIME 10
+#define SEARCH_TIME 15
 int TimeOut(Junqi *pJunqi)
 {
 	int rc = 0;

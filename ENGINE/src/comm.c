@@ -145,6 +145,8 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
 		pJunqi->pEngine = OpneEnigne(pJunqi);
 		InitLineup(pJunqi, data, isInitBoard);
 		InitChess(pJunqi, data);
+
+		SetMaxDepth(pJunqi->pEngine);
 		pthread_mutex_unlock(&pJunqi->mutex);
 		if( !isInitBoard )
 		{

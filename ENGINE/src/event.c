@@ -15,6 +15,7 @@ char *aTypeName[14] =
 	"shizh","lvzh","tuanzh","yingzh","lianzh","paizh","gongb"
 };
 
+#if 1
 void CheckJunqiEvent(Engine *pEngine)
 {
 	u8 isMove = 0;
@@ -84,4 +85,182 @@ void ChecAttackEvent(Engine *pEngine)
             break;
         }
     }
+}
+
+//以上代码为开发过程中的历史代码，不再使用
+//---------------------------------------------------------
+#endif
+
+//敌方有只有一个子时，可能计算出该子是炸弹
+//如果我方只有大子，可能不敢去面对
+void CheckLiveChessNum(Engine *pEngine)
+{
+    Junqi *pJunqi = pEngine->pJunqi;
+    ChessLineup *pLineup;
+    ChessLineup *pLive;
+    int nLive = 0;
+    int i,j;
+
+    for(i=0; i<4; i++)
+    {
+        nLive = 0;
+        if( !pJunqi->aInfo[i].bDead )
+        {
+            for(j=0; j<30; j++)
+            {
+                pLineup = &pJunqi->Lineup[i][j];
+                if( pLineup->bDead || pLineup->type==NONE  )
+                {
+                    continue;
+                }
+                if( pLineup->pChess->isStronghold )
+                {
+                    continue;
+                }
+                if( i%2==ENGINE_DIR )
+                {
+                    if( pLineup->type!=DILEI )
+                    {
+                        nLive++;
+                    }
+                }
+                else if( pLineup->isNotLand )
+                {
+                    nLive++;
+                    pLive = pLineup;
+                }
+            }
+            if( 1==nLive && i%2!=ENGINE_DIR )
+            {
+                pLive->isNotBomb = 1;
+            }
+
+        }
+    }
+
+}
+
+int CalCampAroundNum(Junqi *pJunqi, BoardChess *pSrc)
+{
+    int i;
+    int x,y;
+    BoardChess *pNbr;
+    int num = 0;
+
+    for(i=0; i<9; i++)
+    {
+        if( i==4 ) continue;
+        x = pSrc->point.x+1-i%3;
+        y = pSrc->point.y+i/3-1;
+
+        if( pJunqi->aBoard[x][y].pAdjList )
+        {
+            pNbr = pJunqi->aBoard[x][y].pAdjList->pChess;
+            if( pNbr->type!=NONE && !pNbr->isCamp )
+            {
+                if( pNbr->pLineup->iDir%2==pNbr->iDir%2 )
+                {
+                    num++;
+                }
+            }
+        }
+    }
+
+    return num;
+}
+
+void CheckEmptyCamp(Engine *pEngine)
+{
+    Junqi *pJunqi = pEngine->pJunqi;
+    BoardChess *pCamp;
+    u8 aIndex[5] = {6,8,12,16,18};
+    int i,j;
+
+    for(i=0; i<4; i++)
+    {
+        if( !pJunqi->aInfo[i].bDead )
+        {
+            for(j=0; j<5; j++)
+            {
+
+                pCamp = &pJunqi->ChessPos[i][aIndex[j]];
+                if( !CalCampAroundNum(pJunqi,pCamp) )
+                {
+                    pCamp->isCamp = 2;
+                }
+                else
+                {
+                    pCamp->isCamp = 1;
+                }
+                if( i%2==ENGINE_DIR && j>0 )
+                {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void SetMaxDepth(Engine *pEngine)
+{
+    if( pEngine->gInfo.timeSearch<2 )
+    {
+        pEngine->gInfo.mxDepth++;
+    }
+    else if( pEngine->gInfo.timeSearch>6 )//6秒
+    {
+        pEngine->gInfo.mxDepth--;
+    }
+
+    if( pEngine->gInfo.mxDepth<4 )
+    {
+        pEngine->gInfo.mxDepth = 4;
+    }
+    if( pEngine->gInfo.mxDepth>8 )
+    {
+        pEngine->gInfo.mxDepth = 8;
+    }
+}
+void CheckBebombNum(Engine *pEngine)
+{
+    Junqi *pJunqi = pEngine->pJunqi;
+    ChessLineup *pLineup;
+    int i,j;
+
+    for(i=0; i<4; i++)
+    {
+        if( !pJunqi->aInfo[i].bDead &&
+                pJunqi->aInfo[i].nExchange>1 )
+        {
+            for(j=0;  j<30; j++)
+            {
+                pLineup = &pJunqi->Lineup[i][j];
+                if( pLineup->bDead || pLineup->type==NONE  )
+                {
+                    continue;
+                }
+                if( pLineup->pChess->isStronghold )
+                {
+                    continue;
+                }
+                if( i%2!=ENGINE_DIR )
+                {
+                    if( 2==pLineup->isMayBomb )
+                    {
+                        pLineup->isMayBomb = 0;
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+void CheckGLobalInfo(Engine *pEngine)
+{
+   // Junqi *pJunqi = pEngine->pJunqi;
+    CheckLiveChessNum(pEngine);
+    CheckEmptyCamp(pEngine);
+    CheckBebombNum(pEngine);
 }
