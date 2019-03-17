@@ -186,10 +186,21 @@ void PopMoveFromStack(
     		for(int i=0; i<30; i++)
     		{
     			pLineup = &pJunqi->Lineup[iDir1][i];
-    			if( !pLineup->bDead && pLineup->type!=NONE )
+    			if(  pLineup->type!=NONE )
     			{
-    				pLineup->pChess->type = pLineup->type;
+    			    if( !pLineup->bDead )
+    			    {
+    			        pLineup->pChess->type = pLineup->type;
+    			    }
+                    else if( pLineup->pChess->isStronghold )
+                    {
+                        if( pLineup->pChess->pLineup==pLineup )
+                        {
+                            pLineup->pChess->type = pLineup->type;
+                        }
+                    }
     			}
+
     		}
     		pJunqi->aInfo[iDir1].bDead = 0;
     	}
@@ -226,7 +237,6 @@ void MakeNextMove(
 {
 	BoardChess *pSrc, *pDst;
 	BoardPoint p1,p2;
-	int index;
 
 	p1.x = pResult->src[0]%17;
 	p1.y = pResult->src[1]%17;
@@ -248,18 +258,23 @@ void MakeNextMove(
 	if( (pSrc->pLineup->iDir&1)!=ENGINE_DIR &&
 	        (pDst->iDir&1)==ENGINE_DIR && flag!=NULL )
 	{
-//	    index = pDst->index+5;//敌方棋子到旗上时多搜一层
-//	    if( pJunqi->ChessPos[pDst->iDir][index].type==JUNQI &&
-//	            pJunqi->cnt>=pJunqi->nDepth && pResult->result<BOMB )
-	    if( pDst->isBottom && pJunqi->cnt>=pJunqi->nDepth &&
+	    //考虑但1打2的情形，在cnt==nDepth时是自家走
+	    //但这多出来的一层会浪费大量搜索时间
+	    if( pDst->isBottom && pJunqi->cnt>=pJunqi->nDepth-1 &&
 	            pResult->result<BOMB )
 	    {
-	        //这个变量本来是用来解决送子问题的
-	        //现在用来解决炸弹回防时多搜一层
-	        if( 2!=pJunqi->gFlag[FLAG_PREVENT] )//防止重复
 	        {
-	            pJunqi->gFlag[FLAG_PREVENT] = 1;
-	            *flag = 1;
+                //这个变量本来是用来解决送子问题的
+                //现在用来解决炸弹回防时多搜一层
+                if( 2!=pJunqi->gFlag[FLAG_PREVENT] )//防止重复
+                {
+                    if( pJunqi->eSearchType!=SEARCH_DEFAULT ||
+                            pDst->isBottom<3 )
+                    {
+                        pJunqi->gFlag[FLAG_PREVENT] = 1;
+                        *flag = 1;
+                    }
+                }
 	        }
 
 	    }
@@ -319,7 +334,7 @@ void SetBestMove(Junqi *pJunqi, MoveResultData *pResult)
 
 }
 
-#define SEARCH_TIME 15
+#define SEARCH_TIME 10
 int TimeOut(Junqi *pJunqi)
 {
 	int rc = 0;
@@ -621,6 +636,7 @@ void FreeMoveHashNode(Junqi *pJunqi,  MoveList *pMove)
                     pPre->pNext = p->pNext;
                 }
                 free_cnt++;
+                pJunqi->test_free++;
                 memsys5Free(pJunqi,p);
                 break;
             }
@@ -682,6 +698,7 @@ int RecordMoveHash(
     if( *paHash==NULL )
     {
         size = sizeof(MoveHash *)*nHash;
+        pJunqi->test_malloc1++;
         *paHash = (MoveHash **)memsys5Malloc(pJunqi,size);
         memset(*paHash,0,size);
     }
@@ -695,6 +712,7 @@ int RecordMoveHash(
     {
         size =sizeof(MoveHash);
         malloc_cnt++;
+        pJunqi->test_malloc++;
         pNew = (MoveHash *)memsys5Malloc(pJunqi,size);
         memset(pNew,0,size);
         pNew->iKey = iKey;
@@ -726,6 +744,7 @@ int RecordMoveHash(
         {
             size =sizeof(MoveHash);
             malloc_cnt++;
+            pJunqi->test_malloc++;
             pNew = (MoveHash *)memsys5Malloc(pJunqi,size);
             memset(pNew,0,size);
             pNew->iKey = iKey;
@@ -761,12 +780,16 @@ void ClearMoveHash(Junqi *pJunqi,MoveHash ***paHash)
            // log_a("free key %d",pTemp->iKey);
             pDel = pDel->pNext;
             free_cnt++;
+            pJunqi->test_free++;
             memsys5Free(pJunqi,pTemp);
 
         }
         (*paHash)[i] = NULL;
 
     }
+
+    pJunqi->test_free1++;
+   // log_a("test nDepth %d free %d",pJunqi->nDepth,pJunqi->test_free1);
     memsys5Free(pJunqi,*paHash);
     *paHash = NULL;
 }
@@ -826,6 +849,11 @@ void SetBestMoveNode(
 //        prePercent = nowPercent;
 
        // SafeMemout((u8*)&p->move, sizeof(p->move));
+//        u8 test[4] = {0x04,0x09,0x03,0x0A};
+//        if( !memcmp((u8*)&p->move,test,4) )
+//        {
+//            log_a("sss");
+//        }
         if( memcmp(&p->move,&p->pPre->move,4) || p->isHead )
         {
             break;
@@ -1016,7 +1044,7 @@ int SearchBestMove(
     int beta = pData->beta;
     int cnt = pData->cnt;
     int mxPerMove;
-    int iDir = pJunqi->eTurn;
+    int iDir = pData->iDir;
     BestMoveList *pNode = aBestMove[0].pNode;
     u8 preventFlag = 0;
    // return mxVal;
@@ -1034,8 +1062,17 @@ int SearchBestMove(
         mxPerMove = pNode->index;
         memcpy(&pBest->move,&pNode->result[mxPerMove].move,sizeof(MoveResultData));
         pData->hasBest = 1;
+
+        //下一层不一定有最佳着法
+        //左右搜索时会把一些着法过滤掉导致无棋可走
+        //出现无棋可走时，这里防止把以前搜过着法加进来
+        if( aBestMove[cnt].pHead!=NULL )
+        {
+            aBestMove[cnt].pHead->isMove = 0;
+        }
         for(int i=0; i<RESULT_NUM; i++)
         {
+
             pJunqi->eTurn = iDir;
             if( !pNode->result[i].flag ) continue;
 
@@ -1059,6 +1096,7 @@ int SearchBestMove(
                 aBestMove[cnt].mxPerFlag = 0;
                 aBestMove[cnt].mxPerFlag1 = 0;
             }
+
             MakeNextMove(pJunqi,&pNode->result[i].move,&preventFlag);
 
             if( pJunqi->aInfo[pJunqi->eTurn].bDead )
@@ -1136,6 +1174,7 @@ int SearchBestMove(
             {
 //                assert( alpha==-INFINITY );
 //                assert(depth!=1);
+
                 alpha = val;
                 memcpy(aBestMove[cnt-1].pHead->result,pNode->result,sizeof(pNode->result));
                 aBestMove[cnt-1].pHead->index = pNode->index;

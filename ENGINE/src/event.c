@@ -91,7 +91,7 @@ void ChecAttackEvent(Engine *pEngine)
 //---------------------------------------------------------
 #endif
 
-//敌方有只有一个子时，可能计算出该子是炸弹
+//敌方只有一个子时，可能计算出该子是炸弹
 //如果我方只有大子，可能不敢去面对
 void CheckLiveChessNum(Engine *pEngine)
 {
@@ -99,8 +99,10 @@ void CheckLiveChessNum(Engine *pEngine)
     ChessLineup *pLineup;
     ChessLineup *pLive;
     int nLive = 0;
+    int nMyLive = 0;
     int i,j;
 
+    pEngine->gInfo.isOnlyOneChess = 0;
     for(i=0; i<4; i++)
     {
         nLive = 0;
@@ -121,7 +123,8 @@ void CheckLiveChessNum(Engine *pEngine)
                 {
                     if( pLineup->type!=DILEI )
                     {
-                        nLive++;
+                        nMyLive++;
+                        pEngine->gInfo.pOnly = pLineup;
                     }
                 }
                 else if( pLineup->isNotLand )
@@ -137,7 +140,11 @@ void CheckLiveChessNum(Engine *pEngine)
 
         }
     }
+    if( nMyLive==1 )
+    {
+        pEngine->gInfo.isOnlyOneChess = 1;
 
+    }
 }
 
 int CalCampAroundNum(Junqi *pJunqi, BoardChess *pSrc)
@@ -162,6 +169,13 @@ int CalCampAroundNum(Junqi *pJunqi, BoardChess *pSrc)
                 {
                     num++;
                 }
+                else if( pSrc->isBottom )
+                {
+                    if( !pJunqi->Lineup[pSrc->iDir][22].isNotLand )
+                    {
+                        pJunqi->aInfo[pSrc->iDir].isEnemyInCamp = 1;
+                    }
+                }
             }
         }
     }
@@ -175,26 +189,33 @@ void CheckEmptyCamp(Engine *pEngine)
     BoardChess *pCamp;
     u8 aIndex[5] = {6,8,12,16,18};
     int i,j;
+    u8 rc;
 
     for(i=0; i<4; i++)
     {
         if( !pJunqi->aInfo[i].bDead )
         {
+            pJunqi->aInfo[i].isEnemyInCamp = 0;
             for(j=0; j<5; j++)
             {
 
                 pCamp = &pJunqi->ChessPos[i][aIndex[j]];
-                if( !CalCampAroundNum(pJunqi,pCamp) )
+
+                rc = CalCampAroundNum(pJunqi,pCamp);
+                if( j<2 && pJunqi->iRpOfst>100 && pJunqi->nNoEat>10 )
                 {
-                    pCamp->isCamp = 2;
+                    rc = 0;
                 }
-                else
+                if( i%2!=ENGINE_DIR || j<2 )
                 {
-                    pCamp->isCamp = 1;
-                }
-                if( i%2==ENGINE_DIR && j>0 )
-                {
-                    break;
+                    if( !rc )
+                    {
+                        pCamp->isCamp = 2;
+                    }
+                    else
+                    {
+                        pCamp->isCamp = 1;
+                    }
                 }
             }
         }
@@ -207,7 +228,20 @@ void SetMaxDepth(Engine *pEngine)
     {
         pEngine->gInfo.mxDepth++;
     }
-    else if( pEngine->gInfo.timeSearch>6 )//6秒
+
+    if( pEngine->gInfo.mxDepth>8 )
+    {
+        pEngine->gInfo.mxDepth = 8;
+    }
+    if( pEngine->gInfo.mxDepth<4 )
+    {
+        pEngine->gInfo.mxDepth = 4;
+    }
+}
+
+void ReduceMaxDepth(Engine *pEngine)
+{
+    if( pEngine->gInfo.timeSearch>6 )//6秒
     {
         pEngine->gInfo.mxDepth--;
     }
@@ -216,21 +250,19 @@ void SetMaxDepth(Engine *pEngine)
     {
         pEngine->gInfo.mxDepth = 4;
     }
-    if( pEngine->gInfo.mxDepth>8 )
-    {
-        pEngine->gInfo.mxDepth = 8;
-    }
 }
+
 void CheckBebombNum(Engine *pEngine)
 {
     Junqi *pJunqi = pEngine->pJunqi;
     ChessLineup *pLineup;
     int i,j;
+    int nBomb;
 
     for(i=0; i<4; i++)
     {
-        if( !pJunqi->aInfo[i].bDead &&
-                pJunqi->aInfo[i].nExchange>1 )
+        nBomb = pJunqi->aInfo[i].aTypeNum[ZHADAN];
+        if( !pJunqi->aInfo[i].bDead )
         {
             for(j=0;  j<30; j++)
             {
@@ -245,9 +277,25 @@ void CheckBebombNum(Engine *pEngine)
                 }
                 if( i%2!=ENGINE_DIR )
                 {
-                    if( 2==pLineup->isMayBomb )
+                    if( 2!=nBomb )
                     {
-                        pLineup->isMayBomb = 0;
+                        if( (pJunqi->nNoEat>5 || pJunqi->nEat>30) &&
+                                pJunqi->aInfo[i].nExchange>1 )
+                        {
+                            if( 2==pLineup->isMayBomb )
+                            {
+                                pLineup->isMayBomb = 0;
+                            }
+                        }
+                    }
+                    else
+                    {
+
+                        if( pLineup->isNotLand )
+                        {
+                            //算概率时认为撞过的就不是地雷，所以要加这个条件
+                            pLineup->isNotBomb = 1;
+                        }
                     }
                 }
             }
@@ -255,12 +303,120 @@ void CheckBebombNum(Engine *pEngine)
     }
 }
 
+void PushDarkJunqiChess(Engine *pEngine,int iDir)
+{
+    Junqi *pJunqi = pEngine->pJunqi;
+    BoardChess *pSrcChess;
+    BoardChess *pDstChess;
+    ChessLineup *pSrcLineup;
+    ChessLineup *pDstLineup;
+    u8 index;
+
+    pEngine->gInfo.pDarkinfo = (JunqiInfo*)malloc(sizeof(JunqiInfo));
+    memset(pEngine->gInfo.pDarkinfo,0,sizeof(JunqiInfo));
+
+    index = 26+2*(pEngine->gInfo.timeStamp&1);
+//    if( !pEngine->gInfo.isSetShowFlag )
+//    {
+//        index = 26+2*(pEngine->gInfo.timeStamp&1);
+//        pEngine->gInfo.isSetShowFlag = 1;
+//        pEngine->gInfo.showIndex = index;
+//    }
+//    else
+//    {
+//        index = pEngine->gInfo.showIndex;
+//    }
+
+    assert( index==26||index==28 );
+    pEngine->gInfo.pDarkinfo->index = index;
+    pEngine->gInfo.pDarkinfo->iDir = iDir;
+    pSrcChess = &pJunqi->ChessPos[iDir][index];
+    pDstChess = &pEngine->gInfo.pDarkinfo->xChess;
+    pSrcLineup = &pJunqi->Lineup[iDir][index];
+    pDstLineup = &pEngine->gInfo.pDarkinfo->xLineup;
+    memcpy(pDstChess,pSrcChess,sizeof(BoardChess));
+    memcpy(pDstLineup,pSrcLineup,sizeof(ChessLineup));
+
+
+    pJunqi->aInfo[iDir].bShowFlag = 1;
+    pSrcChess->type = JUNQI;
+    pSrcLineup->type = JUNQI;
+    pSrcLineup->isNotBomb = 1;
+    pSrcLineup->isNotLand = 1;
+}
+
+void PopDarkJunqiChess(Engine *pEngine)
+{
+    Junqi *pJunqi = pEngine->pJunqi;
+    BoardChess *pSrcChess;
+    BoardChess *pDstChess;
+    ChessLineup *pSrcLineup;
+    ChessLineup *pDstLineup;
+    u8 index;
+    int iDir;
+
+    if( pEngine->gInfo.pDarkinfo==NULL )
+    {
+        return;
+    }
+    index = pEngine->gInfo.pDarkinfo->index;
+    assert( index==26||index==28 );
+    iDir = pEngine->gInfo.pDarkinfo->iDir;
+    pSrcChess = &pJunqi->ChessPos[iDir][index];
+    pDstChess = &pEngine->gInfo.pDarkinfo->xChess;
+    pSrcLineup = &pJunqi->Lineup[iDir][index];
+    pDstLineup = &pEngine->gInfo.pDarkinfo->xLineup;
+    memcpy(pSrcChess,pDstChess,sizeof(BoardChess));
+    memcpy(pSrcLineup,pDstLineup,sizeof(ChessLineup));
+    pJunqi->aInfo[iDir].bShowFlag = 0;
+    free(pEngine->gInfo.pDarkinfo);
+}
+
+
+void CheckDarkJunqi(Engine *pEngine)
+{
+    Junqi *pJunqi = pEngine->pJunqi;
+    u8 isDark = 0;
+
+    int i;
+    int iDir;
+
+    pEngine->gInfo.pDarkinfo = NULL;//注意后面有return，绝对不能放在下面
+    if( pJunqi->nNoEat<10 || pJunqi->beginValue<0 )
+    {
+        return;
+    }
+
+    for(i=0; i<4; i++)
+    {
+        if( i%2==ENGINE_DIR )
+        {
+            continue;
+        }
+        if( !pJunqi->aInfo[i].bDead && !isDark )
+        {
+            if( !pJunqi->aInfo[i].bShowFlag )
+            {
+                isDark = 1;
+                iDir = i;
+            }
+        }
+    }
+
+    if( isDark )
+    {
+        PushDarkJunqiChess(pEngine,iDir);
+    }
+}
 
 
 void CheckGLobalInfo(Engine *pEngine)
 {
-   // Junqi *pJunqi = pEngine->pJunqi;
+  //  Junqi *pJunqi = pEngine->pJunqi;
     CheckLiveChessNum(pEngine);
     CheckEmptyCamp(pEngine);
     CheckBebombNum(pEngine);
+    SetMaxDepth(pEngine);
+    CheckDarkJunqi(pEngine);
+
 }

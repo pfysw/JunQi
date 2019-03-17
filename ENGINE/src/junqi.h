@@ -81,7 +81,7 @@ struct BoardChess
 	int index;
 	BoardPoint point;
 	u8  isStronghold;
-	u8  isCamp;//等于2说明营周围无字，该营没有价值
+	u8  isCamp;//等于2说明营周围无子，该营没有价值
 	u8  isRailway;
 	u8  isNineGrid;
 	u8  isBottom;//表示三角雷，1：底线  2：旗上 3：角上 4:下营
@@ -128,6 +128,7 @@ typedef struct PartyInfo
 	u8 nMayBombLand;
 	u8 perLand;
 	u8 nExchange;
+	u8 isEnemyInCamp;
 }PartyInfo;
 
 typedef struct JunqiPathList JunqiPathList;
@@ -174,7 +175,14 @@ typedef struct MoveNodeMem
     MoveNodeSlot *pFree;
 }MoveNodeMem;
 
-
+typedef struct JunqiInfo JunqiInfo;
+struct JunqiInfo
+{
+    BoardChess xChess;
+    ChessLineup xLineup;
+    u8 index;
+    u8 iDir;
+};
 
 struct Junqi
 {
@@ -183,6 +191,7 @@ struct Junqi
 	u8 bGo;
 	u8 bSearch;
 	u8 bMove;
+	u8 bDead;//此处当作局部变量用
 	u8 findMoveFlag;
 	u8 nNoEat;
 	u8 bAnalyse;
@@ -223,6 +232,10 @@ struct Junqi
     int malloc_cnt;
     int free_cnt;
     u8 bDebug;
+    int test_malloc;
+    int test_free;
+    int test_malloc1;
+    int test_free1;
 
 	struct sockaddr_in addr;
 	int socket_fd;

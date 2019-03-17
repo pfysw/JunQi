@@ -885,11 +885,11 @@ int CheckDangerPath(Junqi *pJunqi, int iDir)
     BoardChess *pNbr;
     int value = 0;
     u8 isEatCorner = 0;
-    u8 isCornerLand = 0;
+    u8 isCornerLand = 0;//包角雷
     u8 isDanger = 0;
     int enemyDir;
     u8 aLeftChess[2] = {21,25};
-    u8 aRighChess[2] = {24,29};
+    u8 aRighChess[2] = {23,29};
     u8 aLeftLine[8] = {0,5,10,15,1,6,11,16};
     u8 aRightLine[8] = {4,9,14,19,3,8,13,18};
     u8 *pIndex;
@@ -950,7 +950,8 @@ int CheckDangerPath(Junqi *pJunqi, int iDir)
         pNbr = &pJunqi->ChessPos[iDir][pLine[i+4]];
         if( pChess->type!=NONE )
         {
-            if( pChess->pLineup->iDir%2==ENGINE_DIR )
+            if( pChess->pLineup->iDir%2==ENGINE_DIR &&
+                    pChess->pLineup->index<20 )
             {
                 value += pVal->vPathChess;
                 if( pNbr->type!=NONE &&
@@ -997,7 +998,7 @@ int CheckDangerPath(Junqi *pJunqi, int iDir)
         if( isCornerLand ||
             (isEatCorner && isDanger) )
         {
-            value = -100;
+            value = -10;
         }
     }
 

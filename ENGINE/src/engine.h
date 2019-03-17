@@ -102,6 +102,7 @@ struct SearchMsg
 typedef struct RecordLineup RecordLineup;
 struct RecordLineup
 {
+
     ChessLineup *pLineup;
     int iRpOfst;
     u8 isRecord;
@@ -113,6 +114,11 @@ struct GLOBAL_INFO
     int timeStamp;
     int timeSearch;
     int mxDepth;
+    u8 isSetShowFlag;
+    u8 showIndex;
+    u8 isOnlyOneChess;
+    ChessLineup *pOnly;
+    JunqiInfo *pDarkinfo;
 };
 
 typedef struct ENGINE
@@ -154,6 +160,6 @@ void SendEvent(Junqi* pJunqi, int iDir, u8 event);
 Engine *OpneEnigne(Junqi *pJunqi);
 void CloseEngine(Engine *pEngine);
 void ReSearchInDeep(Junqi* pJunqi, MoveSort *pNode, int depth);
-void SetMaxDepth(Engine *pEngine);
+void ReduceMaxDepth(Engine *pEngine);
 
 #endif /* ENGIN_H_ */

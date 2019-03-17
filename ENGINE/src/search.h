@@ -53,7 +53,7 @@ struct AlphaBetaData
     u8 hasEat;
     u8 cut;
     u8 bestFlag;
-    u8 isGongB;
+    u8 isGongB;//1:搜索工兵路径 2:找到了工兵的专属路径
 };
 
 typedef struct MoveHash MoveHash;

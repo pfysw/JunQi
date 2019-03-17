@@ -748,7 +748,7 @@ void AdjustMaxType(Junqi *pJunqi, int iDir)
 
 	GetLiveTypeSum(aLiveTypeSum,aLiveTypeNum,aLiveAllNum);
 
-    if( nExchange>1 && aTypeNum[ZHADAN]<2 )
+    if( nExchange>2 && aTypeNum[ZHADAN]<2 )
     {
         aTypeNum[ZHADAN]++;
     }
@@ -848,11 +848,19 @@ void JudgeIfBomb(
 		MoveResultData* pResult
 		)
 {
-	if( pSrc->pLineup->iDir%2==ENGINE_DIR%2 )
+	if( pSrc->pLineup->iDir%2==ENGINE_DIR )
 	{
-		if( pDst->pLineup->type==DARK && pDst->pLineup->index>=5 )
+		if( pDst->pLineup->type==DARK )
 		{
-			pDst->pLineup->bBomb = 1;
+		    if( pDst->pLineup->index>=5 )
+		    {
+		        pDst->pLineup->bBomb = 1;
+		    }
+		}
+		else
+		{
+		    //标记是否和吃过大子的棋打兑
+		    pSrc->pLineup->nBigEat = pDst->pLineup->nBigEat;
 		}
 
 		if( (pSrc->pLineup->type==SILING) && !(pResult->extra_info&0x04))
@@ -868,9 +876,17 @@ void JudgeIfBomb(
 	}
 	else
 	{
-		if( pSrc->pLineup->type==DARK && pSrc->pLineup->index>=5 )
+		if( pSrc->pLineup->type==DARK  )
 		{
-			pSrc->pLineup->bBomb = 1;
+		    if( pSrc->pLineup->index>=5 )
+		    {
+		        pSrc->pLineup->bBomb = 1;
+		    }
+		}
+		else
+		{
+		    //标记是否和吃过大子的棋打兑
+		    pDst->pLineup->nBigEat = pSrc->pLineup->nBigEat;
 		}
 
 		if( ((pDst->pLineup->type==SILING) && !(pResult->extra_info&0x02)) ||
@@ -941,10 +957,9 @@ u8 isContinueSearch(
 void SetMayBombValue(
         Junqi *pJunqi,
         BoardChess *pSrc,
-        ChessLineup *pLineup,
-        int iDir )
+        ChessLineup *pLineup)
 {
-    if( iDir%2!=ENGINE_DIR )
+    if( pLineup->iDir%2!=ENGINE_DIR )
     {
         pLineup->isMayBomb = 1;
     }
@@ -986,7 +1001,7 @@ void CheckMayBomb(
         }
 
 
-        SetMayBombValue(pJunqi,pSrc,pLineup,iDir);
+        SetMayBombValue(pJunqi,pSrc,pLineup);
     }
 }
 void PrognosisNbrChess(
@@ -1030,7 +1045,7 @@ void PrognosisNbrChess(
             {
                 continue;
             }
-            if( pNbr->type==NONE || pNbr->isCamp || pNbr->isStronghold )
+            if( pNbr->type==NONE || pNbr->isStronghold )
             {
                 continue;
             }
@@ -1038,10 +1053,11 @@ void PrognosisNbrChess(
             {
                 continue;
             }
-            if( pSrc->isCamp || pNbr->point.x==pSrc->point.x ||
+            if( pSrc->isCamp || pNbr->isCamp ||
+                    pNbr->point.x==pSrc->point.x ||
                     pNbr->point.y==pSrc->point.y )
             {
-                SetMayBombValue(pJunqi,pSrc,pNbr->pLineup,iDir);
+                SetMayBombValue(pJunqi,pSrc,pNbr->pLineup);
             }
         }
     }
@@ -1061,10 +1077,6 @@ void PrognosisChess(
     }
     for(i=0; i<30; i++)
     {
-//        if( i==15 )
-//        {
-//            log_a("sd");
-//        }
         pLineup = &pJunqi->Lineup[iDir][i];
         if( pLineup->bDead ||
             ( pLineup->type<SILING && pLineup->type!=DARK)  )
@@ -1091,7 +1103,7 @@ void PrognosisChess(
 
         if( iDir%2==ENGINE_DIR )
         {
-            if( pLineup->type<SHIZH && pLineup->nEat>0 )
+            if( pLineup->type<SHIZH && pLineup->nEat>0  )
             {
                 PrognosisNbrChess(pJunqi,pLineup->pChess,iDir);
             }
@@ -1103,7 +1115,7 @@ void PrognosisChess(
     }
     if( pMax!=NULL && iDir%2==ENGINE_DIR )
     {
-        if( pMax->type>JUNZH && pLineup->nEat>0 )
+        if( pMax->type>JUNZH && pMax->nEat>0  )
         {
             PrognosisNbrChess(pJunqi,pMax->pChess,iDir);
         }
@@ -1247,10 +1259,14 @@ void PlayResult(
 	        }
             pJunqi->aInfo[pDst->iDir].bShowFlag |= 1;
 	    }
-	    pSrc->pLineup->bDead = 1;
+	    //todo  怎么让小子抗假棋的分数为增
+	    //if( pSrc->pLineup->type<TUANZH )
+	    {
+	        pSrc->pLineup->bDead = 1;
+	    }
 	    if( type<BOMB )
 	    {
-            if( (iDir1&1)==(ENGINE_DIR&1) )
+            if( (iDir1&1)==ENGINE_DIR )
             {
                 assert( pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]>0 );
                 pJunqi->aInfo[iDir1].aTypeNum[pSrc->pLineup->type]--;
@@ -1280,10 +1296,15 @@ void PlayResult(
 	{
 		pDst->pLineup->bDead = 1;
 
-		if( (iDir2&1)==(ENGINE_DIR&1) )
+		if( (iDir2&1)==ENGINE_DIR )
 		{
 		    assert( pJunqi->aInfo[iDir2].aTypeNum[pDst->pLineup->type]>0 );
 		    pJunqi->aInfo[iDir2].aTypeNum[pDst->pLineup->type]--;
+
+		    if( pDst->pLineup->type<LVZH && type==EAT )
+		    {
+		        pSrc->pLineup->nBigEat = 1;
+		    }
 		}
 		else if( type==BOMB )
 		{
@@ -1297,9 +1318,9 @@ void PlayResult(
 		assert(pDst->type!=NONE);
 		if( type==BOMB )
 		{
-
 			pDst->type = NONE;
 			pSrc->pLineup->bDead = 1;
+
             if( pSrc->pLineup->type==SILING )
             {
             	pJunqi->aInfo[iDir1].bShowFlag |= 2;
@@ -1382,11 +1403,16 @@ void PlayResult(
 
 	}
 
-	if( type==EAT || type==MOVE )
+	if( type==EAT || type==MOVE  )
 	{
 		pDst->type = pSrc->pLineup->type;
 		pDst->pLineup = pSrc->pLineup;
 		pDst->pLineup->pChess = pDst;
+	}
+	else if( type==BOMB )
+	{
+        pDst->pLineup = pSrc->pLineup;
+        pDst->pLineup->pChess = pDst;
 	}
 
 	if( type==KILLED )
@@ -1456,6 +1482,23 @@ void PlayResult(
 	}
 	pSrc->type = NONE;
 
+
+	//判断无棋可走需要很多时间，不可能在搜索时判断
+	//避免出现无棋可走时的自杀行为
+	if( pJunqi->pEngine->gInfo.isOnlyOneChess )
+	{
+	    if( (iDir1&1)==ENGINE_DIR &&
+	            pJunqi->pEngine->gInfo.pOnly->bDead )
+	    {
+	        if( !pJunqi->aInfo[(iDir1+1)&3].bDead ||
+	                !pJunqi->aInfo[(iDir1+3)&3].bDead  )
+	        {
+	            pJunqi->aInfo[iDir1].bDead = 1;
+	            pJunqi->bDead = 1;
+	        }
+	    }
+	}
+
 	//预测敌方最大的棋子
 	if( type!=MOVE )
 	{
@@ -1473,7 +1516,7 @@ void PlayResult(
 	    AdjustMaxType(pJunqi, iDir1);
 	}
 
-//	if( pJunqi->Lineup[2][20].mx_type==TUANZH )
+//	if( pJunqi->ChessPos[1][28].type==NONE )
 //	{
 //	    log_a("type %d max %d",pJunqi->Lineup[2][20].type,
 //	            pJunqi->Lineup[2][20].mx_type );

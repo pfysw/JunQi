@@ -32,6 +32,10 @@ int CallAlphaBeta1(
 
 
 
+    if( iDir==pJunqi->eTurn && pJunqi->gFlag[FLAG_PREVENT]<2 )
+    {
+        depth = 0;
+    }
     if( iDir%2==pJunqi->eTurn%2 )
     {
         //下家阵亡轮到对家走
@@ -296,6 +300,7 @@ int GetSearchTypeValue(Junqi *pJunqi, int type, int iDir)
     int depth;
 
     depth = pJunqi->pEngine->gInfo.mxDepth-1;
+
     switch(type)
     {
     case SEARCH_DEEP:
@@ -575,14 +580,14 @@ void CalSortSumValue(
             {
                 p->aValue[j][type] += p->aValue[j][i];
             }
-            if( pJunqi->iRpOfst<100 || pJunqi->nNoEat<10 )
-            {
-                p->aValue[j][type] += p->aValue[0][DANGER_PATH];
-            }
-            if( pJunqi->nNoEat>15 )
-            {
-                p->aValue[j][type] += p->aValue[j][SEARCH_SINGLE];
-            }
+//            if( pJunqi->iRpOfst<100 || pJunqi->nNoEat<10 )
+//            {
+//                p->aValue[j][type] += p->aValue[0][DANGER_PATH];
+//            }
+//            if( pJunqi->nNoEat>15 )//todo 很危险
+//            {
+//                p->aValue[j][type] += p->aValue[j][SEARCH_SINGLE];
+//            }
         }
     }
 }
@@ -616,9 +621,12 @@ MoveSort *ResortMoveList(MoveSort *pHead, int pri, int depth)
         type = SEARCH_SINGLE;
         break;
     case 5:
-        type = SEARCH_PATH;
+        type = DANGER_PATH;
         break;
     case 6:
+        type = SEARCH_PATH;
+        break;
+    case 7:
         type = SEARCH_CONNECT;
         break;
     default:
@@ -639,13 +647,15 @@ MoveSort *ResortMoveList(MoveSort *pHead, int pri, int depth)
 
     if( cnt==1 )
     {
-        assert( pri<7 );
+        assert( pri<8 );
         firstPri = pri;
         firstType = type;
     }
 
 
-    if( type!=SEARCH_PATH &&  type!=SEARCH_CONNECT )
+    if( type!=SEARCH_PATH &&
+            type!=DANGER_PATH &&
+            type!=SEARCH_CONNECT )
     {
         pHead = SortMoveValueList(pHead,type,depth);
         pEnd = GetSortSameNodeEnd(pHead,type,depth);
@@ -660,7 +670,7 @@ MoveSort *ResortMoveList(MoveSort *pHead, int pri, int depth)
     pEnd->pNext = NULL;
     if( SEARCH_SINGLE==type && depth!=0 )
     {
-        pri += 100;
+        pri += 100;//跳到default
     }
     pHead = ResortMoveList(pHead,pri+1,depth);
     pEnd = GetSortListEnd(pHead);
@@ -771,6 +781,10 @@ void CheckPreventMove(
     }
     else
     {
+        //本想在最后选择时验证送吃是否合理
+        //但现在这个标志位已经用来残局的关键步加深搜索
+        return;
+
         if( pJunqi->eSearchType!=SEARCH_DEEP )
         {
             return;//todo 暂时不要
@@ -809,11 +823,14 @@ void SearchAlphaBeta(
     int mxPercent;
     u8 preventFlag = 0;
 
-
     //注意SearchBestMove不能放前面
     //否则会破坏pJunqi->pMoveList这个全局临时变量
     if( pData->pCur==NULL )
     {
+        if( pJunqi->pMoveList==NULL )
+        {
+            return;
+        }
         pData->pCur = pJunqi->pMoveList;
         pData->pHead = pJunqi->pMoveList;
     }
@@ -830,10 +847,12 @@ void SearchAlphaBeta(
     }
 
     //如果这层是无棋可走，代码是不会运行到这里
-    if( !pData->bestFlag )
+    if( !pData->bestFlag && !pData->isGongB )
     {
         pData->bestFlag = 1;
+
         pData->mxVal = SearchBestMove(pJunqi,aBestMove,pData,&pData->bestMove,1);
+
         if( pData->hasBest )
         {
             memcpy(pData->aInitBest,&pData->bestMove.move,4);
@@ -859,14 +878,30 @@ void SearchAlphaBeta(
         pJunqi->pMoveList = NULL;
     }
 
+    //下一层不一定有最佳着法
+    //左右搜索时会把一些着法过滤掉导致无棋可走
+    //出现无棋可走时，这里防止把以前搜过着法加进来
+    if( aBestMove[cnt].pHead!=NULL )
+    {
+        aBestMove[cnt].pHead->isMove = 0;
+    }
     for(p=pData->pCur; pData->pCur!=NULL; p=p->pNext)
     {
+
         pMaxMove = pNextMove;
         pJunqi->eTurn = pData->iDir;
 
         CheckPreventMove(pJunqi,p,&preventFlag);
+
+        //标记作用，无棋可走时避免无限递归，在single搜索时会发生
+        pJunqi->bDead = 0;
         //模拟着法产生后的局面
+
         MakeNextMove(pJunqi,&p->move,&preventFlag);
+        if( pJunqi->bDead )
+        {
+            depth = 1;
+        }
 
         pJunqi->pMoveList = pData->pHead;
         assert(pJunqi->pEngine->pPos!=NULL);
@@ -875,6 +910,10 @@ void SearchAlphaBeta(
 //        SafeMemout((u8*)&p->move, sizeof(p->move));
         if( pData->hasBest && !memcmp(pData->aInitBest, &p->move, 4) )
         {
+            if( preventFlag )
+            {
+                pJunqi->gFlag[FLAG_PREVENT] = 0;
+            }
             UnMakeMove(pJunqi,&p->move);
             goto continue_search;
         }
@@ -890,19 +929,25 @@ void SearchAlphaBeta(
 
             pJunqi->pEngine->pDebugMove[cnt-1] = p;
 
-            u8 test1[4] = {0x0D,0x07,0x0D,0x08};
-            u8 test2[4] = {0x0D,0x09,0x0E,0x09};
-            u8 test3[4] = {0x09,0x04,0x0a,0x03};
+            u8 test1[4] = {0x08,0x0E,0x08,0x0F};
+            u8 test2[4] = {0x08,0x08,0x08,0x0B};
+            u8 test3[4] = {0x06,0x05,0x06,0x0B};
+            u8 test4[4] = {0x0A,0x0B,0x08,0x0B};
+            u8 test5[4] = {0x08,0x01,0x09,0x01};
+            u8 test6[4] = {0x0E,0x07,0x0F,0x06};
 //            if(pJunqi->nDepth==3 && cnt==1 && !memcmp((u8*)&p->move,test3,4) )
 //            {
 //                pJunqi->bDebug = 1;
 //            }
 
-//            if( pJunqi->nDepth==3 && cnt==3 )
+//            if( pJunqi->nDepth==2 && cnt==2 )
 //            {
 //                //log_a("eat");
-//                if( !memcmp(pEngine->pDebugMove[0],test1,4) &&
-//                        !memcmp(pEngine->pDebugMove[1],test2,4) &&
+//                if( !memcmp(pEngine->pDebugMove[0],test4,4) &&
+//                         pEngine->pDebugMove[0]->move.result==2 &&
+//                         pEngine->pDebugMove[1]->move.result==4 &&
+//                        //!memcmp(pEngine->pDebugMove[1],test2,4) &&
+//                       // !memcmp(pEngine->pDebugMove[2],test3,4) &&
 //                        !memcmp((u8*)&p->move,test3,4) )
 //                {
 //                    pJunqi->bDebug = 1;
@@ -935,56 +980,38 @@ void SearchAlphaBeta(
             p->value = val;
 
 
-           // if( pJunqi->gFlag[FLAG_EAT] )
-           // if(pJunqi->nDepth==3 && cnt==2 && !memcmp((u8*)&p->move,test1,4) )
-            //if( pJunqi->bDebug && pJunqi->nDepth==4 && cnt==2 )
-//            if( pJunqi->nDepth==3 && cnt==3 && pJunqi->eSearchType==SEARCH_DEEP &&
-//                    pJunqi->eDeepType==SEARCH_RIGHT && pJunqi->bDebug )
-//            if( cnt==1  )
+//            if( cnt==2  )
 //            {
 //                //log_a("eat");
-//                u8 test4[4] = {0x09,0x0E,0x09,0x0F};
-//                u8 test5[4] = {0x0D,0x09,0x0E,0x09};
-//                u8 test6[4] = {0x0E,0x07,0x0F,0x06};
-// //               if( !memcmp(pEngine->pDebugMove[0],test4,4)
-//          //           &&  !memcmp(pEngine->pDebugMove[1],test5,4) )
-// //                      && pEngine->pDebugMove[0]->move.result==2 )
-////                if( !memcmp(pEngine->pDebugMove[2],test3,4)
-////                        && !memcmp(pEngine->pDebugMove[3],test2,4)
-////                        && !memcmp(pEngine->pDebugMove[4],test1,4) &&
-////                        !memcmp(pEngine->pDebugMove[0],test4,4) )
+//
+//                if( !memcmp(pEngine->pDebugMove[0],test4,4) )
+////                     &&  !memcmp(pEngine->pDebugMove[1],test5,4) )
+////                       && pEngine->pDebugMove[0]->move.result==2 )
+////                if( !memcmp(pEngine->pDebugMove[0],test1,4)
+////                        && !memcmp(pEngine->pDebugMove[1],test2,4)
+////                        && !memcmp(pEngine->pDebugMove[2],test3,4) )
+////                        && !memcmp(pEngine->pDebugMove[3],test4,4) )
 //                {
 //
-//                   // if( pEngine->pDebugMove[3]->move.result==2 )
+//                    //if( pEngine->pDebugMove[0]->move.result==2 )
 //                    {
-////                            static int jj=0;
-////                            jj++;
-////                            if(jj==2)
-////                            log_c("test");
-////                            log_c("jj %d",jj);
 //
 //                        log_a("cnt %d val %d per %d",cnt,val,p->percent);
 //                        //log_a("max %d",pData->mxVal);
 //                        SafeMemout((u8*)&p->move, sizeof(p->move));
+//                            static int jj=0;
+//                            jj++;
+////                            if(jj==11)
+////                            {
+////                                sleep(1);
+////                            assert(0);
+////                            }
+//                            log_a("jj %d",jj);
 //                    }
 //                }
 //            }
 
-//            if( cnt==1 && !memcmp((u8*)&p->move,test3,4)  )
-//            {
-//                log_a("cnt %d val %d per %d",cnt,val,p->percent);
-//                SafeMemout((u8*)&p->move, sizeof(p->move));
-//                if( pJunqi->nDepth==3 )
-//                {
-//                    sleep(1);
-//                    assert(0);
-//                }
-//
-//            }
-//            if(pJunqi->nDepth==2 && cnt==1 && !memcmp((u8*)&p->move,test3,4) )
-//            {
-//                pJunqi->bDebug = 0;
-//            }
+
 
             //把局面撤回到上一步
             pJunqi->pMoveList = pData->pHead;
@@ -1061,7 +1088,8 @@ void SearchAlphaBeta(
         //产生截断
         if( val>=beta )//todo 被剪枝的最后可能分数不准确
         {
-            if( -INFINITY==pData->mxVal && aBestMove[cnt-1].mxPerFlag1 )
+            if( -INFINITY==pData->mxVal && aBestMove[cnt-1].mxPerFlag1 &&
+                    !pData->isGongB)
             {
                 UpdateBestMove(pJunqi,aBestMove,p,pMaxMove,depth,cnt);
                 memcpy(&pData->bestMove.move, &p->move, sizeof(p->move));
@@ -1081,7 +1109,8 @@ void SearchAlphaBeta(
         if( val>pData->mxVal )
         {
             pData->mxVal = val;
-            if( aBestMove[cnt-1].mxPerFlag1 )
+            //不要把模拟工兵的行棋更新到最佳路径里,否则之后的搜索会乱套
+            if( aBestMove[cnt-1].mxPerFlag1 && !pData->isGongB )
             {
 //                UpdateBestMove(pJunqi,aBestMove,pTemp,depth,cnt);
 //                pData->pBest = &pTemp->move;
@@ -1108,11 +1137,6 @@ void SearchAlphaBeta(
 continue_search:
 
 
-        if( p->pNext->isHead )
-        {
-            break;
-        }
-
         //时间结束或收到go指令结束搜索
         if( TimeOut(pJunqi) )
         {
@@ -1121,9 +1145,13 @@ continue_search:
             pJunqi->gFlag[TIME_OUT] = 1;
         }
 
+        if( p->pNext->isHead )
+        {
+            break;
+        }
+
 
     }
-
 
     pData->pCur = p;
 
@@ -1355,17 +1383,23 @@ u8 SearchEat(Junqi *pJunqi)
     Engine *pEngine = pJunqi->pEngine;
     u8 maxCnt;
 
-    if( pJunqi->nEat<20 )
+    //todo 这里更应该用nLive来比较
+    if( pJunqi->nEat<10 )
     {
         maxCnt = pJunqi->nDepth;
     }
-    else if(pJunqi->nEat<40 )
+    if( pJunqi->nEat<20 )
     {
         maxCnt = pJunqi->nDepth+1;
     }
+    else if(pJunqi->nEat<40 )
+    {
+        maxCnt = pJunqi->nDepth+2;
+    }
     else
     {
-        maxCnt = BEST_LIST_NUM-2;
+        //层数太多在cmd中运行会出现内存出错现象，而在eclipse中运行却无法复现
+        maxCnt = pJunqi->nDepth+3;
     }
 
     if( pEngine->eatIndex>4 || pJunqi->cnt>maxCnt )
@@ -1467,7 +1501,8 @@ int AlphaBeta1(
             pEngine->eatInList = 0;
         }
 
-        if( 1==pJunqi->gFlag[FLAG_PREVENT] && pJunqi->eSearchType!=SEARCH_DEFAULT )
+       // if( 1==pJunqi->gFlag[FLAG_PREVENT] && pJunqi->eSearchType!=SEARCH_DEFAULT )
+        if( 1==pJunqi->gFlag[FLAG_PREVENT] )
         {
             pJunqi->gFlag[FLAG_PREVENT] = 2;
             pJunqi->cnt--;
@@ -1538,6 +1573,9 @@ int AlphaBeta1(
 
         val = CallAlphaBeta1(pJunqi,depth,alpha,beta,iDir,isMove);
 
+        //下面这段代码不是重复了吗，当cnt是1时，那么在CallAlphaBeta1里递归会变为1
+        //在那里会做各种释放工作，不知道当时怎么想的，测试没出现问题先留着
+        //可以看到这段代码是无效的，search_data并没有使用到
         if( 0==pJunqi->cnt )
         {
            // log_c("jj %d",kk);
@@ -1572,7 +1610,6 @@ int AlphaBeta1(
         {
             temp[0] = pSrc->type;
             memcpy(&tempLineup,pSrc->pLineup,sizeof(tempLineup));
-            flag = 1;
             pSrc->type = GONGB;
             pSrc->pLineup->type = GONGB;
             pSrc->pLineup->mx_type = GONGB;
@@ -1587,6 +1624,10 @@ int AlphaBeta1(
             pJunqi->aInfo[pSrc->pLineup->iDir].aLiveTypeSum[GONGB]--;
             memcpy(pSrc->pLineup,&tempLineup,sizeof(tempLineup));
             pSrc->type = temp[0];
+            if( 2==search_data.isGongB )
+            {
+                flag = 1;
+            }
         }
 
         val = search_data.mxVal;

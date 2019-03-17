@@ -402,7 +402,6 @@ int ProSearch(Junqi* pJunqi,int depth)
 
     memset(pEngine->aBestMove,0,sizeof(pEngine->aBestMove));
 
-
     for(i=0; i<depth+1; i++)
     {
 
@@ -435,7 +434,7 @@ int ProSearch(Junqi* pJunqi,int depth)
         {
             log_a("search2 num %d",pJunqi->test_num);
             log_a("gen num %d",pJunqi->test_gen_num);
-
+            log_a("type %d cnt %d",pJunqi->eSearchType,i);
             log_a("time %d",time(NULL)-pJunqi->begin_time);
             BoardChess **pBest = pJunqi->pEngine->pBest;
             if(i>0)
@@ -506,6 +505,7 @@ void ReSearchInDeep(Junqi* pJunqi, MoveSort *pNode, int depth)
     u8 nTread = 0;
     int iDir;
 
+
     pJunqi->bSearch = 1;
     pJunqi->bAnalyse = 1;
 
@@ -514,40 +514,44 @@ void ReSearchInDeep(Junqi* pJunqi, MoveSort *pNode, int depth)
     pJunqi->bGo = 0;
     pJunqi->bMove = 0;
     pJunqi->gFlag[TIME_OUT] = 0;
-    pJunqi->begin_time = (unsigned int)time(NULL);
 
     pJunqi->begin_flag = 0;
     iDir = pJunqi->eTurn;
-    if( !IsOnlyTwoDir(pJunqi) )
-    {
-        pMsg->type = SEARCH_DEEP;
-        pMsg->deepDepth = depth;
-        pMsg->pNode = pNode;
-        if( !pJunqi->aInfo[(iDir+1)%4].bDead &&
-                !pNode->isSetValue[depth][SEARCH_RIGHT] )
-        {
 
-            pMsg->deepType = SEARCH_RIGHT;
-            mq_send(pJunqi->search_qid, aBuf, sizeof(SearchMsg), 0);
-            nTread++;
-        }
-        if( !pJunqi->aInfo[(iDir+3)%4].bDead &&
-                !pNode->isSetValue[depth][SEARCH_LEFT] )
-        {
-            pMsg->deepType = SEARCH_LEFT;
-            mq_send(pJunqi->search_qid, aBuf, sizeof(SearchMsg), 0);
-            nTread++;
-        }
+
+    pMsg->type = SEARCH_DEEP;
+    pMsg->deepDepth = depth;
+    pMsg->pNode = pNode;
+
+    if( !pJunqi->aInfo[(iDir+1)%4].bDead &&
+            !pNode->isSetValue[depth][SEARCH_RIGHT] )
+    {
+
+        pMsg->deepType = SEARCH_RIGHT;
+        mq_send(pJunqi->search_qid, aBuf, sizeof(SearchMsg), 0);
+        nTread++;
     }
+    if( !pJunqi->aInfo[(iDir+3)%4].bDead &&
+            !pNode->isSetValue[depth][SEARCH_LEFT] )
+    {
+        pMsg->deepType = SEARCH_LEFT;
+        mq_send(pJunqi->search_qid, aBuf, sizeof(SearchMsg), 0);
+        nTread++;
+    }
+
     while( pJunqi->cntSearch<nTread );//等待所有线程都初始化完毕
     pJunqi->begin_flag = 1;
 
-    if( !pNode->isSetValue[depth][SEARCH_DEFAULT] )
+    if( !IsOnlyTwoDir(pJunqi) )
     {
-        MakeDeepSearch(pJunqi,pNode,depth,SEARCH_DEFAULT);
+        if( !pNode->isSetValue[depth][SEARCH_DEFAULT] )
+        {
+            MakeDeepSearch(pJunqi,pNode,depth,SEARCH_DEFAULT);
+        }
     }
 
     while(pJunqi->cntSearch);//等所有线程搜索完毕
+
   // MakeDeepSearch(pJunqi,pNode,depth,SEARCH_DEFAULT);
 
 }
@@ -656,10 +660,10 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
         pJunqi->cntSearch = 0;
 
         CheckGLobalInfo(pEngine);
-        //pEngine->gInfo.mxDepth = 7;
-
+        //pEngine->gInfo.mxDepth = 6;
 
 #ifndef ENG_TEST
+
         pJunqi->begin_flag = 0;
         iDir = pJunqi->eTurn;
         if( !IsOnlyTwoDir(pJunqi) && pJunqi->nEat>1 )//开局搜没有意义
@@ -679,22 +683,45 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
         }
         while( pJunqi->cntSearch<nTread );//等待所有线程都初始化完毕
         pJunqi->begin_flag = 1;
-#endif
 
+#endif
         LARGE_INTEGER nBeginTimet;
         LARGE_INTEGER nEndTimet;
         QueryPerformanceCounter(&nBeginTimet);
         pJunqi->test_time[1] = 0;
 
 #ifndef ENG_TEST
-        pJunqi->eSearchType = SEARCH_DEFAULT;
+        if( IsOnlyTwoDir(pJunqi) )
+        {
+            if( !pJunqi->aInfo[(iDir+1)%4].bDead )
+            {
+                pJunqi->eSearchType = SEARCH_RIGHT;
+            }
+            else
+            {
+                pJunqi->eSearchType = SEARCH_LEFT;
+            }
+
+        }
+        else
+        {
+            pJunqi->eSearchType = SEARCH_DEFAULT;
+        }
         ProSearch(pJunqi,pEngine->gInfo.mxDepth);
 
         pEngine->gInfo.timeSearch = time(NULL)-pJunqi->begin_time;
-        SetMaxDepth(pEngine);
+        ReduceMaxDepth(pEngine);
+
 
         pJunqi->gFlag[TIME_OUT] = 0;
-        pJunqi->begin_time = (unsigned int)time(NULL);
+        if( pEngine->gInfo.timeSearch<10 )
+        {
+            pJunqi->begin_time = (unsigned int)time(NULL);
+        }
+        else
+        {
+            pJunqi->begin_time = (unsigned int)time(NULL)-7;
+        }
 
 
 //        MoveSort *pResult[5];
@@ -711,12 +738,12 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 
 
 #ifdef ENG_TEST
-        //pJunqi->eSearchType = SEARCH_LEFT;
-        //pJunqi->eSearchType = SEARCH_RIGHT;
-        //pJunqi->eSearchType = SEARCH_SINGLE;
+       // pJunqi->eSearchType = SEARCH_LEFT;
+       // pJunqi->eSearchType = SEARCH_RIGHT;
+       // pJunqi->eSearchType = SEARCH_SINGLE;
         ProSearch(pJunqi,0);
-        //log_a("path %d",CheckDangerPath(pJunqi,1));
-        //MakeDeepSearch(pJunqi,pJunqi->eSearchType);
+        //log_a("path %d",CheckDangerPath(pJunqi,3));
+      //  MakeDeepSearch(pJunqi,pJunqi->eSearchType);
 
 #endif
 
@@ -740,12 +767,18 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
     	FindBestPathMove(pJunqi);
 #endif
     	ClearMoveSortList(pJunqi);
+    	PopDarkJunqiChess(pEngine);
+
         log_a("malloc %d",pJunqi->malloc_cnt);
         log_a("free %d",pJunqi->free_cnt);
 
         log_a("max depth %d",pEngine->gInfo.mxDepth);
-        //log_a("time %d",pEngine->gInfo.timeSearch);
-
+        log_a("defalut time %d",pEngine->gInfo.timeSearch);
+//        log_a("test malloc %d",pJunqi->test_malloc);
+//        log_a("test free %d",pJunqi->test_free);
+//        log_a("test malloc1 %d",pJunqi->test_malloc1);
+//        log_a("test free1 %d",pJunqi->test_free1);
+        assert( pJunqi->test_malloc==pJunqi->test_free );
         assert( pJunqi->malloc_cnt==pJunqi->free_cnt );
 
 //    	memset(pJunqi->pEngine,0,sizeof(Engine));
@@ -754,6 +787,7 @@ void ProRecMsg(Junqi* pJunqi, u8 *data)
 //     	while(1);
     	//ChecAttackEvent(pEngine);
 search_end:
+
 
         pJunqi->bSearch = 0;
         pthread_mutex_unlock(&pJunqi->mutex);

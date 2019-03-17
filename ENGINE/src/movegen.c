@@ -4,8 +4,8 @@
  *  Created on: Sep 21, 2018
  *      Author: Administrator
  */
-#include "engine.h"
 #include "junqi.h"
+#include "engine.h"
 #include "movegen.h"
 #include "path.h"
 #include "search.h"
@@ -26,6 +26,7 @@ void InsertMoveList(
 	pJunqi->test_gen_num++;
 	//pMove = (MoveList *)malloc(sizeof(MoveList));
 	//pMove = MoveNodeMalloc(pJunqi);
+
 	pMove = (MoveList *)memsys5Malloc(pJunqi,sizeof(MoveList));
 
 	memset(pMove, 0, sizeof(MoveList));
@@ -215,7 +216,14 @@ int AddCommanderMove(
 				{
 				    if(pDst->pLineup->type!=SILING)
 				    {
-				        percent = per>>3;// per/8
+				        if( pDst->pLineup->type!=DARK )
+				        {
+				            percent = per>>3;// per/8
+				        }
+				        else
+				        {
+				            percent = 0;//不空炸司令
+				        }
 				    }
 				    else
 				    {
@@ -250,7 +258,14 @@ int AddCommanderMove(
 				{
                     if(pSrc->pLineup->type!=SILING)
                     {
-                        percent = per>>3;// per/8
+                        if( pSrc->pLineup->type!=DARK )
+                        {
+                            percent = per>>3;// per/8
+                        }
+                        else
+                        {
+                            percent = 0;
+                        }
                     }
                     else
                     {
@@ -1179,25 +1194,61 @@ void ReduceEatPercent(
 {
     MoveList *p;
     int sum;
+    MoveList *pBomb = NULL;
+    MoveList *pEat = NULL;
 
     p = pJunqi->pMoveList->pPre;
-    if( p->move.result==BOMB &&
-        p->pPre->move.result==EAT )
+
+    for(;!p->isHead;p=p->pPre)
     {
-        sum = p->pPre->percent + p->percent;
+        if( pBomb==NULL && p->move.result==BOMB )
+        {
+            pBomb = p;
+        }
+        if( pEat==NULL && p->move.result==EAT )
+        {
+            pEat = p;
+        }
+        if( memcmp(&p->move,&p->pPre->move,4) )
+        {
+            break;
+        }
+    }
+
+    if( pBomb!=NULL && pEat!=NULL )
+    {
+        sum = pBomb->percent + pEat->percent;
 
         if( nLeftBomb==2 )
         {
-            p->pPre->percent = sum>>2;
-            p->percent = sum-p->pPre->percent;
+            pEat->percent = sum>>2;
+            pBomb->percent = sum-pEat->percent;
         }
         else
         {
-            p->pPre->percent = sum>>1;
-            p->percent = sum-p->pPre->percent;
+            pEat->percent = sum>>1;
+            pBomb->percent = sum-pEat->percent;
         }
     }
 }
+
+void SetEatPercent(Junqi *pJunqi)
+{
+    MoveList *p;
+
+    p = pJunqi->pMoveList->pPre;
+
+    for(;!p->isHead;p=p->pPre)
+    {
+        p->percent = 0;
+        if( memcmp(&p->move,&p->pPre->move,4) )
+        {
+            break;
+        }
+    }
+    p->percent = 256;
+}
+
 void EnlargeKillPercent(Junqi *pJunqi)
 {
     MoveList *p;
@@ -1295,13 +1346,21 @@ void AdjustMovePercent(
             {
                 EnlargeBombPercent(pJunqi,nLeftBomb);
             }
-            else if( pDst->pLineup->type<LVZH )
+            //第一步不要算炸弹，要不然都不敢吃
+            else if( pDst->pLineup->type<LVZH)
             {
                 MoveList *p = pJunqi->pEngine->pFirstMove;
                 if( !(p->move.dst[0]==pDst->point.x &&
                         p->move.dst[1]==pDst->point.y) )
                 {
-                    EnlargeBombPercent(pJunqi,nLeftBomb);
+                    if( pJunqi->aInfo[iDir].nExchange>1 )
+                    {
+                        EnlargeBombPercent(pJunqi,1);
+                    }
+                    else
+                    {
+                        EnlargeBombPercent(pJunqi,nLeftBomb);
+                    }
                 }
             }
         }
@@ -1312,18 +1371,58 @@ void AdjustMovePercent(
         iDir2 = pSrc->pLineup->iDir;
         nLeftBomb = 2-pJunqi->aInfo[iDir].aTypeNum[ZHADAN];
         if( !pDst->pLineup->isNotBomb &&
-                2==pDst->pLineup->isMayBomb && //todo
                 pDst->pLineup->isNotLand &&
                 pSrc->pLineup->type!=GONGB &&
                 nLeftBomb>0 )
         {
-            if( pSrc->pLineup->type>LVZH )
+            if( 2==pDst->pLineup->isMayBomb )
             {
-                EnlargeBombPercent(pJunqi,nLeftBomb);
+                if( pSrc->pLineup->type<LVZH &&
+                        (pSrc->pLineup->nEat>0 ||
+                        pJunqi->nEat<20) )
+                {
+                    ReduceEatPercent(pJunqi,nLeftBomb);
+                }
+                else if( pJunqi->cnt==1 )
+                {
+                    EnlargeBombPercent(pJunqi,nLeftBomb);
+                }
             }
-            else if( pSrc->pLineup->nEat>0 )
+            else
             {
-                ReduceEatPercent(pJunqi,nLeftBomb);
+                if( pSrc->pLineup->type<LVZH &&
+                        !pSrc->pLineup->nEat &&
+                        pJunqi->iRpOfst<100 )
+                {
+                    ReduceEatPercent(pJunqi,nLeftBomb);
+                }
+                else if( pJunqi->cnt==1 && pJunqi->nEat>10 )
+                {
+                    EnlargeBombPercent(pJunqi,nLeftBomb);
+                }
+
+            }
+        }
+
+        //为什么需要pJunqi->cnt==1
+        //防止盲目乐观估计自身防守实力
+        //比如敌方要来夺军旗了，认为营长防守就够了
+        //从而导致大子不回防
+        if(  pJunqi->cnt==1 &&
+                (pDst->type==DARK ||
+                pDst->type>YINGZH)  &&
+                pSrc->type<LIANZH &&
+                pDst->pLineup->isNotLand &&
+                pJunqi->nEat>20 &&
+                pJunqi->beginValue>0 )
+        {
+            if( pJunqi->nNoEat<10 )
+            {
+                EnlargeBombPercent(pJunqi,2);
+            }
+            else
+            {
+                SetEatPercent(pJunqi);
             }
         }
 
@@ -1340,6 +1439,7 @@ void AdjustMovePercent(
 
 }
 
+
 u8 DiscardBadMove(
         Junqi *pJunqi,
         BoardChess *pSrc,
@@ -1355,20 +1455,35 @@ u8 DiscardBadMove(
 //        return 1;
 //    }
 
+    if( pJunqi->gFlag[FLAG_PREVENT] &&
+            pJunqi->cnt>pJunqi->nDepth )
+    {
+        if( pDst->type!=JUNQI )
+        {
+            if( !pDst->isBottom  )
+            {
+                return 1;
+            }
+        }
+    }
+
     if( pSrc->type==GONGB )
     {
 //        if( pDst->index<20 && ( pDst->isSapperPath ||
 //                (pSrc->pLineup->iDir&1)!=ENGINE_DIR ) )
-        if( pDst->index<20 && pDst->isSapperPath )
+        if( pDst->index<20  )
         {
-            return 1;
+            if( pDst->isSapperPath )
+            {
+                return 1;
+            }
         }
-        else if( pDst->index>20 )
+        else
         {
             if( pDst->isSapperPath && pDst->type==NONE )
             {
                 //飞到对家那里
-                if( (pSrc->iDir&1)==(pDst->iDir&1) )
+                if( (pSrc->pLineup->iDir&1)==(pDst->iDir&1) )
                 {
                     return 1;
                 }
@@ -1381,6 +1496,10 @@ u8 DiscardBadMove(
             {
                 return 1;
             }
+            else
+            {
+                pData->isGongB = 2;
+            }
         }
 
     }
@@ -1392,7 +1511,10 @@ u8 DiscardBadMove(
                 !pDst->pLineup->isNotLand &&
                 pDst->pLineup->type!=JUNQI )
             {
-                if( pDst->pLineup->type!=DILEI && pDst->isRailway)
+                if( pDst->pLineup->type!=DILEI &&
+                       ( (pDst->isRailway && pJunqi->beginValue<300)
+                        || (pJunqi->beginValue<-100 && pDst->type<YINGZH )
+                        || pJunqi->aInfo[pDst->iDir].value>2000 ) )
                 {
                     return 1;
                 }
@@ -1402,7 +1524,8 @@ u8 DiscardBadMove(
             {
                 iDir = pSrc->pLineup->iDir;
                 //被挖的地雷不超过2个
-                if( pJunqi->aInfo[iDir].aTypeNum[DILEI]<2 )
+                if( pJunqi->aInfo[iDir].aTypeNum[DILEI]<2 &&
+                        pDst->type!=GONGB  )
                 {
                     return 1;
                 }
@@ -1532,6 +1655,9 @@ void PushMoveGenStack(
             }
         }
     }
+
+//解决了深度搜索的bug，这段代码可能没什么用了
+#if 0
     if( pDst->isBottom>0 &&
         (pSrc->pLineup->iDir&1)!=ENGINE_DIR &&
             (pDst->iDir&1)==ENGINE_DIR )
@@ -1542,7 +1668,11 @@ void PushMoveGenStack(
             pTemp->bSetMaxType = 1;
             pTemp->tempType = pSrc->pLineup->type;
             pTemp->isNotBomb = pSrc->pLineup->isNotBomb;
-            pSrc->pLineup->type = pSrc->pLineup->mx_type;
+            if( pDst->type>LVZH )
+            {
+                pSrc->pLineup->type = pSrc->pLineup->mx_type;
+            }
+
             pSrc->pLineup->isNotBomb = 1;
         }
     }
@@ -1550,14 +1680,18 @@ void PushMoveGenStack(
              (pDst->pLineup->iDir&1)!=ENGINE_DIR &&
              (pDst->iDir&1)==ENGINE_DIR && pJunqi->cnt>1 )
     {
-            //cnt>1这个条件是为了避免第一层就放弃治疗
             pTemp->bSetMaxType = 2;
             pTemp->tempType = pDst->pLineup->type;
             pTemp->isNotBomb = pDst->pLineup->isNotBomb;
-            pDst->pLineup->type = pDst->pLineup->mx_type;
+            if( pSrc->type>LVZH )
+            {
+                pDst->pLineup->type = pDst->pLineup->mx_type;
+            }
             pDst->pLineup->isNotBomb = 1;
 
     }
+#endif
+
 }
 
 void PoPMoveGenStack(
@@ -1601,7 +1735,6 @@ void AddMoveToList(
 	enum CompareType type;
 	int aPercent[3] = {0};
 	int bShowFlag;
-	u8 bombFlag = 0;
 	MoveStack tempInfo;
 	assert( pSrc->type!=NONE );
 
@@ -1612,13 +1745,13 @@ void AddMoveToList(
 
 
 
-//    if(pSrc->point.x==0x09&&pSrc->point.y==0x0E&&
-//            pDst->point.x==0x09&&pDst->point.y==0x0F)
+//    if(pSrc->point.x==0x08&&pSrc->point.y==0x08&&
+//            pDst->point.x==0x0A&&pDst->point.y==0x0F)
 //    {
 ////        if( pJunqi->eSearchType==SEARCH_DEEP &&
 ////                pJunqi->eDeepType == SEARCH_DEFAULT )
 //        {
-//            if(pJunqi->nDepth==4 && pJunqi->cnt==1)
+//            if(pJunqi->nDepth==4 && pJunqi->cnt==2)
 //            {
 //                log_a("dsds");
 ////                sleep(1);
@@ -1632,23 +1765,23 @@ void AddMoveToList(
 	    return;
 	}
 
-//    if(pSrc->point.x==0x06&&pSrc->point.y==0x05&&
-//            pDst->point.x==0x05&&pDst->point.y==0x06)
+//    if(pSrc->point.x==0x07&&pSrc->point.y==0x0E&&
+//            pDst->point.x==0x06&&pDst->point.y==0x0F)
 //    {
-//
-//
-//        if( pJunqi->cnt==4 && testFlag)
 //        {
-//            log_c("ggg %d",jj);
-//            sleep(1);
-//            assert(0);
-//            log_a("sd1");
+////            if(pJunqi->nDepth==3 && pJunqi->cnt==4 &&
+////                    pSrc->type==YINGZH)
+//            {
+//                log_a("dsds");
+////                sleep(1);
+////                assert(0);
+//            }
 //        }
 //    }
 
 //    static int jj=0;
 //    jj++;
-//    if(jj==171267)
+//    if(jj==29569)
 //    log_c("test");
 //    log_c("jj %d",jj);
 //
@@ -1692,7 +1825,17 @@ void AddMoveToList(
         		log_b("per %d",aPercent[0]);
         		log_b("eat %d %d %d %d",pSrc->point.x,pSrc->point.y,
         				pDst->point.x,pDst->point.y);
-        		InsertMoveList(pJunqi,pSrc,pDst,&temp,aPercent[0]);
+        		if( pJunqi->nEat>30 && pDst->type==GONGB )
+        		{
+        		    aPercent[0] = 256;
+        		    InsertMoveList(pJunqi,pSrc,pDst,&temp,aPercent[0]);
+        		    goto end_loop;
+        		}
+        		else
+        		{
+        		    InsertMoveList(pJunqi,pSrc,pDst,&temp,aPercent[0]);
+        		}
+
 
         	}
 			break;
@@ -1718,14 +1861,7 @@ void AddMoveToList(
         		log_b("bomb %d %d %d %d",pSrc->point.x,pSrc->point.y,
         				pDst->point.x,pDst->point.y);
 
-        		if( pDst->type==DARK && pJunqi->cnt!=1 )
-        		{
-        		    percent = aPercent[1];
-        		}
-        		else
-        		{
-        		    percent = aPercent[1]-AddCommanderMove(pJunqi,pSrc,pDst,&temp,aPercent[1]);
-        		}
+        		percent = aPercent[1]-AddCommanderMove(pJunqi,pSrc,pDst,&temp,aPercent[1]);
 
 
         		log_b("spe %d",percent);
@@ -1771,7 +1907,7 @@ void AddMoveToList(
 			break;
 		}
 	}
-
+end_loop:
 	AdjustMovePercent(pJunqi,pSrc,pDst);
 
 	PoPMoveGenStack(pJunqi,pSrc,pDst,&tempInfo);

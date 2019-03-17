@@ -75,7 +75,7 @@ int CheckCampValue(Junqi *pJunqi, int iDir)
     int val = 0;
     int i;
     u8 aCamp[5] = {6,8,12,16,18};
-    u8 aCampVal[5] = {40,40,90,70,70};
+    u16 aCampVal[5] = {40,40,70,90,90};
     BoardChess *pChess;
 
     for(i=0; i<5; i++)
@@ -111,6 +111,7 @@ int CheckCampValue(Junqi *pJunqi, int iDir)
 
                     }
                     val += 10;
+                    log_a("camp1 val %d ",val);
                 }
                 else if( i==2 && (iDir&1)==ENGINE_DIR )
                 {
@@ -120,21 +121,33 @@ int CheckCampValue(Junqi *pJunqi, int iDir)
                 if( pChess->isCamp!=2 )//空营没有价值
                 {
                     val += aCampVal[i];
+                    log_a("camp2 val %d ",val);
                 }
+                log_a("camp type %d i %d",pChess->isCamp,i);
 
-                if( (iDir&1)!=ENGINE_DIR && pChess->isCamp!=2 )
+                if( pJunqi->iRpOfst>100 && (iDir&1)!=ENGINE_DIR
+                        && pChess->isCamp!=2 )
+
                 {
 
                     int tempDir;
+                    int oppsDir;
                     tempDir = pChess->pLineup->iDir;
                     if( pChess->pLineup->type==pJunqi->aInfo[tempDir].mxType  )
                     {
-                        val -= aCampVal[i];
+                        oppsDir = (tempDir+2)&3;
+                        if( pJunqi->aInfo[oppsDir].bDead ||
+                            pChess->pLineup->type<=pJunqi->aInfo[oppsDir].mxType )
+                        {
+                            val -= aCampVal[i];
+                            log_a("camp3 val %d ",val);
+                        }
                     }
                     else if( pChess->pLineup->type<LVZH )
                     {
                         //大字应该控盘而不是进营
                         val -= (aCampVal[i]>>1);
+                        log_a("camp4 val %d ",val);
                     }
                 }
 
@@ -147,7 +160,21 @@ int CheckCampValue(Junqi *pJunqi, int iDir)
                 if( pChess->pLineup->isNotBomb )
                 {
                     val += 5;
+                    log_a("camp5 val %d ",val);
                 }
+                if( pJunqi->aInfo[iDir].isEnemyInCamp )
+                {
+                    if( (pChess->pLineup->iDir&1)==ENGINE_DIR &&
+                            22==pChess->pLineup->index )
+                    {
+                        val -= 30;
+                    }
+                }
+                //本意打算让炸弹回下营防守，不知为何加了这句胜率就变得很低
+//                if( pChess->isBottom && pChess->type==ZHADAN )
+//                {
+//                    val -= 10;
+//                }
             }
         }
     }
@@ -335,10 +362,15 @@ int CalDangerValue(Junqi *pJunqi, int iDir, u8 *pDir)
                 if(i<3)
                 {
                     value += vDanger<<1;
+                    if( pJunqi->aInfo[(iDir+2)&3].bDead &&
+                            (iDir&1)==ENGINE_DIR && i>0 )
+                    {
+                        value += 1000;
+                    }
                 }
-                else if( iDir==ENGINE_DIR || pChess->pLineup->type<YINGZH )
+                else if( (iDir&1)==ENGINE_DIR || pChess->pLineup->type<YINGZH )
                 {
-                    if( pJunqi->aInfo[iDir].value<2000 ||
+                    if( pJunqi->aInfo[iDir].value<2100 ||
                            pJunqi->aInfo[(iDir+2)&3].bDead )//todo
                     {
 
@@ -354,7 +386,6 @@ int CalDangerValue(Junqi *pJunqi, int iDir, u8 *pDir)
                     }
                 }
             }
-
         }
     }
 
@@ -368,6 +399,13 @@ int CalDangerValue(Junqi *pJunqi, int iDir, u8 *pDir)
         else if( landFlag2 || landFlag3 )
         {
             value += vDanger>>1;
+        }
+    }
+    else
+    {
+        if( landFlag3 )
+        {
+            value += 10;
         }
     }
 
@@ -474,6 +512,7 @@ int CheckDangerValue(Junqi *pJunqi, int iDir)
         }
         else
         {
+
             vDanger = CalDangerValue(pJunqi,iDir,aRightBarrier);
         }
     }
@@ -767,12 +806,10 @@ int EvalSituation(Junqi *pJunqi, u8 isInit)
 
 	if( rc>0 )
 	{
-	    vMaxChess += (pVal->vChess[mxType]>>1);
 	    vDeltaBomb = 30;
 	}
 	else if( rc<0 )
 	{
-	    vMaxChess -= (pVal->vChess[mxType]>>1);
 	    vDeltaBomb = -30;
 	}
 	log_a("maxTye %d val %d rc %d",mxType,vMaxChess,rc);
@@ -810,12 +847,18 @@ int EvalSituation(Junqi *pJunqi, u8 isInit)
 						{
 						    typeValue = pVal->vChess[pLineup->type];
 							tempValue -= typeValue;
-							if( pLineup->type<LVZH && pLineup->type>=SILING )
+							if( pLineup->type==JUNZH || pLineup->type==SILING )
 							{
-							    if( 0==pLineup->nEat && pJunqi->nEat<30 )//todo 防止残局优势时会变得退缩
+							    if( 0==pLineup->nEat && ( pJunqi->nEat<20 ||
+							            pJunqi->beginValue<0 ) )//todo 防止残局优势时会变得退缩
 							    {
 							        //tempValue -= (typeValue)>>1;
 							        tempValue -= typeValue;
+							        //todo  和吃过大子的棋打兑
+							        if( pJunqi->iRpOfst<30 && pLineup->nBigEat )
+							        {
+							            tempValue -= typeValue<<1;
+							        }
 							    }
 							}
 							if( pLineup->index>=20 )
@@ -879,16 +922,24 @@ int EvalSituation(Junqi *pJunqi, u8 isInit)
 						{
 							if( pLineup->type==DARK )
 							{
-								tempValue += pVal->vChess[pLineup->mx_type]/2;
+
+							    if( pLineup->mx_type>TUANZH )//被团长以下的棋暗吃
+							    {
+
+							        tempValue += pVal->vChess[pLineup->mx_type];
+							    }
+							    else
+							    {
+							        tempValue += pVal->vChess[LVZH]>>1;
+							    }
 
 							}
 							else
 							{
 								if( pLineup->bBomb )
 								{
-								    //低估敌方炸弹的价值
 								    tempValue += (pVal->vChess[pLineup->type]+
-								    	 	(pVal->vChess[ZHADAN]-40) )/2;
+								    	 	(pVal->vChess[ZHADAN]) )/2;
 								}
 								else if( pLineup->type==GONGB || pLineup->type==DILEI )
 								{
@@ -926,8 +977,7 @@ int EvalSituation(Junqi *pJunqi, u8 isInit)
 							{
 								tempValue += pVal->vDarkLand;
 							}
-							if( ( pLineup->isNotBomb || 2==pJunqi->aInfo[i].aTypeNum[ZHADAN] )
-									&& pLineup->index>=5 )
+							if( pLineup->isNotBomb && pLineup->index>=5 )
 							{
 								tempValue += pVal->vDarkBomb;
 							}

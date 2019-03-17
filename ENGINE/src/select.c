@@ -119,7 +119,7 @@ void SetSortRank(MoveSort *pHead)
     }
 }
 
-MoveSort * SelectRandMove(Junqi *pJunqi,MoveSort *pHead)
+MoveSort * SelectRandMove(Junqi *pJunqi,MoveSort *pHead, int deepDepth)
 {
     MoveSort *p;
     Engine *pEngine = pJunqi->pEngine;
@@ -130,12 +130,22 @@ MoveSort * SelectRandMove(Junqi *pJunqi,MoveSort *pHead)
     if( pHead==NULL ) return NULL;
     maxLoop = pEngine->gInfo.timeStamp%5;
     log_a("timeStamp rand %d",maxLoop);
-    for(p=pHead; p->pNext!=NULL; p=p->pNext)
+    for(p=pHead; p->pNext!=NULL; )
     {
         if( ++i>maxLoop )
         {
             break;
         }
+
+        if( p->pNext->isSetValue[deepDepth][SEARCH_DEFAULT] )
+        {
+            if( p->aValue[deepDepth][SEARCH_DEFAULT]>
+                p->pNext->aValue[deepDepth][SEARCH_DEFAULT]+50 )
+            {
+                break;
+            }
+        }
+        p=p->pNext;
     }
     return p;
 }
@@ -159,14 +169,14 @@ int CalMaxSumMinValue(
             }
         }
     }
-    if( pJunqi->nEat>20 && pJunqi->nNoEat<15 )
-    {
-        maxSum += pNode->aValue[0][DANGER_PATH];
-    }
-    if( pJunqi->nNoEat>15 )
-    {
-        maxSum += pNode->aValue[2][SEARCH_SINGLE];
-    }
+//    if( pJunqi->nEat>20 && pJunqi->nNoEat<15 )
+//    {
+//        maxSum += pNode->aValue[0][DANGER_PATH];
+//    }
+//    if( pJunqi->nNoEat>15 )//todo 很危险
+//    {
+//        maxSum += pNode->aValue[2][SEARCH_SINGLE];
+//    }
 
     return maxSum;
 }
@@ -176,7 +186,8 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
     MoveSort *pResult[5];
     MoveSort *pSelect[5];
     MoveSort *pNode;
-    MoveSort *pBest = pHead;
+    MoveSort *pBest;
+    MoveSort *pInit = pHead;
     int index;
     int deepDepth = 3;
     u8 headCnt = 0;
@@ -190,18 +201,20 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
     SetSortRank(pHead);
     if( pJunqi->nEat<5 )
     {
-        pHead = SelectRandMove(pJunqi,pHead);
+        pHead = SelectRandMove(pJunqi,pHead,deepDepth-1);
 
     }
+    pBest = pHead;
+
     ReSearchInDeep(pJunqi,pHead,3);
 //    sleep(1);
 //    assert(0);
 
     for(int i=SEARCH_DEFAULT; i<3; i++)
     {
-        FindBestMove(pJunqi,pHead,pResult,i,3,0);
+        FindBestMove(pJunqi,pInit,pResult,i,3,0);
         pNode = pResult[0];
-//        if( i==0 )
+//        if( i==0 && pJunqi->iRpOfst==243)
 //        {
 //            log_a("sdsd");
 //            sleep(1);
@@ -218,7 +231,7 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
             log_a("i %d val %d",i,pNode->aValue[3][2]);
             ReSearchInDeep(pJunqi,pNode,3);
             log_a("i %d val %d",i,pNode->aValue[3][2]);
-//            if( i==1 )
+//            if( i==0 )
 //            {
 //                log_a("sdsd");
 //                sleep(1);
@@ -239,6 +252,7 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
     }
 
     log_a("new head %d",pJunqi->pEngine->gInfo.timeStamp);
+
 
     maxSum = CalMaxSumMinValue(pJunqi,pHead,deepDepth,&minValue);
     log_a("head sum %d min %d",maxSum,minValue);
@@ -270,8 +284,9 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
         {
             sum = CalMaxSumMinValue(pJunqi,pNode,deepDepth,&min);
             log_a("type %d sum %d min %d",i,sum,min);
-            if( min>minValue+50 )
+            if( min>minValue+50 && min>-800 )
             {
+                log_a("min update");
                 maxSum = sum;
                 pBest = pNode;
                 minValue = min;
@@ -279,6 +294,7 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
             }
             else if( sum>maxSum )
             {
+                log_a("sum update");
                 maxSum = sum;
                 pBest = pNode;
                 minValue = min;
@@ -298,6 +314,7 @@ MoveSort *VerifyDeepMove(Junqi *pJunqi, MoveSort *pHead)
     {
         pBest = pHead;
     }
+
 
     return pBest;
 
