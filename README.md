@@ -3,6 +3,8 @@
 windows下需要安装msys2
 
 软件分为界面和引擎2部分，需要分别编译分别启动
+      
+按照当前思路开发下去工作量太大，先暂停一段时间。    
 
 ![demo](https://github.com/pfysw/JunQi/raw/master/GUI/res/demo.png)
 ## 编译
@@ -24,4 +26,8 @@ https://blog.csdn.net/pfysw/article/details/81048379
 
 另外代码的相关说明请参考我写的博客
 
-https://blog.csdn.net/pfysw/article/category/7890775
+https://blog.csdn.net/pfysw/article/category/7890775    
+
+## 测试战绩
+目前稍微有点会下棋了，但是仍然处在弱智阶段，大局观太差
+![战绩](https://github.com/pfysw/JunQi/raw/master/GUI/res/result.png)
