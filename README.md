@@ -1,6 +1,6 @@
 # 四国军棋
-基于GTK+ 3界面库，使用eclipse cdt开发环境，
-windows下需要安装msys2
+基于GTK+ 3界面库，使用eclipse cdt开发环境，win10
+windows下需要安装64位的msys2
 
 软件分为界面和引擎2部分，需要分别编译分别启动
       
@@ -8,11 +8,13 @@ windows下需要安装msys2
 
 ![demo](https://github.com/pfysw/JunQi/raw/master/GUI/res/demo.png)
 ## 编译
-如使用的是32位msys2，直接在eclipse导入工程即可
+使用的是64位msys2，直接在eclipse导入工程即可，需在工程目录下新建一个bld文件夹
 
-需要设置GTK+的环境变量地址为F:\msys32\mingw32\bin;  （必须放在开头）
+GUI已经支持makefile编译，ENGINE工程比较简单没什么依赖还是由eclipse自动编译
 
-需要设置gcc的环境变量地址为F:\msys32\usr\bin;
+需要设置GTK+的环境变量地址为D:\msys64\mingw64\bin （必须放在开头）
+
+需要设置gcc的环境变量地址为D:\msys64\usr\bin
 
 新建C语言工程时编译器选择Cygwin GCC (根据你在msys2上安装的编译器)
 

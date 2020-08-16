@@ -18,7 +18,7 @@
 					<folderInfo id="cdt.managedbuild.config.gnu.cygwin.exe.debug.428035552." name="/" resourcePath="">
 						<toolChain id="cdt.managedbuild.toolchain.gnu.cygwin.exe.debug.1924842523" name="Cygwin GCC" superClass="cdt.managedbuild.toolchain.gnu.cygwin.exe.debug">
 							<targetPlatform id="cdt.managedbuild.target.gnu.platform.cygwin.exe.debug.854516963" name="Debug Platform" superClass="cdt.managedbuild.target.gnu.platform.cygwin.exe.debug"/>
-							<builder buildPath="${workspace_loc:/JunQi}/Debug" id="cdt.managedbuild.target.gnu.builder.cygwin.exe.debug.1038395756" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" superClass="cdt.managedbuild.target.gnu.builder.cygwin.exe.debug"/>
+							<builder autoBuildTarget="all" buildPath="${workspace_loc:/JunQi/src}" cleanBuildTarget="clean" enableAutoBuild="false" enableCleanBuild="true" enabledIncrementalBuild="true" id="cdt.managedbuild.target.gnu.builder.cygwin.exe.debug.1038395756" incrementalBuildTarget="all" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="Gnu Make Builder" parallelBuildOn="false" superClass="cdt.managedbuild.target.gnu.builder.cygwin.exe.debug"/>
 							<tool id="cdt.managedbuild.tool.gnu.assembler.cygwin.exe.debug.803742290" name="GCC Assembler" superClass="cdt.managedbuild.tool.gnu.assembler.cygwin.exe.debug">
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.24477494" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
@@ -32,8 +32,13 @@
 								<option id="gnu.c.compiler.cygwin.exe.debug.option.debugging.level.417346824" name="Debug Level" superClass="gnu.c.compiler.cygwin.exe.debug.option.debugging.level" value="gnu.c.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.include.paths.393463347" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;D:\msys64\mingw64\include\gdk-pixbuf-2.0&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;D:\msys64\mingw64\include\gtk-3.0&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;D:\msys64\mingw64\include\cairo&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;D:\msys64\mingw64\include\glib-2.0&quot;"/>
 								</option>
 								<option id="gnu.c.compiler.option.misc.other.611936912" name="Other flags" superClass="gnu.c.compiler.option.misc.other" value="-c -fmessage-length=0 -mms-bitfields -pthread -mms-bitfields -IF:/msys32/mingw32/include/gtk-3.0 -IF:/msys32/mingw32/include/cairo -IF:/msys32/mingw32/include -IF:/msys32/mingw32/include/pango-1.0 -IF:/msys32/mingw32/include/fribidi -IF:/msys32/mingw32/include/atk-1.0 -IF:/msys32/mingw32/include/cairo -IF:/msys32/mingw32/include/pixman-1 -IF:/msys32/mingw32/include -IF:/msys32/mingw32/include/freetype2 -IF:/msys32/mingw32/include -IF:/msys32/mingw32/include/harfbuzz -IF:/msys32/mingw32/include/libpng16 -IF:/msys32/mingw32/include/gdk-pixbuf-2.0 -IF:/msys32/mingw32/include/libpng16 -IF:/msys32/mingw32/include -IF:/msys32/mingw32/include/glib-2.0 -IF:/msys32/mingw32/lib/glib-2.0/include -IF:/msys32/mingw32/include" valueType="string"/>
+								<option id="gnu.c.compiler.option.dialect.std.2112392911" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.cygwin.1598933267" superClass="cdt.managedbuild.tool.gnu.c.compiler.input.cygwin"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.c.linker.cygwin.exe.debug.2048675667" name="Cygwin C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.cygwin.exe.debug">
@@ -41,7 +46,7 @@
 									<listOptionValue builtIn="false" value="-LF:/msys32/mingw32/bin -LF:/msys32/mingw32/lib -lgtk-3-0 -lgdk-3-0 -lgdi32 -limm32 -lshell32 -lole32 -Wl,-luuid -lwinmm -ldwmapi -lsetupapi -lcfgmgr32 -lz -lpangowin32-1.0-0 -lpangocairo-1.0-0 -lpango-1.0-0 -lfribidi-0 -latk-1.0-0 -lcairo-gobject-2 -lcairo-2 -lgdk_pixbuf-2.0-0 -lgio-2.0-0 -lgobject-2.0-0 -lglib-2.0-0 -lintl-8"/>
 								</option>
 								<option id="gnu.c.link.option.ldflags.1717026527" name="Linker flags" superClass="gnu.c.link.option.ldflags" value="-mwindows" valueType="string"/>
-								<option id="gnu.c.link.option.libs.627993109" superClass="gnu.c.link.option.libs" valueType="libs">
+								<option id="gnu.c.link.option.libs.627993109" name="Libraries (-l)" superClass="gnu.c.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="winmm"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.linker.input.2018773154" superClass="cdt.managedbuild.tool.gnu.c.linker.input">
@@ -114,5 +119,13 @@
 		</scannerConfigBuildInfo>
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
-	<storageModule moduleId="refreshScope"/>
+	<storageModule moduleId="refreshScope" versionNumber="2">
+		<configuration configurationName="Release">
+			<resource resourceType="PROJECT" workspacePath="/JunQi"/>
+		</configuration>
+		<configuration configurationName="Debug">
+			<resource resourceType="PROJECT" workspacePath="/JunQi"/>
+		</configuration>
+	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
 </cproject>
