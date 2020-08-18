@@ -330,7 +330,7 @@ void *search_thread(void *arg)
         pJunqi->pJunqiBase = pJunqiBase;
         //IntiMoveMem(pJunqi);
 
-        memsys5Init(pJunqi,(MEM_POOL_LENGTH>>1),16);
+        memsys5Init(pJunqi,MEM_POOL_LENGTH,16);
 
         pEngineObj = (Engine*)malloc(sizeof(Engine));
         memcpy(pEngineObj,pJunqiBase->pEngine,sizeof(Engine));

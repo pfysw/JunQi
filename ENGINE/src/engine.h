@@ -37,7 +37,7 @@ enum MoveEvent{
 #define RESULT_NUM 6
 #define BEST_LIST_NUM 20
 #define RECORD_LINEUP__NUM 20
-#define MEM_POOL_LENGTH 60000
+#define MEM_POOL_LENGTH 100000
 
 extern u8 aEventBit[100];
 

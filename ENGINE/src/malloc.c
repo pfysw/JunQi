@@ -154,6 +154,8 @@ void *memsys5Malloc(Junqi *pJunqi, int nByte){
   */
   for(iBin=iLogsize; iBin<=LOGMAX && pMem->aiFreelist[iBin]<0; iBin++){}
   if( iBin>LOGMAX ){
+    sleep(1);
+    printf("no mem %d\n",nByte);
     assert(0);
   }
   i = pMem->aiFreelist[iBin];
