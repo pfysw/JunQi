@@ -8,20 +8,25 @@
 #include "junqi.h"
 #include "comm.h"
 
+
 int main(int argc, char *argv[])
 {
     Junqi *pJunqi = JunqiOpen();
-    pthread_t t1,t2;
+   // pthread_t t1;//delete[1]
+    pthread_t t2;
 
     setvbuf(stdout, NULL, _IONBF, 0);
+    InitServerIp(argc,argv);
 
-    pthread_create(&t1,NULL,(void*)engine_thread,pJunqi);
+    //delete[1]
+    //pthread_create(&t1,NULL,(void*)engine_thread,pJunqi);
     pthread_create(&t2,NULL,(void*)comm_thread,pJunqi);
+    EngineProcess(pJunqi);
 
-    //Ö»ÄÜÔÚÖ÷Ïß³ÌÖĞ´´½¨Ïß³Ì²ÅÄÜ¶àºË
-    //ÔÚÆäËûÏß³ÌÖĞ´´½¨µÄĞÂÏß³Ì¶¼Óë¸ÃÏß³ÌÊ¹ÓÃÍ¬Ò»¸öcpu
+    //åªèƒ½åœ¨ä¸»çº¿ç¨‹ä¸­åˆ›å»ºçº¿ç¨‹æ‰èƒ½å¤šæ ¸
+    //åœ¨å…¶ä»–çº¿ç¨‹ä¸­åˆ›å»ºçš„æ–°çº¿ç¨‹éƒ½ä¸è¯¥çº¿ç¨‹ä½¿ç”¨åŒä¸€ä¸ªcpu
 
-    pthread_join(t1,NULL);
+    pthread_join(t2,NULL);
 
     return 0;
 }

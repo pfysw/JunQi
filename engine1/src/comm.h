@@ -9,5 +9,6 @@
 #define COMM_H_
 
 void *comm_thread(void *arg);
+void InitServerIp(int argc, char *argv[]);
 
 #endif /* COMM_H_ */

@@ -26,6 +26,7 @@ struct Junqi
 };
 
 Junqi *JunqiOpen(void);
-void *engine_thread(void *arg);
+//void *engine_thread(void *arg);//delete[1]
+void EngineProcess(Junqi* pJunqi);
 
 #endif /* JUNQI_H_ */

@@ -29,6 +29,15 @@ mqd_t CreateMessageQueue(char *name,int len)
     return qid;
 }
 
+void EngineProcess(Junqi* pJunqi)
+{
+    printf("engine\n");
+    while(1){
+
+    }
+}
+
+/* delete[1]
 void *engine_thread(void *arg)
 {
     printf("engine thread\n");
@@ -46,3 +55,4 @@ pthread_t CreatEngineThread(Junqi* pJunqi)
     pthread_create(&tidp,NULL,(void*)engine_thread,pJunqi);
     return tidp;
 }
+*/
