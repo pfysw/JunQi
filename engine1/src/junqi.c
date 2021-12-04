@@ -7,6 +7,10 @@
 #include "junqi.h"
 #include <mqueue.h>
 
+DebugFlag gDebug = {
+        .flagComm = 1
+};
+
 Junqi *JunqiOpen(void)
 {
     Junqi *pJunqi = (Junqi*)malloc(sizeof(Junqi));

@@ -5,8 +5,43 @@
  *      Author: Administrator
  */
 #include "junqi.h"
+#include "comm.h"
 
 char server_ip[30] = "172.0.0.1";
+
+void PacketHeader(CommHeader *header, u8 iDir, u8 eFun)
+{
+    memset(header, 0, sizeof(CommHeader));
+    memcpy(header->aMagic, aMagic, 4);
+    //目前该位只在COMM_START标识先手位
+    header->iDir = iDir;
+    header->eFun = eFun;
+}
+
+void SendData(Junqi* pJunqi, CommHeader *header, void *data, int len)
+{
+    u8 buf[1000];
+    int length = 0;
+
+    length += sizeof(CommHeader);
+    memcpy(buf, header, length);
+
+    memcpy(buf+length, data, len);
+    length += len;
+
+    sendto(pJunqi->socket_fd, buf, length, 0,
+            (struct sockaddr *)&pJunqi->addr, sizeof(struct sockaddr));
+    if(gDebug.flagComm){
+        log_a("send %d",header->eFun);
+    }
+}
+
+void SendHeader(Junqi* pJunqi, u8 iDir, u8 eFun)
+{
+    CommHeader header;
+    PacketHeader(&header, iDir, eFun);
+    SendData(pJunqi, &header, NULL, 0);
+}
 
 void InitServerIp(int argc, char *argv[])
 {
@@ -16,9 +51,47 @@ void InitServerIp(int argc, char *argv[])
     printf("server ip %s\n",server_ip);
 }
 
+void InitUdpSocket(Junqi* pJunqi)
+{
+
+    int socket_fd;
+    struct sockaddr_in addr,local;
+
+    socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (socket_fd < 0)
+    {
+        printf("Create Socket Failed!\n");
+        pthread_detach(pthread_self());
+    }
+
+    local.sin_family = AF_INET;
+    local.sin_addr.s_addr=INADDR_ANY;
+#ifdef  TEST
+    local.sin_port = htons(6678);
+#else
+    local.sin_port = htons(5678);
+#endif
+    if(bind(socket_fd, (struct sockaddr *)&local, sizeof(struct sockaddr) )<0)
+    {
+        printf("Bind Error!\n");
+        pthread_detach(pthread_self());
+    }
+
+    addr.sin_family = AF_INET;
+    inet_pton(AF_INET, server_ip, &addr.sin_addr);
+    addr.sin_port = htons(1234);
+
+    pJunqi->socket_fd = socket_fd;
+    pJunqi->addr = addr;
+    SendHeader(pJunqi, ENGINE_DIR, COMM_READY);
+}
+
 void *comm_thread(void *arg)
 {
+    Junqi* pJunqi = (Junqi*)arg;
     printf("comm thread\n");
+
+    InitUdpSocket(pJunqi);
     while(1){
 
     }
