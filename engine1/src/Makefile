@@ -1,7 +1,7 @@
 OBJ_DIR = ../bld
 
-SRC = main.c junqi.c comm.c
-  
+SRC = main.c junqi.c comm.c skeleton.c
+
 OBJ = ${patsubst %.c, ${OBJ_DIR}/%.o, ${SRC}}
 
 INC = ${wildcard  *.h}

@@ -51,6 +51,32 @@ void InitServerIp(int argc, char *argv[])
     printf("server ip %s\n",server_ip);
 }
 
+void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
+{
+    CommHeader *pHead;
+    pHead = (CommHeader *)data;
+
+    if( memcmp(pHead->aMagic, aMagic, 4)!=0 )
+    {
+        return;
+    }
+
+    if(gDebug.flagComm){
+        log_a("rec fun %d len %d",pHead->eFun,len);
+    }
+
+    switch(pHead->eFun)
+    {
+    case COMM_READY:
+        break;
+    case COMM_INIT:
+        log_a("init");
+        break;
+    default:
+        break;
+    }
+}
+
 void InitUdpSocket(Junqi* pJunqi)
 {
 
@@ -89,11 +115,14 @@ void InitUdpSocket(Junqi* pJunqi)
 void *comm_thread(void *arg)
 {
     Junqi* pJunqi = (Junqi*)arg;
-    printf("comm thread\n");
+    size_t recvbytes = 0;
+    u8 buf[REC_LEN]={0};
 
+    printf("comm thread\n");
     InitUdpSocket(pJunqi);
     while(1){
-
+        recvbytes=recvfrom(pJunqi->socket_fd, buf, REC_LEN, 0,NULL ,NULL);
+        DealRecData(pJunqi, buf, recvbytes);
     }
     pthread_detach(pthread_self());
     return NULL;
