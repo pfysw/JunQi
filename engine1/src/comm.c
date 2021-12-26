@@ -6,6 +6,7 @@
  */
 #include "junqi.h"
 #include "comm.h"
+#include "skeleton.h"
 
 char server_ip[30] = "172.0.0.1";
 
@@ -51,7 +52,7 @@ void InitServerIp(int argc, char *argv[])
     printf("server ip %s\n",server_ip);
 }
 
-void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
+void DealRecData(Junqi* pJunqi, u8 *data, int len)
 {
     CommHeader *pHead;
     pHead = (CommHeader *)data;
@@ -71,6 +72,8 @@ void DealRecData(Junqi* pJunqi, u8 *data, size_t len)
         break;
     case COMM_INIT:
         log_a("init");
+        InitLineup(pJunqi,data);
+        CheckLineupInit(pJunqi->pSkl);
         break;
     default:
         break;

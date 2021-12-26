@@ -12,14 +12,11 @@
 int main(int argc, char *argv[])
 {
     Junqi *pJunqi = JunqiOpen();
-   // pthread_t t1;//delete[1]
     pthread_t t2;
 
     setvbuf(stdout, NULL, _IONBF, 0);
     InitServerIp(argc,argv);
 
-    //delete[1]
-    //pthread_create(&t1,NULL,(void*)engine_thread,pJunqi);
     pthread_create(&t2,NULL,(void*)comm_thread,pJunqi);
     EngineProcess(pJunqi);
 

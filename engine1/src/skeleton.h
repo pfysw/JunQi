@@ -7,6 +7,7 @@
 
 #ifndef SKELETON_H_
 #define SKELETON_H_
+#include "jtype.h"
 
 enum State1
 {
@@ -29,6 +30,10 @@ typedef struct Skeleton Skeleton;
 struct Skeleton
 {
     SklState *pCommState;
+    Junqi *pJunqi;
 };
+
+Skeleton *SkeletonOpen(Junqi *pJunqi);
+void CheckLineupInit(Skeleton *pSkl);
 
 #endif /* SKELETON_H_ */
