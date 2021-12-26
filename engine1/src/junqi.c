@@ -69,6 +69,49 @@ void InitLineup(Junqi* pJunqi, u8 *data)
     }
 }
 
+void SetChessPosProperty(Junqi* pJunqi)
+{
+    int i,j;
+    ChessLineup *pLineup;
+    BoardChess *pChess;
+    int nChess = 30;
+
+    for(j=0;j<4;j++)
+    {
+        for(i=0;i<nChess;i++)
+        {
+            pChess = &(pJunqi->aChessPos[j*nChess+i]);
+            pLineup = pChess->pLineup;
+
+            if(pLineup==NULL){
+                pChess->prop = CAMP;
+            }
+            else if(i<25)
+            {
+                if( (i/5==0||i/5==4) || ((i%5==0||i%5==4)) )
+                {
+                    pChess->prop = RAILWAY;
+                }
+            }
+            else if(i==26||i==28)
+            {
+                pChess->prop = STRONGHOLD;
+            }
+        }
+    }
+    for(i=4*nChess;i<4*nChess+8;i++)
+    {
+        pChess = &(pJunqi->aChessPos[j*nChess+i]);
+        pChess->prop = RAILWAY;
+    }
+}
+
+void InitChess(Junqi* pJunqi, u8 *data)
+{
+    InitLineup(pJunqi,data);
+    SetChessPosProperty(pJunqi);
+}
+
 mqd_t CreateMessageQueue(char *name,int len)
 {
     mqd_t qid;

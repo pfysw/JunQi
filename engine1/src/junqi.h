@@ -32,6 +32,8 @@
 enum ChessType {NONE,DARK,JUNQI,DILEI,ZHADAN,SILING,JUNZH,SHIZH,
                 LVZH,TUANZH,YINGZH,LIANZH,PAIZH,GONGB};
 
+enum PosType {POS_BESE,RAILWAY,CAMP,STRONGHOLD};
+
 typedef struct DebugFlag
 {
     u8 flagComm;
@@ -52,7 +54,7 @@ struct ChessLineup
 
 struct BoardChess
 {
-
+    enum PosType prop;
     ChessLineup *pLineup;
 };
 
@@ -68,6 +70,6 @@ struct Junqi
 
 Junqi *JunqiOpen(void);
 void EngineProcess(Junqi* pJunqi);
-void InitLineup(Junqi* pJunqi, u8 *data);
+void InitChess(Junqi* pJunqi, u8 *data);
 
 #endif /* JUNQI_H_ */

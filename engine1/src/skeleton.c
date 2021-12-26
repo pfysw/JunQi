@@ -42,8 +42,32 @@ void PrintLineup(Junqi *pJunqi)
     }
 }
 
-void CheckLineupInit(Skeleton *pSkl)
+void PrintPosProperty(Junqi *pJunqi)
+{
+    int i,j;
+    int nChess = 30;
+
+    for(j=0;j<4;j++)
+    {
+        log_a("dir %d:",j);
+        for(i=0;i<nChess;i++)
+        {
+            log_b("%d ",pJunqi->aChessPos[j*nChess+i].prop);
+            if(i%5==4){
+                log_a("");
+            }
+        }
+    }
+    log_a("nine grid");
+    for(i=120;i<128;i++)
+    {
+        log_b("%d ",pJunqi->aChessPos[i].prop);
+    }
+}
+
+void CheckChessInit(Skeleton *pSkl)
 {
     Junqi *pJunqi = pSkl->pJunqi;
-    PrintLineup(pJunqi);
+    //PrintLineup(pJunqi);
+    PrintPosProperty(pJunqi);
 }

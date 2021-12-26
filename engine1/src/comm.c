@@ -72,8 +72,8 @@ void DealRecData(Junqi* pJunqi, u8 *data, int len)
         break;
     case COMM_INIT:
         log_a("init");
-        InitLineup(pJunqi,data);
-        CheckLineupInit(pJunqi->pSkl);
+        InitChess(pJunqi,data);
+        CheckChessInit(pJunqi->pSkl);
         break;
     default:
         break;

@@ -34,6 +34,6 @@ struct Skeleton
 };
 
 Skeleton *SkeletonOpen(Junqi *pJunqi);
-void CheckLineupInit(Skeleton *pSkl);
+void CheckChessInit(Skeleton *pSkl);
 
 #endif /* SKELETON_H_ */
