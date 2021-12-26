@@ -99,10 +99,55 @@ void SetChessPosProperty(Junqi* pJunqi)
             }
         }
     }
-    for(i=4*nChess;i<4*nChess+8;i++)
+    for(i=0;i<9;i++)
     {
-        pChess = &(pJunqi->aChessPos[j*nChess+i]);
+        pChess = &(pJunqi->aChessPos[4*nChess+i]);
         pChess->prop = RAILWAY;
+    }
+}
+
+void InitBoardPoint(Junqi* pJunqi)
+{
+    int i,j;
+    BoardChess *pChess;
+    int nChess = 30;
+
+    for(j=0;j<4;j++)
+    {
+        for(i=0;i<nChess;i++)
+        {
+            pChess = &pJunqi->aChessPos[j*nChess+i];
+            switch(j)
+            {
+            case HOME:
+                pChess->point.x = 10-i%5;
+                pChess->point.y = 11+i/5;
+                break;
+            case RIGHT:
+                pChess->point.x = 5-i/5;
+                pChess->point.y = 10-i%5;
+                break;
+            case OPPS:
+                pChess->point.x = 6+i%5;
+                pChess->point.y = 5-i/5;
+                break;
+            case LEFT:
+                pChess->point.x = 11+i/5;
+                pChess->point.y = 6+i%5;
+                break;
+            default:
+                assert(0);
+                break;
+            }
+            pJunqi->apBoard[pChess->point.x][pChess->point.y] = pChess;
+        }
+    }
+    for(i=0; i<9; i++)
+    {
+        pChess = &pJunqi->aChessPos[4*nChess+i];
+        pChess->point.x = 10-(i%3)*2;
+        pChess->point.y = 6+(i/3)*2;
+        pJunqi->apBoard[pChess->point.x][pChess->point.y] = pChess;
     }
 }
 

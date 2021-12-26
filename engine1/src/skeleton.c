@@ -59,7 +59,7 @@ void PrintPosProperty(Junqi *pJunqi)
         }
     }
     log_a("nine grid");
-    for(i=120;i<128;i++)
+    for(i=120;i<129;i++)
     {
         log_b("%d ",pJunqi->aChessPos[i].prop);
     }
@@ -68,6 +68,6 @@ void PrintPosProperty(Junqi *pJunqi)
 void CheckChessInit(Skeleton *pSkl)
 {
     Junqi *pJunqi = pSkl->pJunqi;
-    //PrintLineup(pJunqi);
+    PrintLineup(pJunqi);
     PrintPosProperty(pJunqi);
 }

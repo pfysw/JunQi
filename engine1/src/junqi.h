@@ -31,8 +31,8 @@
 
 enum ChessType {NONE,DARK,JUNQI,DILEI,ZHADAN,SILING,JUNZH,SHIZH,
                 LVZH,TUANZH,YINGZH,LIANZH,PAIZH,GONGB};
-
 enum PosType {POS_BESE,RAILWAY,CAMP,STRONGHOLD};
+enum ChessDir {HOME,RIGHT,OPPS,LEFT};
 
 typedef struct DebugFlag
 {
@@ -42,6 +42,13 @@ typedef struct DebugFlag
 extern DebugFlag gDebug;
 #define log_a(format,...) printf(format"\n",## __VA_ARGS__)
 #define log_b(format,...) printf(format,## __VA_ARGS__)
+
+typedef struct BoardPoint
+{
+    int x;
+    int y;
+}BoardPoint;
+
 
 typedef struct BoardChess BoardChess;
 typedef struct ChessLineup ChessLineup;
@@ -56,13 +63,15 @@ struct BoardChess
 {
     enum PosType prop;
     ChessLineup *pLineup;
+    BoardPoint point;
 };
 
 typedef struct Junqi Junqi;
 struct Junqi
 {
-    BoardChess aChessPos[120];
+    BoardChess aChessPos[129];
     ChessLineup aLineup[4][25];
+    BoardChess *apBoard[17][17];
     struct sockaddr_in addr;
     int socket_fd;
     Skeleton *pSkl;
