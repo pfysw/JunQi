@@ -155,6 +155,7 @@ void InitChess(Junqi* pJunqi, u8 *data)
 {
     InitLineup(pJunqi,data);
     SetChessPosProperty(pJunqi);
+    InitBoardPoint(pJunqi);
 }
 
 mqd_t CreateMessageQueue(char *name,int len)

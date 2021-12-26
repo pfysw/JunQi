@@ -20,6 +20,13 @@ enum State2
     SKL_COMM
 };
 
+enum SklPrintType
+{
+    SKL_LINEUP,
+    SKL_POS_PROP,
+    SKL_POS_POINT
+};
+
 typedef struct SklState
 {
     enum State1  eState;

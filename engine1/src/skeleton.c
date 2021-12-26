@@ -17,57 +17,51 @@ Skeleton *SkeletonOpen(Junqi *pJunqi)
     return pSkeleton;
 }
 
-void PrintLineup(Junqi *pJunqi)
+void PrintBoardProp(Junqi *pJunqi,enum SklPrintType type)
 {
-    int i,j;
-    ChessLineup *pLineup;
+    int i;
     int nChess = 30;
+    ChessLineup *pLineup;
+    BoardChess *pChess;
 
-    for(j=0;j<4;j++)
+    for(i=0;i<129;i++)
     {
-        log_a("dir %d:",j);
-        for(i=0;i<nChess;i++)
-        {
-            pLineup = pJunqi->aChessPos[j*nChess+i].pLineup;
+        pChess = &pJunqi->aChessPos[i];
+        if(i%nChess==0){
+            log_a("dir %d:",i/nChess);
+        }
+        switch(type){
+        case SKL_LINEUP:
+            pLineup = pChess->pLineup;
             if(pLineup){
                 log_b("%d ",pLineup->type);
             }
             else{
                 log_b("0 ");
             }
-            if(i%5==4){
-                log_a("");
-            }
+            break;
+        case SKL_POS_PROP:
+            log_b("%d ",pChess->prop);
+            break;
+        case SKL_POS_POINT:
+            pChess = pJunqi->apBoard[pChess->point.x][pChess->point.y];
+            log_b("(%d,%d) ",pChess->point.x,pChess->point.y);
+            break;
+        default:
+            break;
+        }
+
+        if(i<120&&i%5==4){
+            log_a("");
         }
     }
-}
-
-void PrintPosProperty(Junqi *pJunqi)
-{
-    int i,j;
-    int nChess = 30;
-
-    for(j=0;j<4;j++)
-    {
-        log_a("dir %d:",j);
-        for(i=0;i<nChess;i++)
-        {
-            log_b("%d ",pJunqi->aChessPos[j*nChess+i].prop);
-            if(i%5==4){
-                log_a("");
-            }
-        }
-    }
-    log_a("nine grid");
-    for(i=120;i<129;i++)
-    {
-        log_b("%d ",pJunqi->aChessPos[i].prop);
-    }
+    log_a("");
 }
 
 void CheckChessInit(Skeleton *pSkl)
 {
     Junqi *pJunqi = pSkl->pJunqi;
-    PrintLineup(pJunqi);
-    PrintPosProperty(pJunqi);
+    PrintBoardProp(pJunqi,SKL_LINEUP);
+    PrintBoardProp(pJunqi,SKL_POS_PROP);
+    PrintBoardProp(pJunqi,SKL_POS_POINT);
 }
