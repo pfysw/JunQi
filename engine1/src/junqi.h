@@ -18,6 +18,7 @@
 #include <pthread.h>
 #include "jtype.h"
 #include <assert.h>
+#include "link.h"
 
 //#define TEST
 
@@ -72,6 +73,7 @@ struct Junqi
     BoardChess aChessPos[129];
     ChessLineup aLineup[4][25];
     BoardChess *apBoard[17][17];
+    LinkNode *apRail[18];
     struct sockaddr_in addr;
     int socket_fd;
     Skeleton *pSkl;

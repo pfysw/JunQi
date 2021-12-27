@@ -1,6 +1,6 @@
 OBJ_DIR = ../bld
 
-SRC = main.c junqi.c comm.c skeleton.c
+SRC = main.c junqi.c comm.c skeleton.c link.c
 
 OBJ = ${patsubst %.c, ${OBJ_DIR}/%.o, ${SRC}}
 

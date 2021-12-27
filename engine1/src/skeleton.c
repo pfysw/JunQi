@@ -62,6 +62,6 @@ void CheckChessInit(Skeleton *pSkl)
 {
     Junqi *pJunqi = pSkl->pJunqi;
     PrintBoardProp(pJunqi,SKL_LINEUP);
-    PrintBoardProp(pJunqi,SKL_POS_PROP);
-    PrintBoardProp(pJunqi,SKL_POS_POINT);
+//    PrintBoardProp(pJunqi,SKL_POS_PROP);
+//    PrintBoardProp(pJunqi,SKL_POS_POINT);
 }

@@ -13,15 +13,6 @@ DebugFlag gDebug = {
         .flagComm = 1
 };
 
-Junqi *JunqiOpen(void)
-{
-    Junqi *pJunqi = (Junqi*)malloc(sizeof(Junqi));
-    memset(pJunqi, 0, sizeof(Junqi));
-    pJunqi->pSkl = SkeletonOpen(pJunqi);
-
-    return pJunqi;
-}
-
 void InitLineup(Junqi* pJunqi, u8 *data)
 {
     CommHeader *pHead;
@@ -29,41 +20,29 @@ void InitLineup(Junqi* pJunqi, u8 *data)
     int i,j,k;
     int idx;
     ChessLineup *pLineup;
-    u8 aCamp[30];
+    BoardChess *pChess;
+    int nChess = 30;
 
     data = (u8*)&pHead[1];
     k=4;
-    memset(aCamp,0,30);
-
-    for(j=0; j<4; j++)
-    {
-        if( data[j]!=1 ){
-            continue;
-        }
-        idx = 0;
-        for(i=0; i<30; i++)
-        {
-            if(data[k]!=NONE){
-                pLineup = &(pJunqi->aLineup[j][idx++]);
-                pLineup->type = data[k];
-                pJunqi->aChessPos[j*30+i].pLineup = pLineup;
-            }
-            else{
-                aCamp[i] = 1;
-            }
-            k++;
-        }
-    }
     for(j=0; j<4; j++)
     {
         idx = 0;
         for(i=0; i<30; i++)
         {
-            if( !data[j] && !aCamp[i] )
-            {
+            pChess = &(pJunqi->aChessPos[j*nChess+i]);
+            if(pChess->prop!=CAMP){
                 pLineup = &(pJunqi->aLineup[j][idx++]);
-                pLineup->type = DARK;
-                pJunqi->aChessPos[j*30+i].pLineup = pLineup;
+                if(data[j]) {
+                    pLineup->type = data[k++];
+                }
+                else{
+                    pLineup->type = DARK;
+                }
+                pChess->pLineup = pLineup;
+            }
+            else if(data[j]){
+                k++;
             }
         }
     }
@@ -72,7 +51,6 @@ void InitLineup(Junqi* pJunqi, u8 *data)
 void SetChessPosProperty(Junqi* pJunqi)
 {
     int i,j;
-    ChessLineup *pLineup;
     BoardChess *pChess;
     int nChess = 30;
 
@@ -81,9 +59,8 @@ void SetChessPosProperty(Junqi* pJunqi)
         for(i=0;i<nChess;i++)
         {
             pChess = &(pJunqi->aChessPos[j*nChess+i]);
-            pLineup = pChess->pLineup;
 
-            if(pLineup==NULL){
+            if(i==6||i==8||i==12||i==16||i==18){
                 pChess->prop = CAMP;
             }
             else if(i<25)
@@ -154,8 +131,22 @@ void InitBoardPoint(Junqi* pJunqi)
 void InitChess(Junqi* pJunqi, u8 *data)
 {
     InitLineup(pJunqi,data);
+
+}
+void InitBoard(Junqi* pJunqi)
+{
     SetChessPosProperty(pJunqi);
     InitBoardPoint(pJunqi);
+}
+
+Junqi *JunqiOpen(void)
+{
+    Junqi *pJunqi = (Junqi*)malloc(sizeof(Junqi));
+    memset(pJunqi, 0, sizeof(Junqi));
+    pJunqi->pSkl = SkeletonOpen(pJunqi);
+    InitBoard(pJunqi);
+
+    return pJunqi;
 }
 
 mqd_t CreateMessageQueue(char *name,int len)
