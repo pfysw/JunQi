@@ -16,8 +16,12 @@ struct LinkNode
     LinkNode *pPre;
     void *pVal;
     u8 isHead;
+    u8 id;
 };
 
 void* Malloc2(Junqi* pJunqi,u32 size);
+LinkNode *NewLinkNode2(Junqi* pJunqi,void *pVal,int size);
+LinkNode *NewLinkHead2(Junqi* pJunqi,void *pVal,int size);
+void InsertLinkNode(Junqi* pJunqi,LinkNode *pPre,LinkNode *p);
 
 #endif /* LINK_H_ */

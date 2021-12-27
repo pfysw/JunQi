@@ -58,10 +58,29 @@ void PrintBoardProp(Junqi *pJunqi,enum SklPrintType type)
     log_a("");
 }
 
+void PrintRailwayLink(Junqi *pJunqi)
+{
+    int i;
+    LinkNode *p;
+    BoardChess *pChess;
+
+    for(i=0;i<4;i++)
+    {
+        log_a("i %d",i);
+        for(p=pJunqi->apRail[i]->pNext;!p->isHead;p=p->pNext)
+        {
+            pChess = (BoardChess *)p->pVal;
+            log_a("(%d,%d) ",pChess->point.x,pChess->point.y);
+        }
+
+    }
+}
+
 void CheckChessInit(Skeleton *pSkl)
 {
     Junqi *pJunqi = pSkl->pJunqi;
-    PrintBoardProp(pJunqi,SKL_LINEUP);
+//    PrintBoardProp(pJunqi,SKL_LINEUP);
 //    PrintBoardProp(pJunqi,SKL_POS_PROP);
 //    PrintBoardProp(pJunqi,SKL_POS_POINT);
+    PrintRailwayLink(pJunqi);
 }

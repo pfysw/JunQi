@@ -34,3 +34,11 @@ LinkNode *NewLinkHead2(Junqi* pJunqi,void *pVal,int size)
     p->isHead = 1;
     return p;
 }
+
+void InsertLinkNode(Junqi* pJunqi,LinkNode *pPre,LinkNode *p)
+{
+    p->pNext = pPre->pNext;
+    p->pPre = pPre;
+    p->pNext->pPre = p;
+    pPre->pNext = p;
+}

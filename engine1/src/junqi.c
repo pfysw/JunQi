@@ -131,12 +131,50 @@ void InitBoardPoint(Junqi* pJunqi)
 void InitChess(Junqi* pJunqi, u8 *data)
 {
     InitLineup(pJunqi,data);
-
 }
+
+void NewRailwayLink(Junqi* pJunqi)
+{
+    int i,j,k;
+    int x,y;
+    int aInc[4] = {-1,1,1,-1};
+    BoardChess *pChess;
+    BoardChess *pNext;
+    LinkNode *pHead;
+    LinkNode *pNew;
+    for(i=0;i<14;i++)
+    {
+        pJunqi->apRail[i] = NewLinkHead2(pJunqi,NULL,sizeof(LinkNode));
+        pJunqi->apRail[i]->id = i;
+    }
+    for(j=0;j<4;j++){
+        pHead = pJunqi->apRail[j];
+        pChess = &pJunqi->aChessPos[20];
+        for(k=0;k<13;k++)
+        {
+            x = pChess->point.x;
+            y = pChess->point.y;
+            if(j%2==0){
+                y += aInc[j];
+            }
+            else{
+                x += aInc[j];
+            }
+            pNext = pJunqi->apBoard[x][y];
+            if(pNext!=NULL){
+                pNew = NewLinkNode2(pJunqi,pNext,sizeof(LinkNode));
+                InsertLinkNode(pJunqi,pHead->pPre,pNew);
+                k++;
+            }
+        }
+    }
+}
+
 void InitBoard(Junqi* pJunqi)
 {
     SetChessPosProperty(pJunqi);
     InitBoardPoint(pJunqi);
+    NewRailwayLink(pJunqi);
 }
 
 Junqi *JunqiOpen(void)
