@@ -203,11 +203,64 @@ void NewRailwayLink(Junqi* pJunqi)
     }
 }
 
+void NewCurveRailway(Junqi* pJunqi)
+{
+    int j,k;
+    int x,y;
+    int aInc[4] = {-1,1,1,-1};
+    int aInc2[4] = {1,1,-1,-1};
+    BoardChess *pChess;
+    BoardChess *pNext;
+    LinkNode *pHead;
+    LinkNode *pNew;
+
+    for(j=0;j<4;j++){
+        pHead = pJunqi->apRail[14+j];
+        pChess = &pJunqi->aChessPos[(j%4)*CHESS_NUM+20];
+        pNext = pChess;
+        x = pChess->point.x;
+        y = pChess->point.y;
+        pNew = NewLinkNode2(pJunqi,pNext,sizeof(LinkNode));
+        InsertLinkNode(pJunqi,pHead->pPre,pNew);
+        for(k=0;k<9;)
+        {
+            if(j%2==0){
+                if(k<4){
+                    y += aInc[j%4];
+                }
+                else{
+                    x += aInc2[j%4];
+                }
+            }
+            else{
+                if(k<4){
+                    x += aInc[j%4];
+                }
+                else{
+                    y += aInc2[j%4];
+                }
+            }
+            if(k==4){
+                pChess = &pJunqi->aChessPos[((j+3)%4)*CHESS_NUM+4];
+                x = pChess->point.x;
+                y = pChess->point.y;
+            }
+            if(pJunqi->apBoard[x][y]!=NULL){
+                k++;
+                pNext = pJunqi->apBoard[x][y];
+                pNew = NewLinkNode2(pJunqi,pNext,sizeof(LinkNode));
+                InsertLinkNode(pJunqi,pHead->pPre,pNew);
+            }
+        }
+    }
+}
+
 void InitBoard(Junqi* pJunqi)
 {
     SetChessPosProperty(pJunqi);
     InitBoardPoint(pJunqi);
     NewRailwayLink(pJunqi);
+    NewCurveRailway(pJunqi);
 }
 
 Junqi *JunqiOpen(void)

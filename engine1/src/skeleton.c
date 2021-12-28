@@ -63,7 +63,7 @@ void PrintRailwayLink(Junqi *pJunqi)
     LinkNode *p;
     BoardChess *pChess;
 
-    for(i=0;i<14;i++)
+    for(i=0;i<18;i++)
     {
         log_a("i %d",i);
         for(p=pJunqi->apRail[i]->pNext;!p->isHead;p=p->pNext)
