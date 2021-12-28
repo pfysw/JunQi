@@ -21,16 +21,15 @@ void InitLineup(Junqi* pJunqi, u8 *data)
     int idx;
     ChessLineup *pLineup;
     BoardChess *pChess;
-    int nChess = 30;
 
     data = (u8*)&pHead[1];
     k=4;
     for(j=0; j<4; j++)
     {
         idx = 0;
-        for(i=0; i<30; i++)
+        for(i=0; i<CHESS_NUM; i++)
         {
-            pChess = &(pJunqi->aChessPos[j*nChess+i]);
+            pChess = &(pJunqi->aChessPos[j*CHESS_NUM+i]);
             if(pChess->prop!=CAMP){
                 pLineup = &(pJunqi->aLineup[j][idx++]);
                 if(data[j]) {
@@ -52,13 +51,12 @@ void SetChessPosProperty(Junqi* pJunqi)
 {
     int i,j;
     BoardChess *pChess;
-    int nChess = 30;
 
     for(j=0;j<4;j++)
     {
-        for(i=0;i<nChess;i++)
+        for(i=0;i<CHESS_NUM;i++)
         {
-            pChess = &(pJunqi->aChessPos[j*nChess+i]);
+            pChess = &(pJunqi->aChessPos[j*CHESS_NUM+i]);
 
             if(i==6||i==8||i==12||i==16||i==18){
                 pChess->prop = CAMP;
@@ -78,7 +76,7 @@ void SetChessPosProperty(Junqi* pJunqi)
     }
     for(i=0;i<9;i++)
     {
-        pChess = &(pJunqi->aChessPos[4*nChess+i]);
+        pChess = &(pJunqi->aChessPos[4*CHESS_NUM+i]);
         pChess->prop = RAILWAY;
     }
 }
@@ -87,13 +85,12 @@ void InitBoardPoint(Junqi* pJunqi)
 {
     int i,j;
     BoardChess *pChess;
-    int nChess = 30;
 
     for(j=0;j<4;j++)
     {
-        for(i=0;i<nChess;i++)
+        for(i=0;i<CHESS_NUM;i++)
         {
-            pChess = &pJunqi->aChessPos[j*nChess+i];
+            pChess = &pJunqi->aChessPos[j*CHESS_NUM+i];
             switch(j)
             {
             case HOME:
@@ -121,7 +118,7 @@ void InitBoardPoint(Junqi* pJunqi)
     }
     for(i=0; i<9; i++)
     {
-        pChess = &pJunqi->aChessPos[4*nChess+i];
+        pChess = &pJunqi->aChessPos[4*CHESS_NUM+i];
         pChess->point.x = 10-(i%3)*2;
         pChess->point.y = 6+(i/3)*2;
         pJunqi->apBoard[pChess->point.x][pChess->point.y] = pChess;
@@ -142,6 +139,7 @@ void NewRailwayLink(Junqi* pJunqi)
     BoardChess *pNext;
     LinkNode *pHead;
     LinkNode *pNew;
+
     for(i=0;i<14;i++)
     {
         pJunqi->apRail[i] = NewLinkHead2(pJunqi,NULL,sizeof(LinkNode));
@@ -149,22 +147,26 @@ void NewRailwayLink(Junqi* pJunqi)
     }
     for(j=0;j<4;j++){
         pHead = pJunqi->apRail[j];
-        pChess = &pJunqi->aChessPos[20];
-        for(k=0;k<13;k++)
+        pChess = &pJunqi->aChessPos[j*CHESS_NUM+20];
+        pNext = pChess;
+        x = pNext->point.x;
+        y = pNext->point.y;
+        for(k=0;;)
         {
-            x = pChess->point.x;
-            y = pChess->point.y;
+            pNew = NewLinkNode2(pJunqi,pNext,sizeof(LinkNode));
+            InsertLinkNode(pJunqi,pHead->pPre,pNew);
+            if(k>11){
+                break;
+            }
             if(j%2==0){
                 y += aInc[j];
             }
             else{
                 x += aInc[j];
             }
-            pNext = pJunqi->apBoard[x][y];
-            if(pNext!=NULL){
-                pNew = NewLinkNode2(pJunqi,pNext,sizeof(LinkNode));
-                InsertLinkNode(pJunqi,pHead->pPre,pNew);
+            if(pJunqi->apBoard[x][y]!=NULL){
                 k++;
+                pNext = pJunqi->apBoard[x][y];
             }
         }
     }

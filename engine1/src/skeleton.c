@@ -20,15 +20,14 @@ Skeleton *SkeletonOpen(Junqi *pJunqi)
 void PrintBoardProp(Junqi *pJunqi,enum SklPrintType type)
 {
     int i;
-    int nChess = 30;
     ChessLineup *pLineup;
     BoardChess *pChess;
 
     for(i=0;i<129;i++)
     {
         pChess = &pJunqi->aChessPos[i];
-        if(i%nChess==0){
-            log_a("dir %d:",i/nChess);
+        if(i%CHESS_NUM==0){
+            log_a("dir %d:",i/CHESS_NUM);
         }
         switch(type){
         case SKL_LINEUP:
