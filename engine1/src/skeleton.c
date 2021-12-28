@@ -57,6 +57,33 @@ void PrintBoardProp(Junqi *pJunqi,enum SklPrintType type)
     log_a("");
 }
 
+void PrintRailwayChess(Junqi *pJunqi)
+{
+    int i;
+    RailInfo *pRail;
+    BoardChess *pChess;
+    LinkNode *p;
+
+    for(i=0;i<129;i++)
+    {
+        pChess = &pJunqi->aChessPos[i];
+        if(i%CHESS_NUM==0){
+            log_a("dir %d:",i/CHESS_NUM);
+        }
+        log_a("i %d",i%30);
+        if(pChess->prop!=RAILWAY){
+            continue;
+        }
+        for(p=pChess->pRail->pNext;!p->isHead;p=p->pNext)
+        {
+            pRail = (RailInfo *)p->pVal;
+            log_a("railway id %d",pRail->pHead->id);
+            assert(pRail->pNode->pVal==pChess);
+        }
+    }
+    log_a("");
+}
+
 void PrintRailwayLink(Junqi *pJunqi)
 {
     int i;
@@ -81,5 +108,6 @@ void CheckChessInit(Skeleton *pSkl)
 //    PrintBoardProp(pJunqi,SKL_LINEUP);
 //    PrintBoardProp(pJunqi,SKL_POS_PROP);
 //    PrintBoardProp(pJunqi,SKL_POS_POINT);
-    PrintRailwayLink(pJunqi);
+//    PrintRailwayLink(pJunqi);
+    PrintRailwayChess(pJunqi);
 }

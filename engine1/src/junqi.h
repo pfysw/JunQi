@@ -66,6 +66,14 @@ struct BoardChess
     enum PosType prop;
     ChessLineup *pLineup;
     BoardPoint point;
+    LinkNode *pRail;
+};
+
+typedef struct RailInfo RailInfo;
+struct RailInfo
+{
+    LinkNode *pHead;
+    LinkNode *pNode;
 };
 
 typedef struct Junqi Junqi;
@@ -74,6 +82,8 @@ struct Junqi
     BoardChess aChessPos[129];
     ChessLineup aLineup[4][25];
     BoardChess *apBoard[17][17];
+    //0~3 long line  4~7 five line  8~11 first line
+    //12~13 middle line 14~17 curve line
     LinkNode *apRail[18];
     struct sockaddr_in addr;
     int socket_fd;
