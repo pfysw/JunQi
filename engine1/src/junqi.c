@@ -134,39 +134,70 @@ void NewRailwayLink(Junqi* pJunqi)
 {
     int i,j,k;
     int x,y;
+    int num;
     int aInc[4] = {-1,1,1,-1};
+    int aInc2[4] = {-1,-1,1,1};
     BoardChess *pChess;
     BoardChess *pNext;
     LinkNode *pHead;
     LinkNode *pNew;
 
-    for(i=0;i<14;i++)
+    for(i=0;i<18;i++)
     {
         pJunqi->apRail[i] = NewLinkHead2(pJunqi,NULL,sizeof(LinkNode));
         pJunqi->apRail[i]->id = i;
     }
-    for(j=0;j<4;j++){
+    for(j=0;j<14;j++){
         pHead = pJunqi->apRail[j];
-        pChess = &pJunqi->aChessPos[j*CHESS_NUM+20];
+        if(j<8){
+            pChess = &pJunqi->aChessPos[(j%4)*CHESS_NUM+20];
+        }
+        else if(j<12){
+            pChess = &pJunqi->aChessPos[(j%4)*CHESS_NUM];
+        }
+        else if(j<14){
+            pChess = &pJunqi->aChessPos[(j%4)*CHESS_NUM+2];
+        }
         pNext = pChess;
         x = pNext->point.x;
         y = pNext->point.y;
-        for(k=0;;)
+        pNew = NewLinkNode2(pJunqi,pNext,sizeof(LinkNode));
+        InsertLinkNode(pJunqi,pHead->pPre,pNew);
+        if(j<4){
+            num = 12;
+        }
+        else if(j<14){
+            num = 4;
+        }
+        for(k=0;k<num;)
         {
-            pNew = NewLinkNode2(pJunqi,pNext,sizeof(LinkNode));
-            InsertLinkNode(pJunqi,pHead->pPre,pNew);
-            if(k>11){
-                break;
-            }
             if(j%2==0){
-                y += aInc[j];
+                if(j<4){
+                    y += aInc[j];
+                }
+                else if(j<12){
+                    x += aInc2[j%4];
+                }
+                else if(j<14){
+                    y += aInc[j%4];
+                }
             }
             else{
-                x += aInc[j];
+                if(j<4){
+                    x += aInc[j];
+                }
+                else if(j<12){
+                    y += aInc2[j%4];
+                }
+                else if(j<14){
+                    x += aInc[j%4];
+                }
             }
             if(pJunqi->apBoard[x][y]!=NULL){
                 k++;
                 pNext = pJunqi->apBoard[x][y];
+                pNew = NewLinkNode2(pJunqi,pNext,sizeof(LinkNode));
+                InsertLinkNode(pJunqi,pHead->pPre,pNew);
             }
         }
     }
