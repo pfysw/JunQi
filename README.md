@@ -1,4 +1,6 @@
-engine1为重写的代码
+engine1为重写的代码 <br>
+qq军棋人工智能交流群:806149422 <br>
+
 
 # 四国军棋
 基于GTK+ 3界面库，使用eclipse cdt开发环境，win10
