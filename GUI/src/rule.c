@@ -6,6 +6,7 @@
  */
 #include "junqi.h"
 #include "board.h"
+#include "rule.h"
 
 int malloc_cnt = 0;
 int free_cnt = 0;
@@ -429,6 +430,192 @@ int IsEnableMove(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, u8 isShowPat
 	return rc;
 }
 
+
+void SearchRailPath(
+        Junqi* pJunqi,
+        BoardGraph *pSrc,
+        BoardGraph *pDst,
+        int color)
+{
+    AdjNode *p;
+    BoardGraph *pVertex;
+
+
+    pDst->passCnt++;
+
+    ShowCircleTest(pJunqi,pDst->pAdjList->pChess,color,1);
+    for(p=pDst->pAdjList->pNext; p!=NULL; p=p->pNext)
+    {
+        pVertex = &pJunqi->aBoard[p->pChess->point.x][p->pChess->point.y];
+
+        if( pVertex->passCnt!=0 )
+        {
+            continue;
+        }
+        else if( p->pChess->type!=NONE )
+        {
+            pVertex->passCnt++;
+            continue;
+        }
+        else
+        {
+            SearchRailPath(pJunqi, pSrc, pVertex,color);
+        }
+    }
+}
+
+GtkWidget *ShowDebugArrow(Junqi *pJunqi,BoardChess *pSrc, BoardChess *pDst)
+{
+    int aCoor[2][2];
+    int x,y;
+    GtkWidget *pArrow;
+
+    GetChessCoor(pSrc,&aCoor[0][0],&aCoor[0][1]);
+    GetChessCoor(pDst,&aCoor[1][0],&aCoor[1][1]);
+    x = aCoor[1][0];
+    y = aCoor[1][1];
+    if(pSrc->point.x<pDst->point.x){
+        x += 20;
+    }
+    if(pSrc->point.y<pDst->point.y){
+        y += 10;
+    }
+    else if(pSrc->point.y>pDst->point.y){
+        y += 20;
+    }
+//    x = aCoor[1][0] + (aCoor[1][0]>aCoor[0][0]?-10:10);
+//    y = aCoor[1][1] + (aCoor[1][1]>aCoor[0][1]?-10:10);
+    pArrow = GetArrowImage(pJunqi, pSrc, pDst);
+    g_object_ref_sink (pArrow);
+    gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pArrow, x, y);
+    gtk_widget_show(pArrow);
+
+    return pArrow;
+}
+
+void ShowDebugPath(Junqi *pJunqi,PathDebug *pInfo)
+{
+    int i = 0;
+    FormInfo *pForm = pJunqi->pForm;
+    BoardChess *pSrc;
+    BoardChess *pDst;
+
+    for(i=0;i<pForm->nLabel;i++){
+        gtk_widget_destroy(pForm->pathLabel[i]);
+        g_object_unref (pForm->pathLabel[i]);
+    }
+    pForm->nLabel = 0;
+    HideAllPathLabel(pJunqi);
+    for(i=0; i<129; i++){
+        ShowPathInfo(pJunqi,pInfo,i);
+    }
+
+    for(i=0;i<pForm->nArrow;i++){
+        gtk_widget_destroy(pForm->apArrow[i]);
+        g_object_unref (pForm->apArrow[i]);
+    }
+    log_b("nPair %d",pInfo->nPair);
+    pForm->nArrow = pInfo->nPair;
+    for(i=0;i<pForm->nArrow;i++){
+        pSrc = pJunqi->apChessPos[pInfo->aDir[i].src];
+        pDst = pJunqi->apChessPos[pInfo->aDir[i].dst];
+        pForm->apArrow[i] = ShowDebugArrow(pJunqi,pSrc,pDst);
+    }
+
+}
+
+void GongbinPathHide(Junqi *pJunqi){
+    int i,j;
+    FormInfo *pForm = pJunqi->pForm;
+
+    for(i=0;i<3;i++){
+        for(j=0;j<129;j++){
+            gtk_widget_hide(pJunqi->cirleFlag[i][j]);
+        }
+    }
+    for(i=0;i<pForm->nArrow;i++){
+        gtk_widget_destroy(pForm->apArrow[i]);
+        g_object_unref (pForm->apArrow[i]);
+    }
+    pForm->nArrow = 0;
+    for(i=0;i<pForm->nLabel;i++){
+        gtk_widget_destroy(pForm->pathLabel[i]);
+        g_object_unref (pForm->pathLabel[i]);
+    }
+    pForm->nLabel = 0;
+}
+
+void HideAllPathLabel(Junqi *pJunqi){
+    int i;
+    for(i=0;i<70;i++){
+        gtk_widget_hide(pJunqi->pathLabel[i]);
+    }
+}
+
+//void ShowPathLabel(Junqi *pJunqi,int idx,int x,int y)
+//{
+//    gtk_widget_show(pJunqi->pathLabel[idx]);
+//    gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
+//            pJunqi->pathLabel[idx],x,y);
+//}
+
+void ShowPathLabel(Junqi *pJunqi,int num,int x,int y)
+{
+    FormInfo *pForm = pJunqi->pForm;
+    int k = pForm->nLabel;
+    char label_str[100];
+    char zNum[10];
+
+    pForm->pathLabel[k] = gtk_label_new(NULL);
+    g_object_ref_sink (pForm->pathLabel[k]);
+    sprintf(zNum,"%d",num);
+    SetLabelStr(label_str,zNum,"0000EE",18);
+    gtk_label_set_markup(GTK_LABEL(pForm->pathLabel[k]),label_str);
+    gtk_widget_show(pForm->pathLabel[k]);
+    gtk_fixed_put(GTK_FIXED(pJunqi->fixed),
+            pForm->pathLabel[k],x,y);
+    pForm->nLabel++;
+}
+
+
+
+void GongbinPathTest(Junqi *pJunqi,BoardChess *pSrc,BoardChess *pDst)
+{
+    BoardGraph *pVertex;
+    BoardGraph *pAdj;
+    AdjNode *p;
+    BoardChess *pChess;
+    static int k = 0;
+
+    ClearPassCnt(pJunqi);
+    HideAllPathLabel(pJunqi);
+    if(pDst->isRailway){
+        pChess = pDst;
+        if(pDst->type!=NONE){
+            ShowCircleTest(pJunqi,pDst,0,0);
+        }
+        else{
+            ShowCircleTest(pJunqi,pDst,k%3,1);
+        }
+    }
+    else if(pSrc->isRailway){
+        pChess = pSrc;
+        ShowCircleTest(pJunqi,pSrc,k%3,1);
+        //return;
+    }
+    else{
+        return;
+    }
+
+    pVertex = &pJunqi->aBoard[pChess->point.x][pChess->point.y];
+    for(p=pVertex->pAdjList->pNext; p!=NULL; p=p->pNext){
+        pAdj = &pJunqi->aBoard[p->pChess->point.x][p->pChess->point.y];
+        if(!pAdj->passCnt && pAdj->pAdjList->pChess->type==NONE){
+            SearchRailPath(pJunqi, pAdj, pAdj,(k++)%3 );
+        }
+    }
+}
+
 int CompareChess(BoardChess *pSrc, BoardChess *pDst)
 {
 	enum CompareType result;
@@ -492,8 +679,15 @@ void ChessTurn(Junqi *pJunqi)
 	}
 
 	pJunqi->bSelect = 0;
+#if (PATH_DEBUG!=1)
 	gtk_widget_hide(pJunqi->whiteRectangle[0]);
 	gtk_widget_hide(pJunqi->whiteRectangle[1]);
+#endif
+    if(pJunqi->aTestFlag[0]&&!pJunqi->bStart){
+       // sleep(1);
+        g_idle_add((GSourceFunc)PlayNextMatch, pJunqi);
+        //PlayNextMatch(pJunqi);
+    }
 }
 
 void IncJumpCnt(Junqi *pJunqi, int iDir)
@@ -547,9 +741,21 @@ int IfHasMove(Junqi* pJunqi, BoardChess *pSrc)
 	return rc;
 }
 
+void SendDeadEvent(Junqi *pJunqi, int iDir)
+{
+    SendSoundEvent(pJunqi,DEAD);
+    DestroyAllChess(pJunqi, iDir);
+    ClearChessFlag(pJunqi,iDir);
+    HideJumpButton(iDir);
+    pJunqi->addr = pJunqi->addr_tmp[0];
+    SendEvent(pJunqi, iDir, SURRENDER_EVENT);
+    pJunqi->addr = pJunqi->addr_tmp[1];
+    SendEvent(pJunqi, iDir, SURRENDER_EVENT);
+}
+
 int CheckIfDead(Junqi *pJunqi, int iDir)
 {
-	int rc = 1;
+	int rc = 2;
 	int i;
 	ChessLineup *pLineup;
 
@@ -558,6 +764,7 @@ int CheckIfDead(Junqi *pJunqi, int iDir)
 		return 1;
 	}
 
+	rc = 2;
 	for(i=0; i<30; i++)
 	{
 		pLineup = &pJunqi->Lineup[iDir][i];
@@ -570,18 +777,6 @@ int CheckIfDead(Junqi *pJunqi, int iDir)
 				break;
 			}
 		}
-	}
-
-	if( rc )
-	{
-		SendSoundEvent(pJunqi,DEAD);
-		DestroyAllChess(pJunqi, iDir);
-		ClearChessFlag(pJunqi,iDir);
-		HideJumpButton(iDir);
-		pJunqi->addr = pJunqi->addr_tmp[0];
-		SendEvent(pJunqi, iDir, SURRENDER_EVENT);
-		pJunqi->addr = pJunqi->addr_tmp[1];
-		SendEvent(pJunqi, iDir, SURRENDER_EVENT);
 	}
 
 	return rc;

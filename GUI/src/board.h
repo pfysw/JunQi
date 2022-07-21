@@ -36,7 +36,7 @@
 #define RECTANGLE_RED 1
 
 
-GtkWidget *GetSelectImage(int isVertical, int color);
+GtkWidget *GetSelectImage(int isVertical, char *color, char *type);
 GdkPixbuf* get_from_pixbuf_position(GdkPixbuf* pixbuf,
 								gint src_x,
 								gint src_y,
@@ -48,4 +48,7 @@ void HideJumpButton(int iDir);
 void ShowDialogMessage(Junqi *pJunqi, char *str, int num);
 void NewMenu(Junqi *pJunqi, u8 isComm);
 void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data);
+void SetLabelStr(char *label_str,char *text,char *color,int font);
+void ShowLabel(GtkWidget *pLabel,char *text,char *color,int font);
+
 #endif /* BOARD_H_ */

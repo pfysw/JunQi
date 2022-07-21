@@ -67,7 +67,7 @@ gboolean dialog_event(gpointer data)
 		gtk_message_dialog_format_secondary_text (GTK_MESSAGE_DIALOG (dialog),
 												  "%d", pArg->num);
 	//2秒后如果还没关闭对话框，则自动关闭对话框
-	timer_id = g_timeout_add(1000, (GSourceFunc)close_dialog, dialog);
+	timer_id = g_timeout_add(2000, (GSourceFunc)close_dialog, dialog);
 	response_id = gtk_dialog_run (GTK_DIALOG (dialog));
 	if(response_id != GTK_RESPONSE_OK)
 	{
@@ -155,12 +155,15 @@ void CreaOpenDialog(Junqi *pJunqi)
 
 void NewMenu(Junqi *pJunqi, u8 isComm)
 {
+    pJunqi->eState = 0;
     pJunqi->bStart = 0;
     pJunqi->bReplay = 0;
     pJunqi->bStop = 0;
     pJunqi->bAnalyse = 0;
     pJunqi->nNoEat = 0;
     pJunqi->eTurn = pJunqi->eFirstTurn;
+    GongbinPathHide(pJunqi);
+    HideAllPathLabel(pJunqi);
     ReSetChessBoard(pJunqi);
     DestroyChessFlag(pJunqi);
     ResetBoardButton(pJunqi);
@@ -171,6 +174,7 @@ void NewMenu(Junqi *pJunqi, u8 isComm)
     {
         SendHeader(pJunqi, 0, COMM_READY);
         SendHeader(pJunqi, 1, COMM_READY);
+        SendProxy(pJunqi);
     }
     gtk_window_set_title(GTK_WINDOW(pJunqi->window), "四国军棋");
     log_a("malloc %d free %d",malloc_cnt,free_cnt);
@@ -182,12 +186,15 @@ static void event_handle(GtkWidget *item,gpointer data)
 {
 	char *event = (char*)data;
 	Junqi *pJunqi = gJunqi;
+
 	if( event==NULL )
 	{
 		return;
 	}
 	if( strcmp(event,"new" )==0 )
 	{
+	    pJunqi->aTestFlag[0] = 0;
+	    gtk_widget_hide(pJunqi->apLabel[0]);
 	    NewMenu(pJunqi,1);
 	}
 	else if( strcmp(event,"save" )==0 )
@@ -233,6 +240,17 @@ static void event_handle(GtkWidget *item,gpointer data)
 //		SendReplyToEngine(pJunqi);
 //	#endif
 	}
+	else if(strcmp(event,"test" )==0)
+	{
+	    if(!pJunqi->bStart){
+	        SetTestLineup(pJunqi);
+	        SendVerifyMsg(pJunqi);
+	    }
+	}
+    else if(strcmp(event,"sound" )==0)
+    {
+        pJunqi->bSound = ~pJunqi->bSound;
+    }
 }
 
 GtkWidget *SetMenuItem(GtkWidget *menu, char *zLabel, void *call_back, char *arg)
@@ -241,6 +259,7 @@ GtkWidget *SetMenuItem(GtkWidget *menu, char *zLabel, void *call_back, char *arg
 	menuitem=gtk_menu_item_new_with_label(zLabel);
 	gtk_menu_shell_append (GTK_MENU_SHELL (menu), menuitem);
 	g_signal_connect(GTK_MENU_ITEM(menuitem),"activate",G_CALLBACK(call_back),arg);
+	log_b("%s arg %p val %d",zLabel,arg,*(u8*)arg);
 	return menuitem;
 }
 
@@ -294,6 +313,13 @@ static void set_first_turn(GtkWidget *item,gpointer data)
 	pJunqi->eFirstTurn = iDir;
 }
 
+static void set_dark_dir(GtkWidget *item,gpointer data)
+{
+    Junqi *pJunqi = gJunqi;
+    pJunqi->eDark = *((u8*)data);
+    log_b("eDark %p:%d",data,pJunqi->eDark);
+}
+
 void CreatSaveLineupMenu(GtkWidget *menu)
 {
 	GtkWidget *menuitem,*save_menu;
@@ -318,6 +344,20 @@ void CreatFirstTurnMenu(GtkWidget *menu)
 	SetMenuItem(sub_menu, "绿色", set_first_turn, "green");
 	SetMenuItem(sub_menu, "蓝色", set_first_turn, "blue");
 	SetMenuItem(sub_menu, "紫色", set_first_turn, "purple");
+}
+
+void CreatDarkSelect(GtkWidget *menu)
+{
+    GtkWidget *menuitem,*sub_menu;
+    static u8 aSelect[4] = {0,1,2,3};
+    menuitem = gtk_menu_item_new_with_label("关棋");
+    gtk_menu_shell_append (GTK_MENU_SHELL (menu), menuitem);
+    sub_menu = gtk_menu_new();
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(menuitem),sub_menu);
+    SetMenuItem(sub_menu, "默认", set_dark_dir, (gpointer)&aSelect[0]);
+    SetMenuItem(sub_menu, "橙绿", set_dark_dir, (gpointer)&aSelect[1]);
+    SetMenuItem(sub_menu, "蓝紫", set_dark_dir, (gpointer)&aSelect[2]);
+    SetMenuItem(sub_menu, "全明", set_dark_dir, (gpointer)&aSelect[3]);
 }
 
 /*
@@ -351,7 +391,10 @@ void set_menu(GtkWidget *vbox)
 	SetMenuItem(menu, "暂停", event_handle, "stop");
 	SetMenuItem(menu, "继续", event_handle, "continue");
 	CreatFirstTurnMenu(menu);
+	CreatDarkSelect(menu);
 	SetMenuItem(menu, "分析", event_handle, "analyse");
+	//SetMenuItem(menu, "过关厕所", event_handle, "test");
+	SetMenuItem(menu, "声音", event_handle, "sound");
 }
 
 /*
@@ -535,9 +578,8 @@ static void  surrender_cb(GtkWidget *button , gpointer data)
 		DestroyAllChess(pJunqi, iDir);
 		ClearChessFlag(pJunqi,iDir);
 		AddEventToReplay(pJunqi, SURRENDER_EVENT, iDir);
-		ChessTurn(pJunqi);
-
 		HideJumpButton(iDir);
+        ChessTurn(pJunqi);
 	}
 
 	gtk_widget_destroy (dialog);
@@ -647,8 +689,9 @@ void SetButton(GtkWidget *window, Junqi *pJunqi)
  * 画一个矩形方框，用来选中棋子
  * isVertical：表示横竖
  * color：表示是白色还是红色
+ * type:0,矩形  1：圆
  */
-GtkWidget *GetSelectImage(int isVertical, int color)
+GtkWidget *GetSelectImage(int isVertical, char *color, char *type)
 {
 	cairo_t *cr;
 	cairo_surface_t *surface = NULL;
@@ -656,19 +699,31 @@ GtkWidget *GetSelectImage(int isVertical, int color)
 	GtkWidget *image;
 	//新建一块画布，大小随意
 	surface = cairo_image_surface_create ( CAIRO_FORMAT_ARGB32, 800, 900) ;
+
 	cr = cairo_create (surface);
 
     cairo_set_line_width (cr, 4);
-    if(color)
+    if(strcmp(color,"red")==0)
     {
         //红色方框
     	cairo_set_source_rgb (cr, 255, 0, 0);
     }
-    else
+    else if(strcmp(color,"white")==0)
     {
     	cairo_set_source_rgb (cr, 180, 238, 180);
     }
-    cairo_rectangle (cr, 4, 4, 36, 27);
+    else{
+        cairo_set_source_rgb (cr, 0,128,0);
+    }
+
+    if(strcmp(type,"rectangle")==0)
+    {
+        cairo_rectangle (cr, 4, 4, 36, 27);
+    }
+    else if(strcmp(type,"circle")==0){
+        cairo_arc (cr, 22, 19, 15,  0, 2 * G_PI);
+        cairo_fill (cr);
+    }
 
     cairo_stroke(cr);
     cairo_set_source_surface (cr, surface, 0, 0);
@@ -705,12 +760,21 @@ static void send_go(GtkWidget *button, GdkEventButton *event, gpointer data)
 void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data)
 {
 	Junqi *pJunqi = (Junqi *)data;
+	printf("begin state %d\n",pJunqi->eState);
+	if(pJunqi->eState!=2){
+	    ShowDialogMessage(pJunqi, "未初始化 请重新新建！", 0);
+	    return;
+	}
 	//隐藏调入布局按钮
 	for(int i=0; i<4; i++)
 	{
 		gtk_widget_hide(gBoard.lineup_button[i]);
 #if NOT_DEBUG1
+#if HOME_DARK
+		if(i%2==1)
+#else
 		if(i%2==0)
+#endif
 #endif
 		{
 			gtk_widget_show(gBoard.surrender_button[i]);
@@ -738,7 +802,8 @@ void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data)
 	pJunqi->addr = pJunqi->addr_tmp[1];
 	SendHeader(pJunqi, pJunqi->eFirstTurn, COMM_START);
 #endif
-
+	//ShowDialogMessage(pJunqi, "开始", 100);
+	printf("begin\n");
 }
 
 
@@ -758,9 +823,16 @@ void ShowTime( Junqi *pJunqi, int bClear )
 	tick--;
 	if( tick==0 )
 	{
-		SendEvent(pJunqi, pJunqi->eTurn, JUMP_EVENT);
+
+        pJunqi->addr = pJunqi->addr_tmp[0];
+        IncJumpCnt(pJunqi, pJunqi->eTurn);
+        SendEvent(pJunqi, pJunqi->eTurn, JUMP_EVENT);
+#ifndef NOT_DEBUG2
+        pJunqi->addr = pJunqi->addr_tmp[1];
+        SendEvent(pJunqi, pJunqi->eTurn, JUMP_EVENT);
+#endif
+		//SendEvent(pJunqi, pJunqi->eTurn, JUMP_EVENT);
 		AddEventToReplay(pJunqi, JUMP_EVENT, pJunqi->eTurn);
-		IncJumpCnt(pJunqi, pJunqi->eTurn);
 		ChessTurn(pJunqi);
 		now_dir = pJunqi->eTurn;
 		tick = 30;
@@ -810,7 +882,7 @@ gboolean time_event(gpointer data)
     if( pJunqi->bStart && !pJunqi->bStop )
     {
     	//复盘时不要显示时间
-    	if( !pJunqi->bReplay )
+    	if( !pJunqi->bReplay && !pJunqi->bAnalyse )
     		ShowTime(pJunqi, 0);
     }
     if( !pJunqi->bStart )
@@ -890,6 +962,9 @@ void *sound_thread(void *arg)
 
 void SendSoundEvent(Junqi *pJunqi, enum CompareType type)
 {
+    if(!pJunqi->bSound){
+        return;
+    }
 	if( !pJunqi->bReplay )
 	{
 		pJunqi->sound_type = type;
@@ -973,6 +1048,17 @@ void SetTimeStr(char *label_str, int time)
 	memcpy(label_str+szStr,"</span>",8);
 }
 
+void SetLabelStr(char *label_str,char *text,char *color,int font)
+{
+    char str[100] = "<span foreground=\"#%s\" font='%d'>";
+    int szStr;
+    //memcpy(label_str,str,strlen(str));
+    sprintf(label_str,str,color,font);
+    sprintf(label_str+strlen(label_str),"%s",text);
+    szStr = strlen(label_str);
+    memcpy(label_str+szStr,"</span>",8);
+}
+
 void CreatStepSlider(Junqi *pJunqi)
 {
 	GtkWidget *fixed;
@@ -1025,6 +1111,21 @@ void CreatStepSlider(Junqi *pJunqi)
 	return ;
 }
 
+void ShowLabel(GtkWidget *pLabel,char *text,char *color,int font)
+{
+    char label_str[100];
+    SetLabelStr(label_str,text,color,font);
+    gtk_label_set_markup(GTK_LABEL(pLabel),label_str);
+    gtk_widget_show(pLabel);
+}
+
+void NewLabelObj(Junqi *pJunqi){
+    for(int i=0;i<10;i++){
+        pJunqi->apLabel[i] =  gtk_label_new(NULL);
+    }
+    gtk_fixed_put(GTK_FIXED(pJunqi->fixed),pJunqi->apLabel[0],100,90);
+    gtk_fixed_put(GTK_FIXED(pJunqi->fixed),pJunqi->apLabel[1],100,120);
+}
 void OpenBoard(GtkWidget *window)
 {
 	GtkWidget* draw_area = gtk_drawing_area_new();
@@ -1048,6 +1149,7 @@ void OpenBoard(GtkWidget *window)
     GtkWidget *fixed = gtk_fixed_new();
     pJunqi->fixed = fixed;
     gtk_container_add(GTK_CONTAINER(event_box),fixed);
+
     gtk_widget_set_size_request(draw_area, 733,688);
     gtk_fixed_put(GTK_FIXED(fixed), draw_area, 0, 0);
     background = gdk_pixbuf_new_from_file("./res/1024board.bmp", NULL);
@@ -1064,6 +1166,8 @@ void OpenBoard(GtkWidget *window)
     gtk_widget_show_all(window);
 
     pJunqi->pTimeLabel = gtk_label_new(NULL);
+    NewLabelObj(pJunqi);
+
     CreatBeginButton(pJunqi);
     SetButton(window,pJunqi);
 #if NOT_DEBUG1

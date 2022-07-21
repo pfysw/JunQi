@@ -1,10 +1,11 @@
-#include <fcntl.h>
+
 #include <unistd.h>
 #include <stdlib.h>
 #include "junqi.h"
 #include "board.h"
 #include "rule.h"
 #include "pthread.h"
+#include <fcntl.h>
 
 void select_flag_event(GtkWidget *widget, GdkEventButton *event, gpointer data);
 
@@ -224,15 +225,35 @@ void SetChess(Junqi *pJunqi, enum ChessDir dir)
 		pJunqi->Lineup[dir][i].iDir = dir;
 		SetBoardCamp(pJunqi, dir, i);
 		SetBoardRailway(pJunqi, dir, i);
-
+		pJunqi->apChessPos[dir*30+i] = &pJunqi->ChessPos[dir][i];
 		if(iType!=NONE)
 		{
-#if NOT_DEBUG1
-			if( (dir==RIGHT||dir==LEFT) && !pJunqi->bReplay && !pJunqi->bAnalyse )
-			{
-				iType = DARK;
-			}
-#endif
+		    if(pJunqi->eDark){
+		        if(pJunqi->eDark==1){
+		            if((dir==HOME||dir==OPPS))
+		            {
+		                iType = DARK;
+		            }
+		        }
+		        else if(pJunqi->eDark==2){
+	                if(dir==RIGHT||dir==LEFT)
+                    {
+                        iType = DARK;
+                    }
+		        }
+		    }
+		    else{
+    #if NOT_DEBUG1
+    #if HOME_DARK
+                if( (dir==HOME||dir==OPPS) && !pJunqi->bReplay && !pJunqi->bAnalyse )
+    #else
+                if( (dir==RIGHT||dir==LEFT) && !pJunqi->bReplay && !pJunqi->bAnalyse )
+    #endif
+                {
+                    iType = DARK;
+                }
+    #endif
+		    }
 			SetChessImageType(pJunqi, dir, i, iType);
 			for(int j=1; j<4; j++)
 			{
@@ -368,6 +389,84 @@ void ShowRectangle(Junqi *pJunqi, BoardChess *pChess, int color)
 			                 image,
 		                     x,y);
 	gtk_widget_show(image);
+}
+
+void GetChessCoor(BoardChess *pChess,int *x ,int *y)
+{
+    if(pChess->iDir&1)
+    {
+        *x = pChess->xPos-8;
+        *y = pChess->yPos-4;
+    }
+    else
+    {
+        *x = pChess->xPos-4;
+        *y = pChess->yPos-4;
+    }
+}
+
+void ShowCircleTest(Junqi *pJunqi, BoardChess *pChess, int color,int isShow)
+{
+    GtkWidget *image;
+    int index = 0;
+    int x,y;
+
+    GetChessCoor(pChess,&x,&y);
+    if(pChess->isNineGrid){
+        index = 120+pChess->index;
+    }
+    else{
+        index = pChess->iDir*30+pChess->index;
+    }
+    image = pJunqi->cirleFlag[color][index];
+    gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
+                             image,
+                             x,y);
+
+    for(int i=0;i<3;i++)
+    {
+        gtk_widget_hide(pJunqi->cirleFlag[i][index]);
+    }
+    if(isShow){
+        gtk_widget_show(image);
+    }
+    ShowPathLabel(pJunqi,1,x+6,y+1);
+}
+
+void ShowPathInfo(Junqi *pJunqi, PathDebug *pInfo, int idx)
+{
+    GtkWidget *image;
+    int index = 0;
+    int x,y;
+    BoardChess *pChess;
+    int color;
+    int num;
+
+    color = pInfo->aChess[idx].color;
+    num = pInfo->aChess[idx].num;
+    pChess = pJunqi->apChessPos[idx];
+    GetChessCoor(pChess,&x,&y);
+    if(pChess->isNineGrid){
+        index = 120+pChess->index;
+    }
+    else{
+        index = pChess->iDir*30+pChess->index;
+    }
+    image = pJunqi->cirleFlag[color%3][index];
+    gtk_fixed_move(GTK_FIXED(pJunqi->fixed),
+                             image,
+                             x,y);
+
+    for(int i=0;i<3;i++)
+    {
+        gtk_widget_hide(pJunqi->cirleFlag[i][index]);
+    }
+    if(color){
+        gtk_widget_show(image);
+    }
+    if(num){
+        ShowPathLabel(pJunqi,num,x+6,y+1);
+    }
 }
 
 void MoveFlag(Junqi *pJunqi, BoardChess *pChess, int isInit)
@@ -527,11 +626,40 @@ int assertAllLineup(Junqi *pJunqi)
 	return rc;
 }
 
+void SetReplayBoard(Junqi *pJunqi,char *zName,u8 *aBuf)
+{
+    gtk_window_set_title(GTK_WINDOW(pJunqi->window), zName);
+    pJunqi->bReplay = 1;
+    memcpy(pJunqi->aReplay, aBuf, PAGE_SIZE);
+    LoadReplayLineup(pJunqi);
+    ReSetChessBoard(pJunqi);
+    ShowReplaySlider(pJunqi);
+    memset(pJunqi->aAnalyseReplay,0,PAGE_SIZE);
+    pJunqi->iReOfst = MOVE_OFFSET;
+    int max_step = *(int *)(&pJunqi->aReplay[4]);
+    gtk_adjustment_set_upper(pJunqi->slider_adj, max_step);
+    gtk_adjustment_set_value(pJunqi->slider_adj, 0);
+    pJunqi->bStart = 1;
+    pJunqi->bStop = 0;
+    pJunqi->iRpStep = 0;
+    pJunqi->bResetFlag = 0;
+}
+
+void SaveReplayByName(Junqi *pJunqi,char *zName)
+{
+    int fd;
+    int iTolalStep;
+    fd = open(zName, O_RDWR|O_CREAT, 0600);
+    assert( pJunqi->iReOfst>=MOVE_OFFSET );
+    iTolalStep = (pJunqi->iReOfst-MOVE_OFFSET)/4;
+    SetReplayData(pJunqi, (u8*)&iTolalStep, 4, 4);
+    OsWrite(fd, pJunqi->aReplay, pJunqi->iReOfst, 0);
+}
+
 void AutoTest(Junqi *pJunqi)
 {
     char zName[10];
     int fd;
-    int iTolalStep;
     char aName[10] = "test";
     char aFirst[10] = "_";
     u8 aBuf[PAGE_SIZE];
@@ -568,12 +696,8 @@ void AutoTest(Junqi *pJunqi)
     zName[iOfst] = '0'+pJunqi->eFirstTurn;
     iOfst++;
     log_b("name %s",zName);
-    fd = open(zName, O_RDWR|O_CREAT, 0600);
-    assert( pJunqi->iReOfst>=MOVE_OFFSET );
-    iTolalStep = (pJunqi->iReOfst-MOVE_OFFSET)/4;
-    SetReplayData(pJunqi, (u8*)&iTolalStep, 4, 4);
+    SaveReplayByName(pJunqi,zName);
     log_b("cnt %d",pJunqi->bAutoTestCnt);
-    OsWrite(fd, pJunqi->aReplay, pJunqi->iReOfst, 0);
     pJunqi->bAutoTestCnt++;
 
     NewMenu(pJunqi,0);
@@ -591,27 +715,62 @@ void AutoTest(Junqi *pJunqi)
     OsRead(fd, aBuf, PAGE_SIZE, 0);
     if( memcmp(aBuf, aMagic, 4)==0 )
     {
-        gtk_window_set_title(GTK_WINDOW(pJunqi->window), zName);
-        pJunqi->bReplay = 1;
-        memcpy(pJunqi->aReplay, aBuf, PAGE_SIZE);
-        LoadReplayLineup(pJunqi);
-        ReSetChessBoard(pJunqi);
-        ShowReplaySlider(pJunqi);
-        memset(pJunqi->aAnalyseReplay,0,PAGE_SIZE);
-        pJunqi->iReOfst = MOVE_OFFSET;
-        int max_step = *(int *)(&pJunqi->aReplay[4]);
-        gtk_adjustment_set_upper(pJunqi->slider_adj, max_step);
-        gtk_adjustment_set_value(pJunqi->slider_adj, 0);
-        pJunqi->bStart = 1;
-        pJunqi->bStop = 0;
-        pJunqi->iRpStep = 0;
-        pJunqi->bResetFlag = 0;
+        SetReplayBoard(pJunqi,zName,aBuf);
     }
 
     NewMenu(pJunqi,1);
     pJunqi->bAutoTest = 1;
     return;
 }
+
+gboolean TestButton(Junqi *pJunqi)
+{
+    begin_button(pJunqi->begin_button,NULL,pJunqi);
+    pJunqi->aTestFlag[0]++;
+    return 0;
+}
+
+gboolean PlayNextMatch(Junqi *pJunqi)
+{
+    char zName[10];
+    char buf[100];
+    int result;
+
+    sleep(2);
+    printf("open %d\n",open_num);
+    if(pJunqi->aInfo[LEFT].bDead&&pJunqi->aInfo[RIGHT].bDead)
+    //if(1)
+    {
+        sprintf(zName,"win %d",pJunqi->aTestFlag[0]);
+        SaveReplayByName(pJunqi,zName);
+        sleep(1);
+        sprintf(buf,"测试中 %d",pJunqi->aTestFlag[0]);
+        ShowLabel(pJunqi->apLabel[0],buf,"FF34B3",22);
+        NewMenu(pJunqi,1);
+        if(pJunqi->aTestFlag[0]<2){
+//            sleep(5);
+//            begin_button(pJunqi->begin_button,NULL,pJunqi);
+//            pJunqi->aTestFlag[0]++;
+            g_timeout_add(3000,(GSourceFunc)TestButton, pJunqi);
+        }
+        else{
+            result = CalDecNum();
+            printf("result %03d\n",result);
+            sprintf(buf,"成功 %d",result);
+            ShowLabel(pJunqi->apLabel[1],buf,"FF34B3",22);
+        }
+    }
+    else{
+        sprintf(zName,"loss %d",pJunqi->aTestFlag[0]);
+        SaveReplayByName(pJunqi,zName);
+        sleep(1);
+        ShowLabel(pJunqi->apLabel[0],"通关失败","FF34B3",24);
+        pJunqi->aTestFlag[0] = 0;
+        NewMenu(pJunqi,0);
+    }
+    return 0;
+}
+
 
 void DestroyAllChess(Junqi *pJunqi, int iDir)
 {
@@ -736,6 +895,7 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 	BoardChess *pBanner;
 	int srcDir = 0;
 	int dstDir = 0;
+	int aNoMove[2];
 
 	srcDir = pSrc->pLineup->iDir;
 	if( pDst->pLineup )
@@ -746,9 +906,11 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 	if( type==MOVE )
 	{
 	    pJunqi->nNoEat++;
-	    if( pJunqi->nNoEat>70 )
+	    if( pJunqi->nNoEat>48 )
 	    {
+#ifndef  SIMULATION
 	        if( !pJunqi->bReplay && !pJunqi->bAnalyse )
+#endif
 	        {
 	            pJunqi->bStart = 0;
 	            pJunqi->bStop = 1;
@@ -867,11 +1029,21 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 		gtk_widget_show(pDst->pLineup->pImage[pDst->iDir]);
 	}
 	ShowRectangle(pJunqi, pDst, RECTANGLE_RED);
+#if PATH_DEBUG
+	ShowRectangle(pJunqi, pSrc, RECTANGLE_WHITE);
+#else
 	ShowPathArrow(pJunqi, 0);
+#endif
 
 	//if(!pJunqi->bReplay && !pJunqi->bAnalyse)
 	{
 		AddMoveRecord(pJunqi, pSrc, pDst);
+	}
+	aNoMove[0] = CheckIfDead(pJunqi, srcDir);
+	aNoMove[1] = CheckIfDead(pJunqi, dstDir);
+	if(aNoMove[0]==2||aNoMove[1]==2){
+	    //无棋可走
+	    send_data.extra_info |= 0x08;
 	}
 	pJunqi->addr = pJunqi->addr_tmp[0];
 	SendMoveResult(pJunqi, pSrc->pLineup->iDir, &send_data);
@@ -879,8 +1051,14 @@ void PlayResult(Junqi *pJunqi, BoardChess *pSrc, BoardChess *pDst, int type)
 	pJunqi->addr = pJunqi->addr_tmp[1];
 	SendMoveResult(pJunqi, pSrc->pLineup->iDir, &send_data);
 #endif
-	CheckIfDead(pJunqi, srcDir);
-	CheckIfDead(pJunqi, dstDir);
+	if(aNoMove[0]==2){
+	    SendDeadEvent(pJunqi,srcDir);
+	}
+    if(aNoMove[1]==2){
+        SendDeadEvent(pJunqi,dstDir);
+    }
+
+	//GongbinPathTest(pJunqi,pSrc,pDst);
 
 //	assert( aseertChess(pSrc) );
 //	assert( aseertChess(pDst) );
@@ -1012,6 +1190,10 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
 	//点击左键
     if( event->button==1 )
     {
+        if( pJunqi->aTestFlag[0] )
+        {
+            return;
+        }
     	if( !pJunqi->bSelect )
     	{
     		if( pChess->type==NONE )
@@ -1056,6 +1238,8 @@ void deal_mouse_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
     			{
             		gtk_widget_hide(pJunqi->redRectangle[0]);
             		gtk_widget_hide(pJunqi->redRectangle[1]);
+                    gtk_widget_hide(pJunqi->whiteRectangle[0]);
+                    gtk_widget_hide(pJunqi->whiteRectangle[1]);
 
     				int type;
     				type = CompareChess(pJunqi->pSelect, pChess);
@@ -1146,14 +1330,40 @@ void DestroySelectImage(Junqi *pJunqi)
 
 void InitSelectImage(Junqi *pJunqi)
 {
-	pJunqi->whiteRectangle[0] = GetSelectImage(0, 0);
-	pJunqi->whiteRectangle[1] = GetSelectImage(1, 0);
-	pJunqi->redRectangle[0] = GetSelectImage(0, 1);
-	pJunqi->redRectangle[1] = GetSelectImage(1, 1);
+    int i,j;
+    char *aColor[3] = {"white","red","green"};
+    char label_str[100];
+    char zNum[10];
+
+	pJunqi->whiteRectangle[0] = GetSelectImage(0, "white","rectangle");
+	pJunqi->whiteRectangle[1] = GetSelectImage(1, "white","rectangle");
+	pJunqi->redRectangle[0] = GetSelectImage(0, "red","rectangle");
+	pJunqi->redRectangle[1] = GetSelectImage(1, "red","rectangle");
 	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->redRectangle[0], 0, 0);
 	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->redRectangle[1], 0, 0);
 	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->whiteRectangle[0], 0, 0);
 	gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->whiteRectangle[1], 0, 0);
+	if(pJunqi->cirleFlag[0][0]==NULL){
+        for(i=0;i<3;i++){
+            for(j=0;j<129;j++){
+                pJunqi->cirleFlag[i][j] = GetSelectImage(0, aColor[i],"circle");
+                gtk_fixed_put(GTK_FIXED(pJunqi->fixed), pJunqi->cirleFlag[i][j], 0, 0);
+            }
+        }
+	}
+    if(pJunqi->pathLabel[0]==NULL){
+        for(i=0;i<70;i++){
+            pJunqi->pathLabel[i] = gtk_label_new(NULL);
+            sprintf(zNum,"%d",i);
+            SetLabelStr(label_str,zNum,"0000EE",18);
+            gtk_label_set_markup(GTK_LABEL(pJunqi->pathLabel[i]),label_str);
+            gtk_fixed_put(GTK_FIXED(pJunqi->fixed),pJunqi->pathLabel[i],0,0);
+        }
+    }
+
+
+
+
 
 }
 
@@ -1234,8 +1444,9 @@ void InitNineGrid(Junqi *pJunqi)
 		pJunqi->NineGrid[i].point.y = 6+(i/3)*2;
 		pJunqi->NineGrid[i].isRailway = 1;
 		pJunqi->NineGrid[i].isNineGrid = 1;
+		pJunqi->NineGrid[i].index = i;
 		CreatGraphVertex(pJunqi,&pJunqi->NineGrid[i]);
-
+		pJunqi->apChessPos[120+i] = &pJunqi->NineGrid[i];
 	}
 
 }
@@ -1409,6 +1620,8 @@ Junqi *JunqiOpen(void)
 {
 	Junqi *pJunqi = (Junqi*)malloc(sizeof(Junqi));
 	memset(pJunqi, 0, sizeof(Junqi));
+	pJunqi->pForm = (FormInfo*)malloc(sizeof(FormInfo));
+	memset(pJunqi->pForm,0,sizeof(FormInfo));
 	pthread_mutex_init(&pJunqi->mutex, NULL);
 	AddDataToReplay(pJunqi, aMagic, 4);
 	return pJunqi;
@@ -1459,6 +1672,33 @@ void LoadLineup(Junqi *pJunqi, int iDir, u8 *chess)
 		assert( aseertChess(&pJunqi->ChessPos[iDir][i]) );
 	}
 	SendLineup(pJunqi, iDir);
+}
+
+void SetTestLineup(Junqi *pJunqi)
+{
+    char *zCatelog = "/d/devc++/junqi/test2/lineup/%d";
+    char name[100];
+    int fd;
+    u8 aBuf[4096];
+    Jql *pLineup;
+    int iDir;
+    time_t t;
+    t = time(NULL);
+
+    log_a("lineup test\n");
+    for(iDir=0;iDir<4;iDir++){
+        sprintf(name,zCatelog,(t>>iDir)%13);
+        log_a("dir %d lineup %s",iDir,name);
+        fd = open(name, O_RDWR|O_CREAT, 0600);
+        OsRead(fd, aBuf, 4096, 0);
+        pLineup = (Jql*)(&aBuf[0]);
+        if( memcmp(pLineup->aMagic, aMagic, 4)!=0 )
+        {
+            assert(0);
+            return;
+        }
+        LoadLineup(pJunqi, iDir, pLineup->chess);
+    }
 }
 
 void get_lineup_cb (GtkNativeDialog *dialog,
@@ -1532,21 +1772,7 @@ void OpenReplay(GtkNativeDialog *dialog,
 		OsRead(fd, aBuf, PAGE_SIZE, 0);
 		if( memcmp(aBuf, aMagic, 4)==0 )
 		{
-		    gtk_window_set_title(GTK_WINDOW(pJunqi->window), name);
-			pJunqi->bReplay = 1;
-			memcpy(pJunqi->aReplay, aBuf, PAGE_SIZE);
-			LoadReplayLineup(pJunqi);
-			ReSetChessBoard(pJunqi);
-			ShowReplaySlider(pJunqi);
-			memset(pJunqi->aAnalyseReplay,0,PAGE_SIZE);
-			pJunqi->iReOfst = MOVE_OFFSET;
-			int max_step = *(int *)(&pJunqi->aReplay[4]);
-			gtk_adjustment_set_upper(pJunqi->slider_adj, max_step);
-			gtk_adjustment_set_value(pJunqi->slider_adj, 0);
-			pJunqi->bStart = 1;
-			pJunqi->bStop = 0;
-			pJunqi->iRpStep = 0;
-			pJunqi->bResetFlag = 0;
+		    SetReplayBoard(pJunqi,name,aBuf);
 		}
 	}
 
@@ -1567,11 +1793,15 @@ void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
     if( !next_flag || pJunqi->bResetFlag )
     {
     	preStep = 0;
-    	pJunqi->bResetFlag = 0;
+    	if(pJunqi->bResetFlag){
+    	    pJunqi->bResetFlag = 0;
+    	    pJunqi->bAnalyse = 0;
+    	}
     	ReSetChessBoard(pJunqi);
     	memset(pJunqi->aAnalyseReplay,0,PAGE_SIZE);
     	memcpy(pJunqi->aAnalyseReplay,pJunqi->aReplay,MOVE_OFFSET);
     	pJunqi->iReOfst = MOVE_OFFSET;
+    	pJunqi->eTurn = pJunqi->eFirstTurn;//标记1
     }
 
 	for(i=preStep; i<pJunqi->iRpStep; i++)
@@ -1582,7 +1812,7 @@ void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
 		{
 			int iDir;
 			//iDir = *((u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+2));
-			iDir=pJunqi->eTurn;
+			iDir=pJunqi->eTurn;//不知道为什么把上一行注了，所以在标记1加了一行
 			event = *((u8*)(pJunqi->aReplay+MOVE_OFFSET+4*i+1));
 			if( event==SURRENDER_EVENT )
 			{
@@ -1627,6 +1857,8 @@ void ShowReplayStep(Junqi *pJunqi, u8 next_flag)
 		{
 			gtk_widget_hide(pJunqi->redRectangle[0]);
 			gtk_widget_hide(pJunqi->redRectangle[1]);
+            gtk_widget_hide(pJunqi->whiteRectangle[0]);
+            gtk_widget_hide(pJunqi->whiteRectangle[1]);
 			int type;
 			type = CompareChess(pSrc, pDst);
 			PlayResult(pJunqi, pSrc, pDst, type);

@@ -44,9 +44,11 @@ static void memout(u8 *pdata,u8 len)
 ////////////////////////////////
 
 #define NOT_DEBUG1   1  //0：开棋 1：关棋
+#define HOME_DARK   0
 //#define NOT_DEBUG2
-//#define SIMULATION  //在复盘中模拟
-#define AUTO_TEST
+#define SIMULATION  //在复盘中模拟,等两家都就绪后再启动复盘
+//#define AUTO_TEST
+#define PATH_DEBUG 0
 
 #define MOVE_SOUND         "./sound/move.wav"
 #define BOMB_SOUND         "./sound/bomb.wav"
@@ -66,6 +68,8 @@ const static u8 aMagic[4]={0x57,0x04,0,0};
 #define PLAY_EVENT 0xF5
 #define JUMP_EVENT 0x00
 #define SURRENDER_EVENT 0x01
+
+extern int open_num;
 
 typedef struct BoardItem BoardItem;
 
@@ -155,7 +159,12 @@ struct Junqi
 	u8 bResetFlag;
 	u8 nNoEat;
 	u8 bAutoTest;
+	u8 bSound;
 	u8 bAutoTestCnt;
+	u8 aTestFlag[10];
+	u8 eState;//0:ready 1:init 2:init完成 3:start没init完成不能start
+	u8 eReply;
+	u8 eDark;
 	enum ChessColor eColor;
 	enum ChessDir eTurn;
 	enum ChessDir eFirstTurn;
@@ -164,6 +173,8 @@ struct Junqi
 	GdkPixbuf *Chess[4][14];
 	ChessLineup Lineup[4][30];
 	BoardChess ChessPos[4][30];
+	BoardChess *apChessPos[129];
+	FormInfo *pForm;
 	GtkWidget *fixed;
 	GtkWidget *window;
 	BoardItem *pBoard;
@@ -190,9 +201,12 @@ struct Junqi
 
 	GtkWidget *whiteRectangle[2];
 	GtkWidget *redRectangle[2];
+	GtkWidget *cirleFlag[3][129];
+	GtkWidget *pathLabel[70];
 	FlagChess flagObj;
 	GdkPixbuf *paArrowPixbuf[8];
-	char label_str[100];
+	//char label_str[100];
+	GtkWidget *apLabel[10];
 	GtkWidget *pTimeLabel;
 
 	gpointer data;
@@ -201,7 +215,7 @@ struct Junqi
 	enum ChessDir eLineupDir;
 
 	struct sockaddr_in addr;
-	struct sockaddr_in addr_tmp[2];
+	struct sockaddr_in addr_tmp[2];//0：敌方 1：自家对家
 	int socket_fd;
 	GtkWidget *comm;
 	u8 *pCommData;
@@ -245,4 +259,10 @@ void ClearChessFlag(Junqi *pJunqi, int iDir);
 int aseertLineup(ChessLineup *pLineup);
 void LoadReplayLineup(Junqi *pJunqi);
 void SetReplayData(Junqi *pJunqi, u8 *aBuf, int iOfst, int iAmt);
+void SetTestLineup(Junqi *pJunqi);
+void AutoTest(Junqi *pJunqi);
+gboolean PlayNextMatch(Junqi *pJunqi);
+void ShowCircleTest(Junqi *pJunqi, BoardChess *pChess, int color,int isHide);
+void GetChessCoor(BoardChess *pChess,int *x ,int *y);
+
 #endif

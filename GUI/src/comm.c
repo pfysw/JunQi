@@ -11,7 +11,21 @@
 #include "rule.h"
 #include "board.h"
 
+int aVerify[2] = {
+        4011111,
+        3922222
+};
+int open_num = 888;
+char server_ip[30] = "172.0.0.1";
+
 gboolean pro_comm_msg(gpointer data);
+
+int CalDecNum(){
+    int result = 0;
+    result = open_num*aVerify[0]%1000;
+    result = result*aVerify[1]%1000;
+    return result;
+}
 
 void PacketHeader(CommHeader *header, u8 iDir, u8 eFun)
 {
@@ -36,6 +50,7 @@ void SendData(Junqi* pJunqi, CommHeader *header, void *data, int len)
 	//但是需要分析的时候可以
     if( !pJunqi->bReplay || pJunqi->bAnalyse )
     {
+        log_b("send fun %d len %d port %d",buf[5],length,pJunqi->addr.sin_port);
 		sendto(pJunqi->socket_fd, buf, length, 0,
 				(struct sockaddr *)&pJunqi->addr, sizeof(struct sockaddr));
     }
@@ -52,6 +67,7 @@ void SendReplyData(Junqi* pJunqi, CommHeader *header, void *data, int len)
 	memcpy(buf+length, data, len);
 	length += len;
 
+	//log_b("send fun %d len %d port %d",buf[5],length,pJunqi->addr.sin_port);
 	sendto(pJunqi->socket_fd, buf, length, 0,
 			(struct sockaddr *)&pJunqi->addr, sizeof(struct sockaddr));
 
@@ -67,6 +83,19 @@ void SendHeader(Junqi* pJunqi, u8 iDir, u8 eFun)
 	}
 	PacketHeader(&header, iDir, eFun);
 	SendData(pJunqi, &header, NULL, 0);
+}
+
+void SendProxy(Junqi* pJunqi)
+{
+    struct sockaddr_in addr;
+    char buf[100] = "register！";
+
+    addr.sin_family = AF_INET;
+    inet_pton(AF_INET, "42.192.193.83", &addr.sin_addr);
+   // inet_pton(AF_INET, "115.194.188.23", &addr.sin_addr);
+    addr.sin_port = htons(5555);
+    sendto(pJunqi->socket_fd, buf, strlen(buf), 0,
+            (struct sockaddr *)&addr, sizeof(struct sockaddr));
 }
 
 void GetSendLineup(Junqi* pJunqi, u8 *data, int iDir)
@@ -86,7 +115,7 @@ void SendLineup(Junqi* pJunqi, int iDir)
 #ifdef NOT_DEBUG2
 	if( iDir%2!=0 )
 #else
-	pthread_mutex_lock(&pJunqi->mutex);
+	//pthread_mutex_lock(&pJunqi->mutex);//这里为什么要加？
 	if( iDir%2!=0 )
 	{
 		//pJunqi->socket_fd = pJunqi->socket_tmp[0];
@@ -97,7 +126,7 @@ void SendLineup(Junqi* pJunqi, int iDir)
 		//pJunqi->socket_fd = pJunqi->socket_tmp[1];
 		pJunqi->addr = pJunqi->addr_tmp[1];
 	}
-	pthread_mutex_unlock(&pJunqi->mutex);
+	//pthread_mutex_unlock(&pJunqi->mutex);
 #endif
 	{
 		PacketHeader(&header, iDir, COMM_LINEUP);
@@ -111,6 +140,19 @@ void SendMoveResult(Junqi* pJunqi, int iDir, MoveResultData *pData)
 	CommHeader header;
 	PacketHeader(&header, iDir, COMM_MOVE);
 	SendData(pJunqi, &header, pData, sizeof(MoveResultData));
+}
+
+void SendVerifyMsg(Junqi* pJunqi)
+{
+    CommHeader header;
+    int aNum[2];
+    pJunqi->addr = pJunqi->addr_tmp[0];
+    PacketHeader(&header, 1, COMM_VERIFY);
+    aNum[0] = 11111;
+    aNum[1] = 22222;
+    printf("verify addr %d\n",pJunqi->addr.sin_port);
+    SendData(pJunqi, &header, aNum, sizeof(aNum));
+    log_b("verify end");
 }
 
 void SendReplyToEngine(Junqi *pJunqi)
@@ -168,8 +210,22 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 #endif
 
 
+	log_b("fun %d",pHead->eFun);
 	switch(pHead->eFun)
 	{
+    case COMM_VERIFY:
+        log_a("verify %d %d",*((int*)&data[8]),*((int*)&data[12]));
+        if(aVerify[0]==*((int*)&data[8]) &&
+           aVerify[1]==*((int*)&data[12]) ){
+            //gtk_widget_show(pJunqi->apLabel[0]);
+            ShowLabel(pJunqi->apLabel[0],"测试中","FF34B3",24);
+            pJunqi->aTestFlag[0] = 1;
+        }
+        else{
+            ShowLabel(pJunqi->apLabel[0],"验证失败","FF34B3",24);
+            pJunqi->aTestFlag[0] = 0;
+        }
+        break;
 	case COMM_READY:
 		//PacketHeader(pHead, 0, COMM_INIT);
 		pHead->eFun = COMM_INIT;
@@ -190,6 +246,8 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 			GetSendLineup(pJunqi, data+34, 2);
 		}
 		SendData(pJunqi, pHead, data, 64);
+		printf("ready state %d\n",pJunqi->eState);
+		pJunqi->eState = 1;
 #ifdef AUTO_TEST
 		//log_b("bAutoTest %d",pJunqi->bAutoTest);
 		if( pJunqi->bAutoTest==1 ||
@@ -236,6 +294,8 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 			{
 				gtk_widget_hide(pJunqi->redRectangle[0]);
 				gtk_widget_hide(pJunqi->redRectangle[1]);
+			    gtk_widget_hide(pJunqi->whiteRectangle[0]);
+			    gtk_widget_hide(pJunqi->whiteRectangle[1]);
 
 				int type;
 				type = CompareChess(pSrc, pDst);
@@ -307,15 +367,27 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 	case COMM_REPLAY:
 		break;
 	case COMM_OK:
+	    printf("ok state %d\n",pJunqi->eState);
+	    if(pJunqi->eState==1){
+	        pJunqi->eState = 2;
+	    }
 		if( pJunqi->bAnalyse && !pJunqi->bReplay )
 		{
-			//SendHeader(pJunqi, pJunqi->eFirstTurn, COMM_REPLAY);
-			SendReplyToEngine(pJunqi);
-			ShowReplayStep(pJunqi, 0);
-			//下一次进入ShowReplayStep再把bAnalyse清0
-			//因为分析该局面后可能还会再手动推演
-			pJunqi->bAnalyse = 1;
-			pJunqi->bReplay = 1;
+#ifdef SIMULATION
+		    pJunqi->eReply++;
+		    if(pJunqi->eReply==2){
+#endif
+                //SendHeader(pJunqi, pJunqi->eFirstTurn, COMM_REPLAY);
+                SendReplyToEngine(pJunqi);
+                ShowReplayStep(pJunqi, 0);
+                //下一次进入ShowReplayStep再把bAnalyse清0
+                //因为分析该局面后可能还会再手动推演
+                pJunqi->bAnalyse = 1;
+                pJunqi->bReplay = 1;
+#ifdef SIMULATION
+                pJunqi->eReply = 0;
+		    }
+#endif
 		}
 #ifdef AUTO_TEST
 		if(pJunqi->bAutoTest==3)
@@ -327,6 +399,13 @@ void DealRecData(Junqi* pJunqi, u8 *data)
 		}
 #endif
 		break;
+	case COMM_PATH_DEBUG:
+#if PATH_DEBUG
+	    printf("debug\n");
+	    data = (u8*)&pHead[1];
+	    ShowDebugPath(pJunqi,(PathDebug *)data);
+#endif
+	    break;
 	default:
 		break;
 	}
@@ -340,9 +419,11 @@ void *comm_thread(void *arg)
 	int socket_fd;
 	struct sockaddr_in addr,local;
 	struct sockaddr_in addr1;
-	size_t recvbytes = 0;
-	u8 buf[200]={0};
-	u8 tmp_buf[200]={0};
+	struct sockaddr_in rec_addr;
+	int from_len;
+	int recvbytes = 0;
+	u8 buf[REC_LEN]={0};
+	u8 tmp_buf[REC_LEN]={0};
 
 	socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (socket_fd < 0)
@@ -373,14 +454,21 @@ void *comm_thread(void *arg)
 	pJunqi->addr_tmp[1] = addr1;
 	SendHeader(pJunqi, 0, COMM_READY);
 	SendHeader(pJunqi, 1, COMM_READY);
+	SendProxy(pJunqi);
+	from_len = sizeof(struct sockaddr_in);
 
-	//SendHeader(pJunqi, pJunqi->eTurn, COMM_READY);
-
+//    int result = CalDecNum();
+//    printf("%d\n",result);
 	while(1)
 	{
-		recvbytes=recvfrom(socket_fd, buf, 200, 0,NULL ,NULL);
-
+        //recvbytes=recvfrom(socket_fd, buf, REC_LEN, 0,NULL,NULL);
+		recvbytes=recvfrom(socket_fd, buf, REC_LEN, 0,
+		        (struct sockaddr *)&rec_addr,&from_len);
+		printf("rec ip %s port %d %d\n",inet_ntoa(rec_addr.sin_addr),
+		        htons(rec_addr.sin_port),rec_addr.sin_port);
+		//log_b("len %d",recvbytes);
 		pthread_mutex_lock(&pJunqi->mutex);
+		pJunqi->addr = rec_addr;
 		memcpy(tmp_buf,buf,recvbytes);
 		pJunqi->pCommData = tmp_buf;
 		//pthread_mutex_unlock(&pJunqi->mutex);
@@ -404,17 +492,22 @@ gboolean pro_comm_msg(gpointer data)
 	CommHeader *pHead;
 	pHead = (CommHeader *)pJunqi->pCommData;
 
-	if( pHead->iDir%2==1 )
+	if(!pJunqi->bStart)
 	{
-		//log_b("dir0 %d",pHead->iDir);
-		pJunqi->addr = pJunqi->addr_tmp[0];
+        if( pHead->iDir%2==1 )
+        {
+            //log_b("dir0 %d",pHead->iDir);
+           // pJunqi->addr = pJunqi->addr_tmp[0];
+            pJunqi->addr_tmp[0] = pJunqi->addr;
+        }
+        else
+        {
+            //log_b("dir1 %d",pHead->iDir);
+           // pJunqi->addr = pJunqi->addr_tmp[1];
+            pJunqi->addr_tmp[1] = pJunqi->addr;
+        }
+        log_b("dir %d",pHead->iDir);
 	}
-	else
-	{
-		//log_b("dir1 %d",pHead->iDir);
-		pJunqi->addr = pJunqi->addr_tmp[1];
-	}
-	//log_b("dir %d",pHead->iDir);
 	DealRecData(pJunqi, pJunqi->pCommData);
 
 
