@@ -32,7 +32,7 @@ msys2环境搭建可以参考下文
 
 https://blog.csdn.net/qiuzhiqian1990/article/details/56671839
 
-如编译出现错误，请参照下文的GTK+环境搭建进行修改
+如编译出现错误，请参照下文的GTK+环境搭建进行修改（有了makefile后，这个已经失效，谨慎参考）
 
 https://blog.csdn.net/pfysw/article/details/81048379
 
