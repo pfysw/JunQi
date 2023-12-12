@@ -8,7 +8,7 @@
 #include "comm.h"
 #include "skeleton.h"
 
-char server_ip[30] = "172.0.0.1";
+char server_ip[30] = "127.0.0.1";
 
 void PacketHeader(CommHeader *header, u8 iDir, u8 eFun)
 {
