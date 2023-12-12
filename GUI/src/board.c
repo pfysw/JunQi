@@ -762,7 +762,7 @@ void begin_button(GtkWidget *button, GdkEventButton *event, gpointer data)
 	Junqi *pJunqi = (Junqi *)data;
 	printf("begin state %d\n",pJunqi->eState);
 	if(pJunqi->eState!=2){
-	    ShowDialogMessage(pJunqi, "未打开引擎，无法初始化 请打开引擎后重新新建！", 0);
+	    ShowDialogMessage(pJunqi, "未打开引擎，无法初始化\n 请打开引擎后重新新建！", 0);
 	    return;
 	}
 	//隐藏调入布局按钮
